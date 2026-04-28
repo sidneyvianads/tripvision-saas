@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Sparkles, MapPin, AlertTriangle, Trash2 } from "lucide-react";
+import { Send, Sparkles, MapPin, AlertTriangle, Trash2, RotateCw } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import Stars from "./ambient/Stars";
 import Avatar from "./Avatar";
 import { useIaConversa } from "../hooks/useIaConversa";
@@ -10,11 +11,90 @@ import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
 
 const LOADING_PHASES = [
-  { delay: 0,    text: "Pensando…",                   icon: "💭" },
-  { delay: 3000, text: "Pesquisando online…",         icon: "🔍" },
+  { delay: 0,    text: "Pensando…",                    icon: "💭" },
+  { delay: 3000, text: "Pesquisando online…",          icon: "🔍" },
   { delay: 7000, text: "Buscando preços e endereços…", icon: "📍" },
   { delay: 12000, text: "Montando sugestões pra você…", icon: "✍️" },
 ];
+
+const ROTEIRO_OPEN = "<roteiro_update>";
+const ROTEIRO_CLOSE = "</roteiro_update>";
+
+function stripPartialRoteiroTag(text) {
+  if (!text) return "";
+  const open = text.indexOf(ROTEIRO_OPEN);
+  if (open === -1) return text;
+  const close = text.indexOf(ROTEIRO_CLOSE, open);
+  if (close === -1) return text.slice(0, open).trimEnd();
+  const after = close + ROTEIRO_CLOSE.length;
+  return (text.slice(0, open) + text.slice(after)).trim();
+}
+
+async function streamPlan(req, signal, onDelta) {
+  const res = await fetch("/api/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+    signal,
+  });
+
+  if (!res.ok) {
+    let err = null;
+    try { err = await res.json(); } catch {}
+    throw new Error(err?.error || `HTTP ${res.status}`);
+  }
+  if (!res.body) throw new Error("A IA não retornou stream.");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE: eventos separados por linha em branco (\n\n)
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+
+    for (const block of events) {
+      let dataStr = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("data: ")) dataStr += line.slice(6);
+      }
+      if (!dataStr) continue;
+      let data;
+      try { data = JSON.parse(dataStr); } catch { continue; }
+
+      if (data.type === "content_block_delta" && data.delta?.type === "text_delta") {
+        const piece = data.delta.text || "";
+        if (piece) {
+          full += piece;
+          onDelta(piece, full);
+        }
+      } else if (data.type === "error") {
+        throw new Error(data.error?.message || "Erro retornado pelo stream.");
+      }
+    }
+  }
+  return full;
+}
+
+const MD_COMPONENTS_LIGHT = {
+  p:      ({ children }) => <p className="m-0 leading-relaxed">{children}</p>,
+  ul:     ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
+  ol:     ({ children }) => <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>,
+  li:     ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-display font-extrabold text-[#0F1B2D]">{children}</strong>,
+  em:     ({ children }) => <em className="italic">{children}</em>,
+  code:   ({ children }) => <code className="px-1 py-0.5 rounded bg-[#1A3A4A]/10 text-[#1A3A4A] text-[0.9em]">{children}</code>,
+  a:      ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-[#2E86C1] underline break-words">{children}</a>,
+  h1:     ({ children }) => <h1 className="text-base font-display font-extrabold text-[#0F1B2D] mt-1">{children}</h1>,
+  h2:     ({ children }) => <h2 className="text-sm font-display font-extrabold text-[#0F1B2D] mt-1">{children}</h2>,
+  h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#0F1B2D] mt-1">{children}</h3>,
+};
 
 export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const { days, reload: reloadRoteiro } = useRoteiro(trip.id);
@@ -25,8 +105,12 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const [phase, setPhase] = useState(0);
   const [usage, setUsage] = useState(() => getPlanUsage(user?.id));
   const [err, setErr] = useState(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [hasStarted, setHasStarted] = useState(false);
+  const [lastUserText, setLastUserText] = useState(null);
 
   const scrollerRef = useRef(null);
+  const abortRef = useRef(null);
 
   const welcome = useMemo(() => ({
     role: "assistant",
@@ -36,24 +120,27 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 
   const renderedMessages = messages.length === 0 ? [welcome] : messages;
 
+  // Auto-scroll: rolar pro fim quando chegam mensagens novas, durante stream e em loading
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [renderedMessages, busy]);
+    if (!el) return;
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(id);
+  }, [renderedMessages, streamingText, busy]);
 
-  // Loading phase rotation
+  // Loading phase rotation: só roda enquanto não chegou o primeiro byte
   useEffect(() => {
-    if (!busy) { setPhase(0); return; }
+    if (!busy || hasStarted) { setPhase(0); return; }
     const timers = LOADING_PHASES.map((p, i) =>
       setTimeout(() => setPhase(i), p.delay)
     );
     return () => timers.forEach(clearTimeout);
-  }, [busy]);
+  }, [busy, hasStarted]);
 
-  const send = async (e) => {
-    e?.preventDefault();
-    const text = input.trim();
-    if (!text || busy) return;
+  const runSend = async (text) => {
+    if (busy) return;
+    const trimmed = (text ?? "").trim();
+    if (!trimmed) return;
 
     const u = getPlanUsage(user.id);
     if (u.remaining <= 0) {
@@ -62,26 +149,30 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     }
 
     setErr(null);
+    setLastUserText(trimmed);
+
     const baseMessages = messages.length === 0 ? [welcome] : messages;
-    const userMsg = { role: "user", content: text, ts: Date.now() };
+    const userMsg = { role: "user", content: trimmed, ts: Date.now() };
     const next = [...baseMessages.filter((m) => !m._welcome), userMsg];
+
     setMessages(next);
     persist(next);
     setInput("");
     setBusy(true);
+    setHasStarted(false);
+    setStreamingText("");
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // Limite frouxo de 90s só pra cobrir falhas — o stream em si dá heartbeat
+    const safetyTimer = setTimeout(() => controller.abort("safety-timeout"), 90_000);
 
     const historyForApi = next.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
     try {
-      const res = await fetch("/api/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          message: text,
+      const fullText = await streamPlan(
+        {
+          message: trimmed,
           history: historyForApi,
           viagem: {
             nome: trip.nome,
@@ -92,15 +183,16 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             descricao: trip.descricao,
             roteiro_resumo: buildRoteiroResumo(days),
           },
-        }),
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const replyText = data?.reply ?? "(sem resposta)";
+        },
+        controller.signal,
+        (_delta, full) => {
+          setHasStarted(true);
+          setStreamingText(full);
+        }
+      );
+      clearTimeout(safetyTimer);
 
-      const { cleanText, updates } = parseRoteiroUpdate(replyText);
-
+      const { cleanText, updates } = parseRoteiroUpdate(fullText);
       let appliedResults = null;
       if (updates && updates.length > 0) {
         appliedResults = await applyRoteiroUpdates(trip.id, updates);
@@ -112,45 +204,62 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         content: cleanText || (appliedResults ? "✅ Atualizações aplicadas." : "(sem resposta)"),
         ts: Date.now(),
         _applied: appliedResults,
-        _usage: data.usage ?? null,
       };
       const after = [...next, assistantMsg];
       setMessages(after);
       persist(after);
-
-      const u2 = bumpPlanUsage(user.id);
-      setUsage(u2);
+      setStreamingText("");
+      setLastUserText(null);
+      setUsage(bumpPlanUsage(user.id));
     } catch (e) {
-      clearTimeout(timeoutId);
-      console.error("[PlanChat] /api/plan failed:", e);
-      const isAbort = e?.name === "AbortError";
-      const isTimeoutHttp = /HTTP\s+5(0[24]|24)/.test(e?.message ?? "");
-      const isTimeout = isAbort || isTimeoutHttp;
+      clearTimeout(safetyTimer);
+      console.error("[PlanChat] stream failed:", e);
+      const isAbort = e?.name === "AbortError" || /aborted/i.test(e?.message ?? "");
+      const isHttp5xx = /HTTP\s+5\d{2}/.test(e?.message ?? "");
+      const isTimeout = isAbort || isHttp5xx;
       const errMsg = {
         role: "assistant",
         content: isTimeout
-          ? "A pesquisa está demorando mais que o normal. Tente perguntar uma coisa por vez pra facilitar! ⏱️"
-          : "Tive um problema pra processar agora. Tente de novo daqui a pouco. ❄️",
+          ? "A pesquisa está demorando mais que o normal. Tenta perguntar uma coisa por vez pra facilitar! ⏱️"
+          : `Tive um problema pra processar agora: ${e.message}. Tenta de novo. ❄️`,
         ts: Date.now(),
         _error: true,
       };
       const after = [...next, errMsg];
       setMessages(after);
       persist(after);
-      setErr(isTimeout
-        ? "Timeout — pergunte uma coisa por vez."
-        : (e.message || String(e)));
+      setStreamingText("");
+      setErr(isTimeout ? "Timeout — pergunte uma coisa por vez." : (e.message || String(e)));
     } finally {
+      abortRef.current = null;
       setBusy(false);
     }
   };
 
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    runSend(input);
+  };
+
+  const handleRetry = () => {
+    if (!lastUserText) return;
+    setErr(null);
+    // Remove a última mensagem de erro antes de retentar
+    const lastIsError = messages[messages.length - 1]?._error;
+    const cleaned = lastIsError ? messages.slice(0, -1) : messages;
+    setMessages(cleaned);
+    runSend(lastUserText);
+  };
+
   const handleReset = async () => {
+    if (busy) return;
     if (!confirm("Apagar toda a conversa de planejamento? O roteiro montado fica.")) return;
     await reset();
   };
 
   const currentPhase = LOADING_PHASES[phase] ?? LOADING_PHASES[0];
+  const cleanedStream = stripPartialRoteiroTag(streamingText);
+  const streamHasContent = busy && hasStarted && cleanedStream.length > 0;
 
   return (
     <div
@@ -164,8 +273,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           <Sparkles className="w-3 h-3" /> Planejar com IA
         </span>
         <span className="tabular">
-          {usage.remaining} / {usage.limit} mensagens hoje
-          {messages.length > 0 && (
+          {usage.remaining} / {usage.limit} hoje
+          {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="ml-2 text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />
             </button>
@@ -184,10 +293,26 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             message={m}
             user={user}
             onGoToRoteiro={onGoToRoteiro}
+            onRetry={m._error ? handleRetry : null}
           />
         ))}
 
-        {busy && (
+        {/* Bolha em streaming: mostra texto parcial conforme chega */}
+        {streamHasContent && (
+          <div className="flex gap-2 items-end justify-start animate-fade-up">
+            <BotAvatar />
+            <div
+              className="max-w-[80%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm whitespace-pre-wrap break-words"
+              style={{ background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
+            >
+              <ReactMarkdown components={MD_COMPONENTS_LIGHT}>{cleanedStream}</ReactMarkdown>
+              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-[#2E86C1] animate-pulse" aria-hidden />
+            </div>
+          </div>
+        )}
+
+        {/* Loading inicial (antes do primeiro byte) */}
+        {busy && !hasStarted && (
           <div className="flex gap-2 items-end justify-start animate-fade-up">
             <BotAvatar />
             <div
@@ -215,7 +340,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         </div>
       )}
 
-      <form onSubmit={send} className="flex items-center gap-2 py-3 relative z-10">
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 py-3 relative z-10">
         <input
           className="input input-dark flex-1"
           placeholder="Conta como vocês querem viajar…"
@@ -247,7 +372,7 @@ function BotAvatar() {
   );
 }
 
-function Message({ message, user, onGoToRoteiro }) {
+function Message({ message, user, onGoToRoteiro, onRetry }) {
   const isUser = message.role === "user";
   return (
     <div className={`flex gap-2 items-end animate-pop ${isUser ? "justify-end" : "justify-start"}`}>
@@ -260,9 +385,25 @@ function Message({ message, user, onGoToRoteiro }) {
               ? { background: "linear-gradient(135deg, #2E86C1 0%, #1B4F72 100%)", boxShadow: "0 2px 12px rgba(46, 134, 193, 0.30)" }
               : { background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
           >
-            {message.content}
+            {isUser ? (
+              message.content
+            ) : (
+              <ReactMarkdown components={MD_COMPONENTS_LIGHT}>{message.content}</ReactMarkdown>
+            )}
           </div>
         )}
+
+        {!isUser && message._error && onRetry && (
+          <button
+            onClick={onRetry}
+            className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold"
+            style={{ background: "rgba(124, 185, 232, 0.18)", color: "#7CB9E8", border: "1px solid rgba(124, 185, 232, 0.45)" }}
+          >
+            <RotateCw className="w-3 h-3" />
+            Tentar de novo
+          </button>
+        )}
+
         {!isUser && Array.isArray(message._applied) && message._applied.length > 0 && (
           <UpdateCard applied={message._applied} onGoToRoteiro={onGoToRoteiro} />
         )}
@@ -285,7 +426,6 @@ function UpdateCard({ applied, onGoToRoteiro }) {
     );
   }
 
-  // Agrupa add_activity por dia_numero pra exibir
   const byDay = new Map();
   for (const a of summary.added) {
     if (!byDay.has(a.dia_numero)) byDay.set(a.dia_numero, []);
