@@ -91,13 +91,53 @@ ACTIONS POSSÍVEIS:
 TIPOS: transporte, passeio, alimentacao, hospedagem, livre
 STATUS: confirmado, aberto, pendente
 
-REGRAS DO UPDATE:
-- Só gere <roteiro_update> quando o usuário CONFIRMAR. Sugestões NÃO geram update.
-- "vamos com a opção 2" → gere update.
-- "o que sugere pra almoço?" → NÃO gere update — apenas sugira.
-- Após gerar o update, confirme em texto: "Adicionei ao roteiro: [resumo]"
-- Use ordem incrementando dentro do dia (1, 2, 3…) com base no roteiro atual.
-- O JSON DEVE ser válido (aspas duplas, sem vírgula extra, sem comentários).
+REGRAS DO UPDATE — CRÍTICO, NÃO IGNORE:
+
+A confirmação do usuário É O GATILHO pra gerar <roteiro_update>. Não espere ele pedir "adiciona no roteiro" — assuma que decisão = adicionar.
+
+GERE <roteiro_update> SEMPRE QUE:
+- O usuário disser uma confirmação após sugestão sua: "sim", "ok", "fechado", "vamos nessa", "vamos com esse", "pode ser", "gostei", "perfeito", "esse mesmo", "vamos com a opção X", "então vamos pra...", "manda ver"
+- O usuário descrever a viagem com fatos concretos já decididos, mesmo sem perguntar antes (ex: "vamos pra gramado 3 dias, hotel serra azul, chegando dia 10/07 às 14h" — TUDO ISSO já é confirmação: gere add_day pros 3 dias com data e hotel + add_activity pro check-in 14h).
+- O usuário corrigir algo que já foi sugerido ("não, vamos com o hotel X" → gere update_day field=hotel)
+- O usuário pedir pra remover algo ("tira o passeio das 15h" → gere remove_activity)
+
+NÃO GERE <roteiro_update> SE:
+- O usuário só está explorando/perguntando: "o que sugere pra almoço?", "tem hotel barato em Gramado?", "que tal um passeio?". Apenas sugira; espere a confirmação.
+
+EXEMPLOS:
+
+Usuário: "Vou pra Gramado 3 dias, chego dia 10/07 às 14h, hotel Serra Azul"
+Você: "Show! Já anotei: 3 dias em Gramado, chegada **10/07 às 14h** no **Hotel Serra Azul**. Vou montar os 3 dias agora.
+
+<roteiro_update>
+[
+  {"action":"add_day","dia_numero":1,"data":"2026-07-10","titulo":"Chegada em Gramado","cidade":"Gramado","hotel":"Hotel Serra Azul","cover_emoji":"🛬"},
+  {"action":"add_day","dia_numero":2,"data":"2026-07-11","titulo":"Gramado — dia cheio","cidade":"Gramado","hotel":"Hotel Serra Azul","cover_emoji":"🌲"},
+  {"action":"add_day","dia_numero":3,"data":"2026-07-12","titulo":"Volta","cidade":"Gramado","hotel":"Hotel Serra Azul","cover_emoji":"🚗"},
+  {"action":"add_activity","dia_numero":1,"horario":"14:00","titulo":"Check-in Hotel Serra Azul","tipo":"hospedagem","status":"confirmado","ordem":1}
+]
+</roteiro_update>
+
+Quer que eu sugira o que fazer no fim do dia 1?"
+
+Usuário: "sim, manda"
+Você: [pesquisa, sugere 2-3 opções]. NÃO gera update — está sugerindo.
+
+Usuário: "vamos com a Rua Coberta"
+Você: "Adicionado! 🌟
+
+<roteiro_update>
+[{"action":"add_activity","dia_numero":1,"horario":"16:00","titulo":"Rua Coberta + chocolate quente","tipo":"passeio","preco":"Gratuito","status":"confirmado","endereco":"Rua Coberta, Centro","ordem":2}]
+</roteiro_update>"
+
+REGRAS TÉCNICAS:
+- O JSON DEVE ser válido: aspas duplas, sem vírgula trailing, sem comentários, sem texto fora do array.
+- Sempre array, mesmo com 1 item.
+- Quando adicionar dias novos, considere o ROTEIRO ATUAL pra escolher o próximo dia_numero.
+- Em add_activity, calcule "ordem" como próximo número dentro do dia (1, 2, 3…).
+- Se o usuário corrigir um dia/atividade já existente, use update_day/update_activity (não delete + add).
+- Se um dia ainda não tiver "data" e o usuário decidir, use update_day field=data.
+- Após o update, sempre confirme em texto curto: "Adicionei: [resumo]"
 `;
 
 function jsonResponse(obj, status = 200) {

@@ -42,6 +42,34 @@ async function getDiaId(viagemId, dia_numero) {
   return data?.id ?? null;
 }
 
+// Garante que o dia exista. Se não existir, cria com defaults mínimos.
+// Retorna { diaId, created } — created=true se foi criado agora.
+async function ensureDia(viagemId, dia_numero, defaults = {}) {
+  let id = await getDiaId(viagemId, dia_numero);
+  if (id) return { diaId: id, created: false };
+
+  const payload = {
+    viagem_id: viagemId,
+    dia_numero: Number(dia_numero),
+    titulo: defaults.titulo ?? `Dia ${dia_numero}`,
+    cover_emoji: defaults.cover_emoji ?? "📍",
+    data: defaults.data ?? null,
+    cidade: defaults.cidade ?? null,
+    hotel: defaults.hotel ?? null,
+  };
+  const { data, error } = await supabase
+    .from("roteiro_dias")
+    .insert(payload)
+    .select("id")
+    .single();
+  if (error) {
+    console.error("[roteiroParser] ensureDia create error:", error);
+    return { diaId: null, created: false };
+  }
+  console.log(`[TripVision] auto-criou Dia ${dia_numero} (id ${data.id})`);
+  return { diaId: data.id, created: true };
+}
+
 async function nextOrdem(diaId) {
   const { data } = await supabase
     .from("roteiro_atividades")
@@ -91,10 +119,15 @@ export async function applyRoteiroUpdates(viagemId, updates) {
         }
 
         case "add_activity": {
-          const diaId = await getDiaId(viagemId, Number(u.dia_numero));
+          // Auto-cria o dia se a IA mandou add_activity sem add_day antes.
+          const ensured = await ensureDia(viagemId, Number(u.dia_numero));
+          const diaId = ensured.diaId;
           if (!diaId) {
-            results.push({ action: "add_activity", dia_numero: u.dia_numero, success: false, error: "Dia não encontrado." });
+            results.push({ action: "add_activity", dia_numero: u.dia_numero, success: false, error: "Não consegui criar/encontrar o dia." });
             break;
+          }
+          if (ensured.created) {
+            results.push({ action: "add_day", dia_numero: Number(u.dia_numero), titulo: `Dia ${u.dia_numero}`, success: true, _auto: true });
           }
           const ordem = u.ordem != null ? Number(u.ordem) : await nextOrdem(diaId);
           const payload = {
@@ -150,7 +183,7 @@ export async function applyRoteiroUpdates(viagemId, updates) {
           }
           const diaId = await getDiaId(viagemId, Number(u.dia_numero));
           if (!diaId) {
-            results.push({ action: "update_activity", success: false, error: "Dia não encontrado." });
+            results.push({ action: "update_activity", dia_numero: Number(u.dia_numero), success: false, error: "Dia não encontrado." });
             break;
           }
           const { error } = await supabase

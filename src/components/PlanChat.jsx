@@ -192,11 +192,22 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       );
       clearTimeout(safetyTimer);
 
-      const { cleanText, updates } = parseRoteiroUpdate(fullText);
+      console.log("[TripVision] fullText recebido (", fullText.length, "chars):\n", fullText);
+
+      const { cleanText, updates, raw } = parseRoteiroUpdate(fullText);
+      console.log("[TripVision] parse result:", { hasTag: !!raw, updatesCount: updates?.length ?? 0, updates });
+
       let appliedResults = null;
       if (updates && updates.length > 0) {
         appliedResults = await applyRoteiroUpdates(trip.id, updates);
+        console.log("[TripVision] apply result:", appliedResults);
+        const errors = appliedResults.filter((r) => !r.success);
+        if (errors.length) console.warn("[TripVision] apply errors:", errors);
         await reloadRoteiro();
+      } else if (raw) {
+        console.warn("[TripVision] tag <roteiro_update> apareceu mas JSON inválido — IA precisa corrigir formato.");
+      } else {
+        console.log("[TripVision] sem <roteiro_update> nesta resposta (IA não confirmou ainda).");
       }
 
       const assistantMsg = {
