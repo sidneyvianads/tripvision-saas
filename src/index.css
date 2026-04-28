@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+@theme {
+  /* Inverno na serra — paleta principal */
+  --color-deep:    #0F1B2D;   /* azul escuro de noite */
+  --color-petrol:  #1A3A4A;   /* azul petróleo */
+  --color-ice:     #7CB9E8;   /* azul gelo */
+  --color-fire:    #E8834A;   /* laranja lareira */
+  --color-gold:    #D4A574;   /* dourado quente */
+  --color-snow:    #E8F0FE;   /* azul bem claro neve */
+
+  /* Compatibilidade com nomes antigos (caso algum util ainda referencie) */
+  --color-coral:   #E8834A;
+  --color-laranja: #D4A574;
+  --color-verde:   #27AE60;
+  --color-azul:    #3498DB;
+  --color-amarelo: #F1C40F;
+  --color-roxo:    #8E44AD;
+
+  --color-bg:      #0F1B2D;
+  --color-card:    #FFFFFF;
+  --color-ink:     #2D3436;
+  --color-ink-light: #636E72;
+  --color-ink-muted: #B2BEC3;
+
+  --font-display: "Nunito", system-ui, sans-serif;
+  --font-body:    "DM Sans", system-ui, sans-serif;
+
+  --radius-card:  16px;
+  --radius-btn:   12px;
+  --radius-badge: 24px;
+
+  --shadow-soft:  0 2px 12px rgba(15, 27, 45, 0.18);
+  --shadow-pop:   0 8px 24px rgba(15, 27, 45, 0.28);
+  --shadow-ice:   0 4px 16px rgba(124, 185, 232, 0.25);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "DM Sans", system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.15) 0%, transparent 50%),
+    linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%);
+  background-attachment: fixed;
+  color: #E8F0FE;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Nunito", system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.font-display { font-family: "Nunito", system-ui, sans-serif; }
+.font-body    { font-family: "DM Sans", system-ui, sans-serif; }
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+@layer components {
+  .btn-primary {
+    background: linear-gradient(135deg, #7CB9E8 0%, #1A3A4A 100%);
+    color: white;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 6px 20px rgba(124, 185, 232, 0.30);
+    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(124, 185, 232, 0.45); filter: brightness(1.05); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
+
+  .btn-fire {
+    background: linear-gradient(135deg, #E8834A 0%, #D4A574 100%);
+    color: white;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 0.5rem 1rem;
+    box-shadow: 0 4px 16px rgba(232, 131, 74, 0.30);
+  }
+
+  .card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(232, 240, 254, 0.92) 100%);
+    border: 1px solid rgba(124, 185, 232, 0.18);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(15, 27, 45, 0.18);
+    color: #2D3436;
+  }
+
+  .card-dark {
+    background: linear-gradient(180deg, rgba(26, 58, 74, 0.85) 0%, rgba(15, 27, 45, 0.85) 100%);
+    border: 1px solid rgba(124, 185, 232, 0.22);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+    color: #E8F0FE;
+  }
+
+  .input {
+    width: 100%;
+    background: #FFFFFF;
+    color: #2D3436;
+    border: 1.5px solid rgba(124, 185, 232, 0.4);
+    border-radius: 12px;
+    padding-block: 0.75rem;
+    padding-inline: 1rem;
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 0.95rem;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+    outline: none;
+  }
+  .input:focus {
+    border-color: #7CB9E8;
+    box-shadow: 0 0 0 4px rgba(124, 185, 232, 0.20);
+  }
+  .input-dark {
+    background: rgba(15, 27, 45, 0.6);
+    color: #E8F0FE;
+    border-color: rgba(124, 185, 232, 0.35);
+  }
+  .input-dark::placeholder { color: rgba(232, 240, 254, 0.45); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 24px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: "Nunito", system-ui, sans-serif;
+  }
+}
+
+.gradient-winter   { background: linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
+.gradient-night    { background: radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.20) 0%, transparent 60%), linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
+.gradient-header   { background: linear-gradient(135deg, #0F1B2D 0%, #1A3A4A 60%, #2E86C1 100%); }
+.gradient-fire     { background: linear-gradient(135deg, #E8834A 0%, #D4A574 100%); }
+
+/* compat: alguma classe antiga ainda chama gradient-coral */
+.gradient-coral    { background: radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.25) 0%, transparent 60%), linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
+
+.text-snow         { color: #E8F0FE; }
+.text-ice          { color: #7CB9E8; }
+.text-gold         { color: #D4A574; }
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { scrollbar-width: none; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 360ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes pop {
+  0%   { transform: scale(0.96); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop { animation: pop 200ms ease-out both; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50%      { opacity: 1; transform: translateY(-3px); }
+}
+.dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+.dot:nth-child(2) { animation-delay: 0.15s; }
+.dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* Neve caindo (CSS only) */
+@keyframes snow-fall {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.85; }
+  90%  { opacity: 0.7; }
+  100% { transform: translate3d(var(--snow-sway, 0px), 110vh, 0) rotate(360deg); opacity: 0; }
+}
+.snowflake {
+  position: absolute;
+  top: -2vh;
+  color: rgba(232, 240, 254, 0.85);
+  text-shadow: 0 0 4px rgba(232, 240, 254, 0.5);
+  user-select: none;
+  pointer-events: none;
+  animation: snow-fall linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Estrelas piscando (chat IA) */
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.65; }
+}
+.star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #E8F0FE;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: star-twinkle 4s ease-in-out infinite;
+}
+
+/* Lareira (acento dourado pulsante muito sutil) */
+@keyframes ember-glow {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.ember { animation: ember-glow 3s ease-in-out infinite; }
+
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
+.safe-top    { padding-top: max(env(safe-area-inset-top), 0); }
