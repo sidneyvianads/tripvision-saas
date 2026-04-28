@@ -72,10 +72,14 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 
     const historyForApi = next.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     try {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: text,
           history: historyForApi,
@@ -90,6 +94,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           },
         }),
       });
+      clearTimeout(timeoutId);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const replyText = data?.reply ?? "(sem resposta)";
@@ -116,17 +121,25 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       const u2 = bumpPlanUsage(user.id);
       setUsage(u2);
     } catch (e) {
+      clearTimeout(timeoutId);
       console.error("[PlanChat] /api/plan failed:", e);
+      const isAbort = e?.name === "AbortError";
+      const isTimeoutHttp = /HTTP\s+5(0[24]|24)/.test(e?.message ?? "");
+      const isTimeout = isAbort || isTimeoutHttp;
       const errMsg = {
         role: "assistant",
-        content: "Tive um problema pra processar agora. Tente de novo daqui a pouco. ❄️",
+        content: isTimeout
+          ? "A pesquisa está demorando mais que o normal. Tente perguntar uma coisa por vez pra facilitar! ⏱️"
+          : "Tive um problema pra processar agora. Tente de novo daqui a pouco. ❄️",
         ts: Date.now(),
         _error: true,
       };
       const after = [...next, errMsg];
       setMessages(after);
       persist(after);
-      setErr(e.message || String(e));
+      setErr(isTimeout
+        ? "Timeout — pergunte uma coisa por vez."
+        : (e.message || String(e)));
     } finally {
       setBusy(false);
     }

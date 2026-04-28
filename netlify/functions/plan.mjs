@@ -33,6 +33,12 @@ REGRAS:
 - NÃO invente preços — se não encontrar, diga "não encontrei o preço atualizado, vale confirmar"
 - A cada bloco de decisões, resuma o que ficou definido
 
+LIMITE DE PESQUISA (importante pra UX):
+- Faça NO MÁXIMO 2 web searches por resposta.
+- Se o usuário pedir muitas coisas de uma vez (ex: "me sugere hotel, restaurante e passeio"), responda sobre UMA parte primeiro e diga: "Vou começar pelo [X]. Depois passamos pro resto, ok?"
+- Nunca tente resolver tudo de uma vez — isso atrasa a resposta e cansa o usuário.
+- Se já souber a resposta sem precisar pesquisar (ex: pergunta sobre algo já definido no roteiro), NÃO pesquise.
+
 FORMATO DE SAÍDA:
 Responda sempre com texto natural pro usuário.
 Quando o usuário CONFIRMAR uma decisão (não apenas pedir sugestão), adicione no FINAL da mensagem um bloco JSON entre tags <roteiro_update> e </roteiro_update> com as ações:
@@ -137,7 +143,7 @@ export default async (req) => {
           {
             type: "web_search_20250305",
             name: "web_search",
-            max_uses: 5,
+            max_uses: 2,
           },
         ],
         messages: [
