@@ -1,10 +1,10 @@
-import { CalendarDays, MessageCircle, Bot, CheckSquare } from "lucide-react";
+import { CalendarDays, MessageCircle, Sparkles, CheckSquare } from "lucide-react";
 
 const TABS = [
-  { id: "roteiro", label: "Roteiro", Icon: CalendarDays },
-  { id: "chat",    label: "Chat",    Icon: MessageCircle },
-  { id: "ia",      label: "IA",      Icon: Bot },
-  { id: "tarefas", label: "Tarefas", Icon: CheckSquare },
+  { id: "roteiro",  label: "Roteiro",  Icon: CalendarDays },
+  { id: "planejar", label: "Planejar", Icon: Sparkles },
+  { id: "chat",     label: "Chat",     Icon: MessageCircle },
+  { id: "tarefas",  label: "Tarefas",  Icon: CheckSquare },
 ];
 
 export default function TabBar({ active, onChange }) {

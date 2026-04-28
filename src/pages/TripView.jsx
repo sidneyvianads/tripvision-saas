@@ -8,21 +8,21 @@ import TabBar from "../components/TabBar";
 import Countdown from "../components/Countdown";
 import DayCard from "../components/DayCard";
 import GroupChat from "../components/GroupChat";
-import AiChat from "../components/AiChat";
+import PlanChat from "../components/PlanChat";
 import Checklist from "../components/Checklist";
 import { FullscreenLoader } from "../App";
 
 const TAB_TITLES = {
-  roteiro: "📅 Roteiro",
-  chat:    "💬 Chat do grupo",
-  ia:      "🤖 Concierge IA",
-  tarefas: "✅ Tarefas",
+  roteiro:  "📅 Roteiro",
+  planejar: "✨ Planejar com IA",
+  chat:     "💬 Chat do grupo",
+  tarefas:  "✅ Tarefas",
 };
 
 export default function TripView() {
   const { slug } = useParams();
   const { user, signOut } = useAuth();
-  const { trip, role, isAdmin, loading, error } = useTrip(slug, user?.id);
+  const { trip, isAdmin, loading, error } = useTrip(slug, user?.id);
   const [tab, setTab] = useState("roteiro");
 
   const handleLogout = () => {
@@ -53,10 +53,10 @@ export default function TripView() {
         user={user}
         onLogout={handleLogout}
       >
-        {tab === "roteiro" && <RoteiroTab trip={trip} />}
-        {tab === "chat"    && <GroupChat viagemId={trip.id} user={user} />}
-        {tab === "ia"      && <IaTab trip={trip} user={user} />}
-        {tab === "tarefas" && <Checklist viagemId={trip.id} user={user} isAdmin={isAdmin} />}
+        {tab === "roteiro"  && <RoteiroTab trip={trip} />}
+        {tab === "planejar" && <PlanChat   trip={trip} user={user} onGoToRoteiro={() => setTab("roteiro")} />}
+        {tab === "chat"     && <GroupChat  viagemId={trip.id} user={user} />}
+        {tab === "tarefas"  && <Checklist  viagemId={trip.id} user={user} isAdmin={isAdmin} />}
       </TripLayout>
       <TabBar active={tab} onChange={setTab} />
     </>
@@ -100,7 +100,8 @@ function RoteiroTab({ trip }) {
           <div className="text-3xl mb-2">🗺️</div>
           <div className="font-display font-extrabold text-[#0F1B2D]">Roteiro vazio</div>
           <p className="text-sm text-[#1A3A4A]/70 mt-1">
-            Vá em <span className="font-bold">🛡️ Admin</span> pra adicionar dias e atividades.
+            Use a aba <span className="font-bold">✨ Planejar</span> pra montar com IA, ou
+            o <span className="font-bold">🛡️ Admin</span> pra adicionar manualmente.
           </p>
         </div>
       ) : (
@@ -120,9 +121,4 @@ function RoteiroTab({ trip }) {
       )}
     </div>
   );
-}
-
-function IaTab({ trip, user }) {
-  const { days } = useRoteiro(trip.id);
-  return <AiChat trip={trip} days={days} user={user} />;
 }
