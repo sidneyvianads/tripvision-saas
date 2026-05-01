@@ -6,9 +6,7 @@ import People from "./People";
 import Profile from "./Profile";
 import PlanBadge from "./PlanBadge";
 import UpgradeModal from "./UpgradeModal";
-import TemaParticles from "./ambient/TemaParticles";
 import { temaCssVars } from "../lib/applyTema";
-import { getTema } from "../data/themes";
 import { getLimits } from "../data/plans";
 
 export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, children }) {
@@ -43,12 +41,9 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
     }
   };
 
-  const tema = getTema(trip.tema);
-
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
       <header className="gradient-tema text-white safe-top relative overflow-hidden">
-        <TemaParticles tema={tema} count={20} className="opacity-50" />
         <div className="px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
           <Link to="/" className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />

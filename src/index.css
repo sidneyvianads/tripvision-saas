@@ -254,57 +254,5 @@ h1, h2, h3, h4, h5, h6 {
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 
-/* Partículas — opt-in via componente Particles dentro da viagem */
-@keyframes snow-fall {
-  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
-  10%  { opacity: 0.85; }
-  90%  { opacity: 0.7; }
-  100% { transform: translate3d(var(--snow-sway, 0px), 110vh, 0) rotate(360deg); opacity: 0; }
-}
-.snowflake {
-  position: absolute;
-  top: -2vh;
-  color: rgba(232, 240, 254, 0.85);
-  text-shadow: 0 0 4px rgba(232, 240, 254, 0.5);
-  user-select: none;
-  pointer-events: none;
-  animation: snow-fall linear infinite;
-  will-change: transform, opacity;
-}
-
-@keyframes star-twinkle {
-  0%, 100% { opacity: 0.15; }
-  50%      { opacity: 0.65; }
-}
-.star {
-  position: absolute;
-  width: 2px;
-  height: 2px;
-  background: #E8F0FE;
-  border-radius: 50%;
-  pointer-events: none;
-  animation: star-twinkle 4s ease-in-out infinite;
-}
-
-@keyframes leaf-fall {
-  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
-  10%  { opacity: 0.8; }
-  90%  { opacity: 0.5; }
-  100% { transform: translate3d(var(--leaf-sway, 30px), 110vh, 0) rotate(540deg); opacity: 0; }
-}
-.leaf {
-  position: absolute;
-  top: -2vh;
-  user-select: none;
-  pointer-events: none;
-  animation: leaf-fall linear infinite;
-}
-
-@keyframes wave-drift {
-  0%   { transform: translateX(0); }
-  50%  { transform: translateX(-25%); }
-  100% { transform: translateX(0); }
-}
-
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
 .safe-top    { padding-top: max(env(safe-area-inset-top), 0); }

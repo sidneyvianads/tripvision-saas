@@ -166,6 +166,12 @@ export default function Welcome() {
           />
         ) : (
           <form onSubmit={handleSignupNext} className="mt-6 space-y-3">
+            <div className="flex items-center justify-center gap-1.5 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
+              <span className="w-6 h-1 rounded-full bg-[#6366F1]" />
+              <span className="w-6 h-1 rounded-full bg-[#E5E7EB]" />
+              <span className="ml-1.5">Etapa 1 de 2</span>
+            </div>
+
             <div className="flex justify-center pt-1 pb-2">
               <PhotoPicker
                 value={photo}
@@ -268,11 +274,18 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
   const proMensal = PRICES.pro.mensal;
 
   return (
-    <div className="mt-6 space-y-3">
+    <div className="mt-6 space-y-3 animate-pop">
+      {/* Step indicator */}
+      <div className="flex items-center justify-center gap-1.5 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
+        <span className="w-6 h-1 rounded-full bg-[#E5E7EB]" />
+        <span className="w-6 h-1 rounded-full bg-[#6366F1]" />
+        <span className="ml-1.5">Etapa 2 de 2</span>
+      </div>
+
       <div className="text-center">
-        <div className="text-2xl mb-1">✨</div>
+        <div className="text-3xl mb-1">✨</div>
         <h2 className="font-display font-extrabold text-[#1F2937] text-xl">Escolha seu plano</h2>
-        <p className="text-[#6B7280] text-xs mt-1">Pode trocar depois.</p>
+        <p className="text-[#6B7280] text-xs mt-1">Pode trocar depois nas configurações.</p>
       </div>
 
       {/* Card Free */}

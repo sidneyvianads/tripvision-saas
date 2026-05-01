@@ -12,7 +12,6 @@ export const TEMAS = {
     accentDark: "#6366F1",
     bgLight: "#F0EEFF",
     cardBorder: "#6366F1",
-    particles: "lights",
   },
   montanha: {
     id: "montanha",
@@ -24,7 +23,6 @@ export const TEMAS = {
     accentDark: "#1B4F72",
     bgLight: "#E8F4FD",
     cardBorder: "#2E86C1",
-    particles: "snow",
   },
   praia: {
     id: "praia",
@@ -36,7 +34,6 @@ export const TEMAS = {
     accentDark: "#E8483F",
     bgLight: "#FFF5F0",
     cardBorder: "#FF6B6B",
-    particles: "waves",
   },
   natureza: {
     id: "natureza",
@@ -48,7 +45,6 @@ export const TEMAS = {
     accentDark: "#047857",
     bgLight: "#ECFDF5",
     cardBorder: "#059669",
-    particles: "leaves",
   },
   internacional: {
     id: "internacional",
@@ -60,7 +56,6 @@ export const TEMAS = {
     accentDark: "#1F2937",
     bgLight: "#F3F4F6",
     cardBorder: "#374151",
-    particles: null,
   },
 };
 
