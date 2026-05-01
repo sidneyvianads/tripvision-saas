@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { supabase } from "../lib/supabase";
+import { supabase, sha256Hex, normalizePassword } from "../lib/supabase";
 import { PLANS, planName, planIcon, isPaid } from "../data/plans";
 import UpgradeModal from "../components/UpgradeModal";
+import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
-import Mountains from "../components/ambient/Mountains";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -22,6 +22,67 @@ export default function Account() {
   const [assinatura, setAssinatura] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(params.get("upgrade") != null);
   const [loading, setLoading] = useState(true);
+
+  // Trocar senha
+  const [pwOld, setPwOld] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwNew2, setPwNew2] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState(null);
+
+  // Deletar conta
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+
+  // Notificações
+  const [notifOn, setNotifOn] = useState(user?.notifications_on ?? true);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwMsg(null);
+    const oldClean = normalizePassword(pwOld);
+    const newClean = normalizePassword(pwNew);
+    if (newClean.length < 6) return setPwMsg({ type: "err", text: "Nova senha precisa ter no mínimo 6 caracteres." });
+    if (newClean !== normalizePassword(pwNew2)) return setPwMsg({ type: "err", text: "As senhas não conferem." });
+
+    setPwBusy(true);
+    try {
+      const oldHash = await sha256Hex(oldClean);
+      const { data: row } = await supabase.from("users").select("senha_hash").eq("id", user.id).maybeSingle();
+      if (!row || row.senha_hash !== oldHash) {
+        throw new Error("Senha atual incorreta.");
+      }
+      const newHash = await sha256Hex(newClean);
+      const { error } = await supabase.from("users").update({ senha_hash: newHash }).eq("id", user.id);
+      if (error) throw new Error(error.message);
+      setPwMsg({ type: "ok", text: "Senha atualizada!" });
+      setPwOld(""); setPwNew(""); setPwNew2("");
+    } catch (err) {
+      setPwMsg({ type: "err", text: err.message });
+    } finally { setPwBusy(false); }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDelBusy(true);
+    try {
+      // Apaga viagens onde é owner (CASCADE remove tudo associado)
+      await supabase.from("viagens").delete().eq("owner_id", user.id);
+      await supabase.from("users").delete().eq("id", user.id);
+      signOut();
+      navigate("/", { replace: true });
+    } catch (err) {
+      alert("Erro ao deletar conta: " + err.message);
+      setDelBusy(false);
+      setConfirmDelete(false);
+    }
+  };
+
+  const handleToggleNotif = async () => {
+    const next = !notifOn;
+    setNotifOn(next);
+    try { await supabase.from("users").update({ notifications_on: next }).eq("id", user.id); }
+    catch (e) { console.warn("[notif toggle]", e); }
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -48,18 +109,17 @@ export default function Account() {
   const isFree = !isPaid(plano);
 
   return (
-    <div className="min-h-screen flex flex-col gradient-winter">
-      <header className="gradient-header text-white safe-top relative overflow-hidden">
-        <Mountains className="h-16" color="#7CB9E8" />
-        <div className="px-4 pt-4 pb-5 flex items-center gap-3 relative z-10">
-          <Link to="/" className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
-            <ArrowLeft className="w-4 h-4" />
+    <div className="min-h-screen flex flex-col bg-app">
+      <header className="bg-white safe-top" style={{ borderBottom: "1px solid #E5E7EB" }}>
+        <div className="px-4 pt-4 pb-4 flex items-center gap-3">
+          <Link to="/" className="rounded-full bg-[#F3F4F6] hover:bg-[#E5E7EB] p-2" aria-label="Voltar">
+            <ArrowLeft className="w-4 h-4 text-[#1F2937]" />
           </Link>
           <div className="flex-1 min-w-0">
-            <div className="font-display font-extrabold text-lg leading-tight">Minha conta</div>
-            <div className="text-[#7CB9E8] text-xs truncate">{user.email}</div>
+            <div className="font-display font-extrabold text-lg leading-tight text-[#1F2937]">Minha conta</div>
+            <div className="text-[#6B7280] text-xs truncate">{user.email}</div>
           </div>
-          <Avatar user={user} size={36} style={{ boxShadow: "0 0 0 2px rgba(255,255,255,0.45)" }} />
+          <Avatar user={user} size={36} />
         </div>
       </header>
 
@@ -138,8 +198,8 @@ export default function Account() {
 
         {/* Conta */}
         <section className="card p-5 mt-3">
-          <div className="font-display font-extrabold text-[#0F1B2D]">Sua conta</div>
-          <div className="text-[13px] text-[#1A3A4A]/85 mt-2 space-y-1">
+          <div className="font-display font-extrabold text-[#1F2937]">Sua conta</div>
+          <div className="text-[13px] text-[#374151] mt-2 space-y-1">
             <div>Nome: <strong>{user.nome}</strong></div>
             <div>E-mail: <strong>{user.email}</strong></div>
           </div>
@@ -156,6 +216,81 @@ export default function Account() {
             </button>
           </div>
         </section>
+
+        {/* Trocar senha */}
+        <section className="card p-5 mt-3">
+          <div className="font-display font-extrabold text-[#1F2937] flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-[#6366F1]" /> Alterar senha
+          </div>
+          <form onSubmit={handleChangePassword} className="mt-3 space-y-2">
+            <input type="password" className="input" placeholder="Senha atual" value={pwOld} onChange={(e) => setPwOld(e.target.value)} autoComplete="current-password" required />
+            <input type="password" className="input" placeholder="Nova senha (mín. 6)" value={pwNew} onChange={(e) => setPwNew(e.target.value)} autoComplete="new-password" required />
+            <input type="password" className="input" placeholder="Confirmar nova senha" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} autoComplete="new-password" required />
+            {pwMsg && (
+              <div className={`rounded-xl px-3 py-2 text-sm ${pwMsg.type === "ok" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                {pwMsg.text}
+              </div>
+            )}
+            <button type="submit" className="btn-primary w-full inline-flex items-center justify-center gap-2" disabled={pwBusy}>
+              {pwBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+              Atualizar senha
+            </button>
+          </form>
+        </section>
+
+        {/* Notificações (placeholder) */}
+        <section className="card p-5 mt-3">
+          <div className="font-display font-extrabold text-[#1F2937] flex items-center gap-2">
+            <Bell className="w-4 h-4 text-[#F59E0B]" /> Notificações
+          </div>
+          <label className="flex items-center justify-between mt-3 cursor-pointer">
+            <span className="text-[13px] text-[#374151]">
+              Receber notificações
+              <div className="text-[11px] text-[#9CA3AF]">Em breve — atualmente apenas guarda sua preferência.</div>
+            </span>
+            <button
+              type="button"
+              onClick={handleToggleNotif}
+              className="relative w-11 h-6 rounded-full transition"
+              style={{ background: notifOn ? "#6366F1" : "#D1D5DB" }}
+              aria-pressed={notifOn}
+            >
+              <span
+                className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                style={{ left: notifOn ? "calc(100% - 22px)" : "2px" }}
+              />
+            </button>
+          </label>
+        </section>
+
+        {/* Deletar conta */}
+        <section className="card p-5 mt-3 border-red-200" style={{ borderColor: "#FECACA" }}>
+          <div className="font-display font-extrabold text-red-700 flex items-center gap-2">
+            <Trash2 className="w-4 h-4" /> Deletar conta
+          </div>
+          <p className="text-[13px] text-[#374151] mt-2">
+            Todos os seus dados (viagens, mensagens, checklists, fotos) serão apagados permanentemente. Não dá pra desfazer.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="mt-3 px-4 py-2.5 rounded-xl font-display font-extrabold text-sm bg-red-600 hover:bg-red-700 text-white inline-flex items-center gap-2"
+            disabled={delBusy}
+          >
+            {delBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Excluir minha conta
+          </button>
+        </section>
+
+        <ConfirmModal
+          open={confirmDelete}
+          title="Excluir conta?"
+          body="Todos os seus dados serão apagados permanentemente. Inclui suas viagens (com roteiro, chat, checklist e contatos), foto de perfil e histórico de IA. Não dá pra desfazer."
+          confirmLabel="Sim, excluir tudo"
+          confirmVariant="danger"
+          onConfirm={handleDeleteAccount}
+          onClose={() => setConfirmDelete(false)}
+        />
 
         <section className="card p-5 mt-3 text-[12px] text-[#1A3A4A]/70 space-y-1">
           <div className="flex items-center gap-1.5">

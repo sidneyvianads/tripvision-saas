@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import Snow from "../components/ambient/Snow";
-import Pines from "../components/ambient/Pines";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
 
@@ -57,21 +55,29 @@ export default function Welcome() {
   const handleSignup = async (e) => {
     e.preventDefault();
     setErr(null);
+    const nomeClean = nome.trim();
+    if (!nomeClean) return setErr("Digite seu nome.");
+    if (nomeClean.length > 50) return setErr("Nome muito longo (máx 50 caracteres).");
     if (senha.length < 6) return setErr("Senha precisa ter no mínimo 6 caracteres.");
     if (senha !== senha2) return setErr("As senhas não conferem.");
     try {
-      const created = await signUp({ nome, email, senha, avatar_cor: cor, avatar_url: photo });
+      const created = await signUp({ nome: nomeClean, email, senha, avatar_cor: cor, avatar_url: photo });
       setSuccess({ email: created.email, nome: created.nome });
     } catch (e) {
       setErr(e.message);
     }
   };
 
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center px-5 py-10 gradient-night relative overflow-hidden">
-      <Snow count={70} />
-      <Pines className="h-24 opacity-40" color="#0A1320" />
+  // Indicador de força da senha
+  const senhaForca = passwordStrength(senha);
 
+  return (
+    <div
+      className="min-h-screen w-full flex items-center justify-center px-5 py-10 relative overflow-hidden"
+      style={{
+        background: "radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 50%), radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.06), transparent 50%), #FAFBFC",
+      }}
+    >
       {success && (
         <div
           role="status"
@@ -87,12 +93,14 @@ export default function Welcome() {
 
       <div className="card w-full max-w-md p-8 animate-fade-up relative z-10">
         <div className="text-center">
-          <div className="text-6xl mb-3">🧳</div>
-          <h1 className="text-3xl text-[#0F1B2D]">TripVision</h1>
-          <p className="text-[#1A3A4A] mt-1 font-display font-bold text-sm">
+          <Link to="/" className="inline-block">
+            <div className="text-5xl mb-2">🧳</div>
+          </Link>
+          <h1 className="text-3xl text-[#1F2937]">TripVision</h1>
+          <p className="text-[#6B7280] mt-1 font-display font-bold text-sm">
             Planeje sua viagem conversando.
           </p>
-          <p className="text-[#7CB9E8] text-xs font-display font-bold uppercase tracking-widest mt-0.5">
+          <p className="text-primary text-xs font-display font-bold uppercase tracking-widest mt-0.5">
             A IA faz o resto.
           </p>
         </div>
@@ -141,6 +149,16 @@ export default function Welcome() {
             <Field icon={User} type="text" placeholder="Seu nome" value={nome} onChange={setNome} autoFocus maxLength={40} autoComplete="given-name" disabled={isBusy} />
             <Field icon={Mail} type="email" placeholder="seu@email.com" value={email} onChange={setEmail} autoComplete="email" disabled={isBusy} />
             <Field icon={KeyRound} type="password" placeholder="senha (mín. 6)" value={senha} onChange={setSenha} autoComplete="new-password" disabled={isBusy} />
+            {senha && senhaForca && (
+              <div className="px-1">
+                <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${senhaForca.pct}%`, background: senhaForca.color }} />
+                </div>
+                <div className="text-[11px] mt-1 font-display font-bold" style={{ color: senhaForca.color }}>
+                  Força: {senhaForca.label}
+                </div>
+              </div>
+            )}
             <Field icon={KeyRound} type="password" placeholder="confirmar senha" value={senha2} onChange={setSenha2} autoComplete="new-password" disabled={isBusy} />
 
             <div className="pt-1">
@@ -197,9 +215,13 @@ export default function Welcome() {
           </form>
         )}
 
-        <p className="text-center text-xs text-[#7CB9E8] mt-6 font-display font-bold tracking-wide">
-          🧳 TripVision SaaS · MVP
-        </p>
+        <div className="text-center text-xs text-[#6B7280] mt-6 font-display font-bold tracking-wide flex items-center justify-center gap-3">
+          <Link to="/" className="hover:text-primary">Início</Link>
+          <span className="opacity-30">·</span>
+          <Link to="/precos" className="hover:text-primary">Preços</Link>
+          <span className="opacity-30">·</span>
+          <Link to="/termos" className="hover:text-primary">Termos</Link>
+        </div>
       </div>
     </div>
   );
@@ -231,4 +253,18 @@ function ErrorBox({ msg }) {
       {msg}
     </div>
   );
+}
+
+function passwordStrength(s) {
+  if (!s) return null;
+  let score = 0;
+  if (s.length >= 6) score++;
+  if (s.length >= 10) score++;
+  if (/[A-Z]/.test(s) && /[a-z]/.test(s)) score++;
+  if (/\d/.test(s)) score++;
+  if (/[^A-Za-z0-9]/.test(s)) score++;
+  if (s.length < 6) return { label: "muito curta", color: "#EF4444", pct: 10 };
+  if (score <= 2) return { label: "fraca", color: "#EF4444", pct: 33 };
+  if (score === 3) return { label: "média", color: "#F59E0B", pct: 66 };
+  return { label: "forte", color: "#10B981", pct: 100 };
 }

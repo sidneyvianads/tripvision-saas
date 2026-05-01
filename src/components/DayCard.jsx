@@ -38,13 +38,21 @@ export default function DayCard({ day, expanded, onToggle, isToday, color }) {
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {day.cidade && (
-              <span className="badge" style={{ background: "rgba(124, 185, 232, 0.18)", color: "#1A3A4A" }}>
+              <span className="badge" style={{ background: "#F3F4F6", color: "#374151" }}>
                 📍 {day.cidade}
               </span>
             )}
-            <span className="text-xs text-[#1A3A4A]/70 font-display font-bold">
+            <span className="text-xs text-[#6B7280] font-display font-bold">
               {day.atividades?.length ?? 0} {(day.atividades?.length ?? 0) === 1 ? "atividade" : "atividades"}
             </span>
+            {day.data && (() => {
+              const ms = new Date(day.data + "T00:00:00").getTime() - Date.now();
+              const dias = Math.round(ms / 86400000);
+              if (dias > 0 && dias <= 7) {
+                return <span className="text-[11px] text-[#0EA5E9]">🌤️ Clima em breve</span>;
+              }
+              return null;
+            })()}
           </div>
         </div>
 

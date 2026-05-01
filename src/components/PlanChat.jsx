@@ -12,6 +12,15 @@ import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid } from "../data/plans";
 
+const SUGESTOES = [
+  "Sugere hotel",
+  "O que fazer amanhã?",
+  "Restaurante perto",
+  "Quanto vai custar?",
+  "Passeio pra crianças",
+  "Onde almoçar?",
+];
+
 const LOADING_PHASES = [
   { delay: 0,    text: "Pensando…",                    icon: "💭" },
   { delay: 3000, text: "Pesquisando online…",          icon: "🔍" },
@@ -290,10 +299,18 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <span className="inline-flex items-center gap-1">
           <Sparkles className="w-3 h-3" /> Planejar com IA
         </span>
-        <span className="tabular">
-          {usage.remaining} / {usage.limit} {usage.tipo === "lifetime" ? "no total" : "hoje"}
+        <span className="tabular flex items-center gap-2">
+          <button
+            onClick={() => runSend("Resuma todo o roteiro montado até agora, dia a dia.")}
+            disabled={busy}
+            className="text-[#7CB9E8] hover:text-white normal-case font-display font-bold disabled:opacity-50"
+            title="Resumir roteiro"
+          >
+            📋 Resumir
+          </button>
+          <span>{usage.remaining} / {usage.limit} {usage.tipo === "lifetime" ? "total" : "hoje"}</span>
           {messages.length > 0 && !busy && (
-            <button onClick={handleReset} className="ml-2 text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
+            <button onClick={handleReset} className="text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />
             </button>
           )}
@@ -355,6 +372,22 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <div className="relative z-10 mx-1 mb-2 rounded-xl bg-red-100/90 border border-red-300 px-3 py-2 text-red-900 text-xs flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{err}</span>
+        </div>
+      )}
+
+      {!busy && (
+        <div className="scroll-x-snap scrollbar-hide relative z-10 -mx-1 px-1 pb-1">
+          {SUGESTOES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => runSend(s)}
+              className="shrink-0 text-[12px] px-3 py-1.5 rounded-full font-display font-bold whitespace-nowrap"
+              style={{ background: "rgba(124, 185, 232, 0.15)", color: "#7CB9E8", border: "1px solid rgba(124, 185, 232, 0.30)" }}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       )}
 

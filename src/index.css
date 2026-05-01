@@ -1,27 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  /* Inverno na serra — paleta principal */
-  --color-deep:    #0F1B2D;   /* azul escuro de noite */
-  --color-petrol:  #1A3A4A;   /* azul petróleo */
-  --color-ice:     #7CB9E8;   /* azul gelo */
-  --color-fire:    #E8834A;   /* laranja lareira */
-  --color-gold:    #D4A574;   /* dourado quente */
-  --color-snow:    #E8F0FE;   /* azul bem claro neve */
+  /* Paleta neutra (default do app — landing, login, dashboard, conta) */
+  --color-bg:        #FAFBFC;
+  --color-card:      #FFFFFF;
+  --color-ink:       #1F2937;
+  --color-ink-light: #6B7280;
+  --color-ink-muted: #9CA3AF;
+  --color-border:    #E5E7EB;
 
-  /* Compatibilidade com nomes antigos (caso algum util ainda referencie) */
-  --color-coral:   #E8834A;
-  --color-laranja: #D4A574;
-  --color-verde:   #27AE60;
-  --color-azul:    #3498DB;
-  --color-amarelo: #F1C40F;
-  --color-roxo:    #8E44AD;
+  /* Primário neutro (índigo → violeta) */
+  --color-primary:        #6366F1;
+  --color-primary-dark:   #4F46E5;
+  --color-primary-light:  #A78BFA;
+  --color-violet:         #8B5CF6;
 
-  --color-bg:      #0F1B2D;
-  --color-card:    #FFFFFF;
-  --color-ink:     #2D3436;
-  --color-ink-light: #636E72;
-  --color-ink-muted: #B2BEC3;
+  /* Secundário (CTAs, destaques) */
+  --color-amber:          #F59E0B;
+  --color-amber-dark:     #D97706;
+
+  /* Tema dinâmico — substituído por viagem via CSS vars no container */
+  --tv-accent:        #6366F1;
+  --tv-accent-dark:   #4F46E5;
+  --tv-bg-light:      #F0EEFF;
+  --tv-card-border:   #6366F1;
+  --tv-gradient:      linear-gradient(135deg, #6366F1, #8B5CF6);
 
   --font-display: "Nunito", system-ui, sans-serif;
   --font-body:    "DM Sans", system-ui, sans-serif;
@@ -30,13 +33,13 @@
   --radius-btn:   12px;
   --radius-badge: 24px;
 
-  --shadow-soft:  0 2px 12px rgba(15, 27, 45, 0.18);
-  --shadow-pop:   0 8px 24px rgba(15, 27, 45, 0.28);
-  --shadow-ice:   0 4px 16px rgba(124, 185, 232, 0.25);
+  --shadow-soft:  0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-pop:   0 8px 24px rgba(15, 23, 42, 0.10);
+  --shadow-card:  0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html, body, #root {
@@ -47,11 +50,8 @@ html, body, #root {
 
 body {
   font-family: "DM Sans", system-ui, sans-serif;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.15) 0%, transparent 50%),
-    linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%);
-  background-attachment: fixed;
-  color: #E8F0FE;
+  background: #FAFBFC;
+  color: #1F2937;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
@@ -61,6 +61,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: "Nunito", system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.01em;
+  color: #1F2937;
 }
 
 .font-display { font-family: "Nunito", system-ui, sans-serif; }
@@ -70,50 +71,80 @@ h1, h2, h3, h4, h5, h6 {
 
 @layer components {
   .btn-primary {
-    background: linear-gradient(135deg, #7CB9E8 0%, #1A3A4A 100%);
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
     color: white;
     font-family: "Nunito", system-ui, sans-serif;
     font-weight: 700;
     border-radius: 12px;
     padding: 0.75rem 1.25rem;
-    box-shadow: 0 6px 20px rgba(124, 185, 232, 0.30);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
     transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
   }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(124, 185, 232, 0.45); filter: brightness(1.05); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99, 102, 241, 0.40); filter: brightness(1.05); }
   .btn-primary:active { transform: translateY(0); }
   .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
 
-  .btn-fire {
-    background: linear-gradient(135deg, #E8834A 0%, #D4A574 100%);
+  .btn-amber {
+    background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
     color: white;
     font-family: "Nunito", system-ui, sans-serif;
     font-weight: 700;
     border-radius: 12px;
     padding: 0.5rem 1rem;
-    box-shadow: 0 4px 16px rgba(232, 131, 74, 0.30);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.30);
   }
 
+  .btn-tema {
+    background: var(--tv-gradient);
+    color: white;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
+    transition: transform 120ms ease, filter 120ms ease;
+  }
+  .btn-tema:hover { transform: translateY(-1px); filter: brightness(1.05); }
+
+  .btn-ghost {
+    background: transparent;
+    color: #1F2937;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 0.65rem 1rem;
+    border: 1.5px solid #E5E7EB;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .btn-ghost:hover { background: #F9FAFB; border-color: #D1D5DB; }
+
   .card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(232, 240, 254, 0.92) 100%);
-    border: 1px solid rgba(124, 185, 232, 0.18);
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
     border-radius: 16px;
-    box-shadow: 0 4px 16px rgba(15, 27, 45, 0.18);
-    color: #2D3436;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
+    color: #1F2937;
+  }
+
+  .card-tema {
+    background: var(--tv-bg-light, #F9FAFB);
+    border: 1px solid var(--tv-card-border, #E5E7EB);
+    border-radius: 16px;
+    color: #1F2937;
   }
 
   .card-dark {
-    background: linear-gradient(180deg, rgba(26, 58, 74, 0.85) 0%, rgba(15, 27, 45, 0.85) 100%);
-    border: 1px solid rgba(124, 185, 232, 0.22);
+    background: #1F2937;
+    border: 1px solid #374151;
     border-radius: 16px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
-    color: #E8F0FE;
+    color: #F9FAFB;
   }
 
   .input {
     width: 100%;
     background: #FFFFFF;
-    color: #2D3436;
-    border: 1.5px solid rgba(124, 185, 232, 0.4);
+    color: #1F2937;
+    border: 1.5px solid #E5E7EB;
     border-radius: 12px;
     padding-block: 0.75rem;
     padding-inline: 1rem;
@@ -123,15 +154,15 @@ h1, h2, h3, h4, h5, h6 {
     outline: none;
   }
   .input:focus {
-    border-color: #7CB9E8;
-    box-shadow: 0 0 0 4px rgba(124, 185, 232, 0.20);
+    border-color: var(--tv-accent, #6366F1);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
   }
   .input-dark {
-    background: rgba(15, 27, 45, 0.6);
-    color: #E8F0FE;
-    border-color: rgba(124, 185, 232, 0.35);
+    background: #111827;
+    color: #F9FAFB;
+    border-color: #374151;
   }
-  .input-dark::placeholder { color: rgba(232, 240, 254, 0.45); }
+  .input-dark::placeholder { color: rgba(249, 250, 251, 0.45); }
 
   .badge {
     display: inline-flex;
@@ -143,22 +174,53 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
     font-family: "Nunito", system-ui, sans-serif;
   }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: "DM Sans", system-ui, sans-serif;
+    background: #F3F4F6;
+    color: #374151;
+    border: 1px solid #E5E7EB;
+    cursor: pointer;
+    transition: all 120ms ease;
+    white-space: nowrap;
+  }
+  .chip:hover { background: #E5E7EB; }
+  .chip-active {
+    background: var(--tv-bg-light, #EEF2FF);
+    border-color: var(--tv-accent, #6366F1);
+    color: var(--tv-accent-dark, #4F46E5);
+  }
 }
 
-.gradient-winter   { background: linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
-.gradient-night    { background: radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.20) 0%, transparent 60%), linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
-.gradient-header   { background: linear-gradient(135deg, #0F1B2D 0%, #1A3A4A 60%, #2E86C1 100%); }
-.gradient-fire     { background: linear-gradient(135deg, #E8834A 0%, #D4A574 100%); }
+.gradient-primary { background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); }
+.gradient-amber   { background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%); }
+.gradient-tema    { background: var(--tv-gradient); }
+.gradient-app     { background: linear-gradient(180deg, #FAFBFC 0%, #F3F4F6 100%); }
 
-/* compat: alguma classe antiga ainda chama gradient-coral */
-.gradient-coral    { background: radial-gradient(ellipse at 50% 0%, rgba(124, 185, 232, 0.25) 0%, transparent 60%), linear-gradient(180deg, #0F1B2D 0%, #1A3A4A 100%); }
+.text-primary { color: #6366F1; }
+.text-amber   { color: #F59E0B; }
+.text-tema    { color: var(--tv-accent); }
 
-.text-snow         { color: #E8F0FE; }
-.text-ice          { color: #7CB9E8; }
-.text-gold         { color: #D4A574; }
+.bg-app    { background: #FAFBFC; }
+.bg-card   { background: #FFFFFF; }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { scrollbar-width: none; }
+
+.scroll-x-snap {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+.scroll-x-snap > * { scroll-snap-align: start; }
 
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(12px); }
@@ -180,7 +242,19 @@ h1, h2, h3, h4, h5, h6 {
 .dot:nth-child(2) { animation-delay: 0.15s; }
 .dot:nth-child(3) { animation-delay: 0.3s; }
 
-/* Neve caindo (CSS only) */
+/* Skeleton loading */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #F3F4F6 0%, #E5E7EB 50%, #F3F4F6 100%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* Partículas — opt-in via componente Particles dentro da viagem */
 @keyframes snow-fall {
   0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
   10%  { opacity: 0.85; }
@@ -198,7 +272,6 @@ h1, h2, h3, h4, h5, h6 {
   will-change: transform, opacity;
 }
 
-/* Estrelas piscando (chat IA) */
 @keyframes star-twinkle {
   0%, 100% { opacity: 0.15; }
   50%      { opacity: 0.65; }
@@ -213,12 +286,25 @@ h1, h2, h3, h4, h5, h6 {
   animation: star-twinkle 4s ease-in-out infinite;
 }
 
-/* Lareira (acento dourado pulsante muito sutil) */
-@keyframes ember-glow {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
+@keyframes leaf-fall {
+  0%   { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 0.8; }
+  90%  { opacity: 0.5; }
+  100% { transform: translate3d(var(--leaf-sway, 30px), 110vh, 0) rotate(540deg); opacity: 0; }
 }
-.ember { animation: ember-glow 3s ease-in-out infinite; }
+.leaf {
+  position: absolute;
+  top: -2vh;
+  user-select: none;
+  pointer-events: none;
+  animation: leaf-fall linear infinite;
+}
+
+@keyframes wave-drift {
+  0%   { transform: translateX(0); }
+  50%  { transform: translateX(-25%); }
+  100% { transform: translateX(0); }
+}
 
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
 .safe-top    { padding-top: max(env(safe-area-inset-top), 0); }

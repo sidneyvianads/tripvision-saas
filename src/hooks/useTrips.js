@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, randomSlug } from "../lib/supabase";
 
-const TRIP_COLS = "id, owner_id, nome, slug, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema, created_at";
+const TRIP_COLS = "id, owner_id, nome, slug, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema, tema, created_at";
 
 export function useTrips(userId) {
   const [trips, setTrips] = useState([]);
@@ -34,7 +34,7 @@ export function useTrips(userId) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const createTrip = useCallback(async ({ nome, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema }) => {
+  const createTrip = useCallback(async ({ nome, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema, tema }) => {
     if (!userId) throw new Error("Não logado.");
     let slug;
     for (let i = 0; i < 5; i++) {
@@ -54,9 +54,10 @@ export function useTrips(userId) {
         num_pessoas: num_pessoas ? Number(num_pessoas) : null,
         descricao: descricao?.trim() || null,
         cover_emoji: cover_emoji ?? "🧳",
-        cor_tema: cor_tema ?? "#7CB9E8",
+        cor_tema: cor_tema ?? "#6366F1",
+        tema: tema ?? "cidade",
       })
-      .select(TRIP_COLS)
+      .select(TRIP_COLS + ", tema")
       .single();
     if (error) throw new Error(error.message);
     await reload();

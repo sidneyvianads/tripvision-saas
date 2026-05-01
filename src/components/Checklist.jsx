@@ -1,13 +1,32 @@
 import { useState } from "react";
-import { Check, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
+import { Check, Plus, Trash2, Loader2, Sparkles, Calendar } from "lucide-react";
 import { useChecklist } from "../hooks/useChecklist";
 import { getLimits } from "../data/plans";
 import UpgradeModal from "./UpgradeModal";
+
+const CATEGORIAS = [
+  { value: "antes",       label: "📋 Antes" },
+  { value: "durante",     label: "⛽ Durante" },
+  { value: "depois",      label: "📷 Depois" },
+  { value: "malas",       label: "🎒 Malas" },
+  { value: "documentos",  label: "📄 Documentos" },
+  { value: "ingressos",   label: "🎫 Ingressos" },
+  { value: "reservas",    label: "🛎️ Reservas" },
+];
+
+const CAT_LABELS = Object.fromEntries(CATEGORIAS.map((c) => [c.value, c.label]));
+
+function diasAteData(prazo) {
+  if (!prazo) return null;
+  const ms = new Date(prazo + "T23:59:59").getTime() - Date.now();
+  return Math.ceil(ms / 86400000);
+}
 
 export default function Checklist({ viagemId, user, isAdmin }) {
   const { items, loading, error, toggle, addItem, deleteItem } = useChecklist(viagemId);
   const [newTitle, setNewTitle] = useState("");
   const [newCat, setNewCat] = useState("antes");
+  const [newPrazo, setNewPrazo] = useState("");
   const [adding, setAdding] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -26,8 +45,9 @@ export default function Checklist({ viagemId, user, isAdmin }) {
     if (atLimit) { setShowUpgrade(true); return; }
     setAdding(true);
     try {
-      await addItem({ titulo: newTitle, categoria: newCat });
+      await addItem({ titulo: newTitle, categoria: newCat, prazo: newPrazo || null });
       setNewTitle("");
+      setNewPrazo("");
     } catch (e) { alert("Erro: " + e.message); }
     finally { setAdding(false); }
   };
@@ -53,23 +73,33 @@ export default function Checklist({ viagemId, user, isAdmin }) {
         </div>
       </div>
 
-      <form onSubmit={handleAdd} className="card p-3 mt-3 flex gap-2">
+      <form onSubmit={handleAdd} className="card p-3 mt-3 space-y-2">
         <input
-          className="input flex-1"
+          className="input"
           placeholder={atLimit ? `Limite Free: ${limits.checklist} itens. Assine pra ilimitado.` : "Novo item…"}
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onFocus={() => { if (atLimit) setShowUpgrade(true); }}
           maxLength={120}
         />
-        <select className="input" style={{ maxWidth: 130 }} value={newCat} onChange={(e) => setNewCat(e.target.value)}>
-          <option value="antes">📋 Antes</option>
-          <option value="durante">⛽ Durante</option>
-          <option value="depois">📷 Depois</option>
-        </select>
-        <button type="submit" className="btn-fire !px-3 inline-flex items-center" disabled={!newTitle.trim() || adding}>
-          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : atLimit ? <Sparkles className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-        </button>
+        <div className="flex gap-2">
+          <select className="input flex-1" value={newCat} onChange={(e) => setNewCat(e.target.value)}>
+            {CATEGORIAS.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            className="input flex-1"
+            value={newPrazo}
+            onChange={(e) => setNewPrazo(e.target.value)}
+            placeholder="Prazo (opcional)"
+            title="Prazo (opcional)"
+          />
+          <button type="submit" className="btn-amber !px-3 inline-flex items-center" disabled={!newTitle.trim() || adding}>
+            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : atLimit ? <Sparkles className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          </button>
+        </div>
       </form>
 
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="checklist" user={user} />
@@ -96,11 +126,23 @@ export default function Checklist({ viagemId, user, isAdmin }) {
 }
 
 function catLabel(cat) {
-  return ({
-    antes: "📋 Antes da viagem",
-    durante: "⛽ Durante a viagem",
-    depois: "📷 Depois da viagem",
-  })[cat] ?? `📌 ${cat}`;
+  return CAT_LABELS[cat] ?? `📌 ${cat}`;
+}
+
+function PrazoBadge({ prazo }) {
+  const dias = diasAteData(prazo);
+  if (dias == null) return null;
+  let text, color, bg;
+  if (dias < 0) { text = "vencido"; color = "#991B1B"; bg = "#FEE2E2"; }
+  else if (dias === 0) { text = "vence hoje"; color = "#92400E"; bg = "#FEF3C7"; }
+  else if (dias <= 3) { text = `${dias} dia${dias === 1 ? "" : "s"}`; color = "#92400E"; bg = "#FEF3C7"; }
+  else if (dias <= 7) { text = `${dias} dias`; color = "#374151"; bg = "#F3F4F6"; }
+  else { text = `${dias} dias`; color = "#6B7280"; bg = "#F9FAFB"; }
+  return (
+    <span className="badge mt-1 inline-flex items-center gap-1" style={{ background: bg, color }}>
+      ⏰ {text}
+    </span>
+  );
 }
 
 function Section({ title, list, toggle, user, isAdmin, onDelete }) {
@@ -127,11 +169,12 @@ function Section({ title, list, toggle, user, isAdmin, onDelete }) {
                 </span>
               </button>
               <button onClick={() => toggle(item, user)} className="flex-1 min-w-0 text-left">
-                <div className={`text-sm ${item.concluido ? "text-[#1A3A4A]/40 line-through" : "text-[#0F1B2D]"}`}>
+                <div className={`text-sm ${item.concluido ? "text-[#9CA3AF] line-through" : "text-[#1F2937]"}`}>
                   {item.titulo}
                 </div>
+                {item.prazo && !item.concluido && <PrazoBadge prazo={item.prazo} />}
                 {item.concluido && item._by_nome && (
-                  <div className="text-xs text-[#1A3A4A]/50 mt-0.5">✓ por {item._by_nome}</div>
+                  <div className="text-xs text-[#9CA3AF] mt-0.5">✓ por {item._by_nome}</div>
                 )}
               </button>
               {isAdmin && (

@@ -95,6 +95,26 @@ function GroupChatInner({ viagemId, user }) {
           const day = dayKey(m.created_at);
           const showSep = day !== lastDay;
           lastDay = day;
+
+          if (m.is_system) {
+            return (
+              <div key={m.id}>
+                {showSep && (
+                  <div className="my-3 flex justify-center">
+                    <span className="text-[10px] uppercase font-display font-bold tracking-wide px-3 py-1 rounded-full" style={{ background: "rgba(124, 185, 232, 0.12)", color: "#7CB9E8", border: "1px solid rgba(124, 185, 232, 0.20)" }}>
+                      {formatDayLabel(m.created_at)}
+                    </span>
+                  </div>
+                )}
+                <div className="my-1.5 flex justify-center animate-fade-up">
+                  <span className="text-[11px] text-[#9CA3AF] italic px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                    {m.content}
+                  </span>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div key={m.id}>
               {showSep && (

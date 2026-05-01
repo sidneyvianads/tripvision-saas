@@ -47,9 +47,15 @@ export default function ActivityItem({ activity, isLast }) {
       )}
       {activity.preco && (
         <div className="mt-1.5">
-          <span className="badge" style={{ background: "rgba(212, 165, 116, 0.18)", color: "#8B6F47" }}>
+          <span className="badge" style={{ background: "#FEF3C7", color: "#92400E" }}>
             {activity.preco}
           </span>
+        </div>
+      )}
+      {activity.notas && (
+        <div className="mt-1.5 text-[12px] text-[#6B7280] italic flex gap-1">
+          <span>📝</span>
+          <span>{activity.notas}</span>
         </div>
       )}
     </div>

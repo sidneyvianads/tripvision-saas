@@ -3,26 +3,26 @@ import { ArrowLeft } from "lucide-react";
 
 function LegalLayout({ title, children }) {
   return (
-    <div className="min-h-screen flex flex-col gradient-night">
+    <div className="min-h-screen flex flex-col bg-app">
       <header
         className="fixed top-0 left-0 right-0 z-40 backdrop-blur-md"
-        style={{ background: "rgba(15, 27, 45, 0.85)", borderBottom: "1px solid rgba(124, 185, 232, 0.18)" }}
+        style={{ background: "rgba(255, 255, 255, 0.92)", borderBottom: "1px solid #E5E7EB" }}
       >
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="rounded-full p-1.5 hover:bg-white/10 text-[#E8F0FE]">
+          <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" className="font-display font-extrabold text-[#E8F0FE] text-lg">❄️ TripVision</Link>
+          <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg">🧳 TripVision</Link>
         </div>
       </header>
 
       <main className="flex-1 pt-24 px-4 pb-12">
         <article className="card max-w-3xl mx-auto p-6 sm:p-8">
-          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-[#0F1B2D]">{title}</h1>
-          <div className="mt-4 space-y-4 text-[14px] text-[#1A3A4A] leading-relaxed">
+          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-[#1F2937]">{title}</h1>
+          <div className="mt-4 space-y-4 text-[14px] text-[#374151] leading-relaxed">
             {children}
           </div>
-          <p className="text-xs text-[#1A3A4A]/55 mt-8">Atualizado em 01/05/2026.</p>
+          <p className="text-xs text-[#9CA3AF] mt-8">Atualizado em 01/05/2026.</p>
         </article>
       </main>
     </div>

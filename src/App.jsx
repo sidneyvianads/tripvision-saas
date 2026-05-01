@@ -6,6 +6,7 @@ import MyTrips from "./pages/MyTrips";
 import NewTrip from "./pages/NewTrip";
 import TripView from "./pages/TripView";
 import AdminTrip from "./pages/AdminTrip";
+import ChooseFlow from "./pages/ChooseFlow";
 import Landing from "./pages/Landing";
 import PrecosPage from "./pages/PrecosPage";
 import { TermosPage, PrivacidadePage } from "./pages/LegalPages";
@@ -25,6 +26,7 @@ export default function App() {
 
       {/* App autenticado */}
       <Route path="/v/new" element={user ? <NewTrip /> : <Navigate to="/welcome" replace />} />
+      <Route path="/v/:slug/start" element={user ? <ChooseFlow /> : <Navigate to="/welcome" replace />} />
       <Route path="/v/:slug" element={user ? <TripView /> : <Navigate to="/welcome" replace />} />
       <Route path="/v/:slug/admin" element={user ? <AdminTrip /> : <Navigate to="/welcome" replace />} />
       <Route path="/conta" element={user ? <Account /> : <Navigate to="/welcome" replace />} />

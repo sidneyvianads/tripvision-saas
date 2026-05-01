@@ -5,7 +5,9 @@ import Avatar from "./Avatar";
 import People from "./People";
 import Profile from "./Profile";
 import PlanBadge from "./PlanBadge";
-import Mountains from "./ambient/Mountains";
+import TemaParticles from "./ambient/TemaParticles";
+import { temaCssVars } from "../lib/applyTema";
+import { getTema } from "../data/themes";
 
 export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, children }) {
   const navigate = useNavigate();
@@ -14,27 +16,32 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   const [copied, setCopied] = useState(false);
 
   const shareUrl = `${window.location.origin}/v/${trip.slug}`;
+  const cidades = trip.cidades?.length ? trip.cidades.join(", ") : "uma viagem incrível";
+  const emoji = trip.cover_emoji ?? "🧳";
+  const shareText = `Entra no app da nossa viagem pra ${cidades}! ${emoji}\n${shareUrl}`;
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: trip.nome, text: `Vamos juntos? ${trip.nome}`, url: shareUrl });
+        await navigator.share({ title: trip.nome, text: shareText, url: shareUrl });
         return;
       } catch { /* fall through */ }
     }
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(shareText);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), 1800);
     } catch {
-      prompt("Copie esse link:", shareUrl);
+      prompt("Copie essa mensagem:", shareText);
     }
   };
 
+  const tema = getTema(trip.tema);
+
   return (
-    <div className="min-h-screen flex flex-col gradient-winter">
-      <header className="gradient-header text-white safe-top relative overflow-hidden">
-        <Mountains className="h-16" color="#7CB9E8" />
+    <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
+      <header className="gradient-tema text-white safe-top relative overflow-hidden">
+        <TemaParticles tema={tema} count={20} className="opacity-50" />
         <div className="px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
           <Link to="/" className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />

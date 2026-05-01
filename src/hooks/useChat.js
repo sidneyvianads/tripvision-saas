@@ -1,6 +1,63 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+export function useUnreadCount(viagemId, userId) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!viagemId || !userId) return;
+    let active = true;
+
+    const fetchCount = async () => {
+      const { data: m } = await supabase
+        .from("viagem_membros")
+        .select("last_seen_chat")
+        .eq("viagem_id", viagemId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const lastSeen = m?.last_seen_chat;
+      let q = supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("viagem_id", viagemId)
+        .neq("user_id", userId);
+      if (lastSeen) q = q.gt("created_at", lastSeen);
+      const { count: c } = await q;
+      if (active) setCount(c ?? 0);
+    };
+
+    fetchCount();
+
+    const channel = supabase
+      .channel(`unread-${viagemId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `viagem_id=eq.${viagemId}` },
+        (p) => {
+          if (p.new.user_id !== userId) setCount((n) => n + 1);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [viagemId, userId]);
+
+  const markSeen = useCallback(async () => {
+    if (!viagemId || !userId) return;
+    setCount(0);
+    await supabase
+      .from("viagem_membros")
+      .update({ last_seen_chat: new Date().toISOString() })
+      .eq("viagem_id", viagemId)
+      .eq("user_id", userId);
+  }, [viagemId, userId]);
+
+  return { count, markSeen };
+}
+
 export function useChat(viagemId) {
   const [messages, setMessages] = useState([]);
   const [profilesById, setProfilesById] = useState({});

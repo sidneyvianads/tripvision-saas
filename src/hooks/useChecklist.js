@@ -49,6 +49,9 @@ export function useChecklist(viagemId) {
   const toggle = useCallback(async (item, user) => {
     if (!user) return;
     const next = !item.concluido;
+    if (next && typeof navigator !== "undefined" && navigator.vibrate) {
+      try { navigator.vibrate(50); } catch {}
+    }
     const updates = {
       concluido: next,
       concluido_por: next ? user.id : null,
@@ -59,12 +62,19 @@ export function useChecklist(viagemId) {
     if (error) setError(error.message);
   }, []);
 
-  const addItem = useCallback(async ({ titulo, categoria }) => {
+  const addItem = useCallback(async ({ titulo, categoria, prazo, responsavel_id }) => {
     if (!viagemId) return;
     const ordem = items.length ? Math.max(...items.map((i) => i.ordem)) + 1 : 0;
     const { data, error } = await supabase
       .from("checklist")
-      .insert({ viagem_id: viagemId, titulo: titulo.trim(), categoria: categoria || null, ordem })
+      .insert({
+        viagem_id: viagemId,
+        titulo: titulo.trim(),
+        categoria: categoria || null,
+        prazo: prazo || null,
+        responsavel_id: responsavel_id || null,
+        ordem,
+      })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
