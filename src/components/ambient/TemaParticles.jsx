@@ -1,16 +1,25 @@
 import { useMemo } from "react";
 
 // Partículas opt-in por tema. Render leve, CSS-only.
+// Hard guard: cada partícula só renderiza pra um tema.id específico,
+// não confiando apenas em tema.particles. Defesa em profundidade.
 
 export default function TemaParticles({ tema, count = 35, className = "" }) {
-  if (!tema?.particles) return null;
+  if (!tema?.id) return null;
 
-  switch (tema.particles) {
-    case "snow":   return <Snow count={count} className={className} />;
-    case "leaves": return <Leaves count={count} className={className} />;
-    case "lights": return <Stars count={count} className={className} />;
-    case "waves":  return <Waves className={className} />;
-    default:       return null;
+  // Diagnóstico — útil pra ver na console qual tema chegou aqui
+  if (typeof window !== "undefined" && !window.__tvLogged) {
+    console.log("[TripVision] TemaParticles tema:", tema.id, "particles:", tema.particles);
+    window.__tvLogged = true;
+  }
+
+  switch (tema.id) {
+    case "montanha":     return tema.particles === "snow"   ? <Snow   count={count} className={className} /> : null;
+    case "natureza":     return tema.particles === "leaves" ? <Leaves count={count} className={className} /> : null;
+    case "cidade":       return tema.particles === "lights" ? <Stars  count={count} className={className} /> : null;
+    case "praia":        return tema.particles === "waves"  ? <Waves              className={className} /> : null;
+    case "internacional":
+    default:             return null;
   }
 }
 
@@ -25,7 +34,7 @@ function Snow({ count, className }) {
         duration: 14 + Math.random() * 22,
         size: 0.5 + Math.random() * 0.9,
         sway: -40 + Math.random() * 80,
-        glyph: ["❄", "❅", "❆", "•"][Math.floor(Math.random() * 4)],
+        glyph: ["❄", "❅", "❆"][Math.floor(Math.random() * 3)],
         opacity: 0.45 + Math.random() * 0.5,
       });
     }

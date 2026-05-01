@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, Sparkles, MapPin, AlertTriangle, Trash2, RotateCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import Stars from "./ambient/Stars";
 import Avatar from "./Avatar";
 import UpgradeModal from "./UpgradeModal";
 import { useIaConversa } from "../hooks/useIaConversa";
@@ -294,7 +293,6 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       className="flex flex-col h-[calc(100vh-180px)] px-3 relative overflow-hidden"
       style={{ background: "linear-gradient(180deg, #0D1B2A 0%, #0F1B2D 100%)" }}
     >
-      <Stars count={45} />
 
       <div className="relative z-10 px-1 pt-2 pb-1 flex items-center justify-between text-[10px] font-display font-bold tracking-wide text-[#7CB9E8]/80 uppercase">
         <span className="inline-flex items-center gap-1">

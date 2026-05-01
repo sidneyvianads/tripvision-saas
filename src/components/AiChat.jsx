@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import Stars from "./ambient/Stars";
 import Avatar from "./Avatar";
 
 export default function AiChat({ trip, days, user }) {
@@ -72,7 +71,6 @@ export default function AiChat({ trip, days, user }) {
       className="flex flex-col h-[calc(100vh-180px)] px-3 relative overflow-hidden"
       style={{ background: "linear-gradient(180deg, #0D1B2A 0%, #0F1B2D 100%)" }}
     >
-      <Stars count={45} />
 
       <div ref={ref} className="flex-1 overflow-y-auto py-3 space-y-2.5 scrollbar-hide relative z-10">
         {messages.map((m, idx) => {

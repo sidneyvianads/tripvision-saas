@@ -96,12 +96,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const signUp = useCallback(async ({ nome, email, senha, avatar_cor, avatar_url }) => {
+  const signUp = useCallback(async ({ nome, email, senha, avatar_cor, avatar_url, plano }) => {
     setLoading(true);
     try {
       const cleanNome  = (nome ?? "").trim();
       const cleanEmail = normalizeEmail(email);
       const cleanSenha = normalizePassword(senha);
+      const cleanPlano = (plano === "pro" ? "pro" : "free");
       if (!cleanNome)  throw new Error("Informe seu nome.");
       if (!cleanEmail) throw new Error("Informe seu e-mail.");
       if (cleanSenha.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");
@@ -123,6 +124,7 @@ export function AuthProvider({ children }) {
           senha_hash: hash,
           avatar_cor,
           avatar_url: avatar_url ?? null,
+          plano: cleanPlano,
         })
         .select(PROFILE_COLS)
         .single();
