@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Lock, Sparkles } from "lucide-react";
 import Avatar from "./Avatar";
 import { useChat } from "../hooks/useChat";
+import { getLimits } from "../data/plans";
+import UpgradeModal from "./UpgradeModal";
 
 const formatTime = (iso) => {
   try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
@@ -20,6 +22,41 @@ const formatDayLabel = (iso) => {
 };
 
 export default function GroupChat({ viagemId, user }) {
+  const limits = getLimits(user?.plano);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  if (!limits.chat) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center h-[calc(100vh-180px)] px-4 text-center relative overflow-hidden"
+        style={{ background: "linear-gradient(180deg, #0D1B2A 0%, #0F1B2D 100%)" }}
+      >
+        <div
+          className="rounded-3xl p-8 max-w-sm"
+          style={{ background: "rgba(232, 240, 254, 0.06)", border: "1px solid rgba(124, 185, 232, 0.30)" }}
+        >
+          <Lock className="w-10 h-10 text-[#7CB9E8] mx-auto" />
+          <h3 className="font-display font-extrabold text-snow text-xl mt-3">Chat do grupo é Pro</h3>
+          <p className="text-[#E8F0FE]/75 text-sm mt-2">
+            Conversa em tempo real com sua família/grupo dentro do app — incluído a partir do plano Pro.
+          </p>
+          <button
+            onClick={() => setShowUpgrade(true)}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-display font-extrabold text-white"
+            style={{ background: "linear-gradient(135deg, #E8834A 0%, #D4A574 100%)", boxShadow: "0 4px 16px rgba(232, 131, 74, 0.40)" }}
+          >
+            <Sparkles className="w-4 h-4" /> Assinar Pro
+          </button>
+        </div>
+        <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="chat" user={user} />
+      </div>
+    );
+  }
+
+  return <GroupChatInner viagemId={viagemId} user={user} />;
+}
+
+function GroupChatInner({ viagemId, user }) {
   const { messages, profilesById, loading, sendMessage } = useChat(viagemId);
   const [text, setText] = useState("");
   const ref = useRef(null);

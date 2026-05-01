@@ -3,12 +3,14 @@ import { Send, Sparkles, MapPin, AlertTriangle, Trash2, RotateCw } from "lucide-
 import ReactMarkdown from "react-markdown";
 import Stars from "./ambient/Stars";
 import Avatar from "./Avatar";
+import UpgradeModal from "./UpgradeModal";
 import { useIaConversa } from "../hooks/useIaConversa";
 import { useRoteiro } from "../hooks/useRoteiro";
 import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
+import { isPaid } from "../data/plans";
 
 const LOADING_PHASES = [
   { delay: 0,    text: "Pensando…",                    icon: "💭" },
@@ -103,11 +105,12 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(0);
-  const [usage, setUsage] = useState(() => getPlanUsage(user?.id));
+  const [usage, setUsage] = useState(() => getPlanUsage(user?.id, user?.plano));
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [lastUserText, setLastUserText] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   const scrollerRef = useRef(null);
   const abortRef = useRef(null);
@@ -142,9 +145,13 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     const trimmed = (text ?? "").trim();
     if (!trimmed) return;
 
-    const u = getPlanUsage(user.id);
+    const u = getPlanUsage(user.id, user.plano);
     if (u.remaining <= 0) {
-      setErr(`Você usou ${u.used}/${u.limit} mensagens de planejamento hoje. Volte amanhã ou ative o plano Grupo. ✨`);
+      if (!isPaid(user.plano)) {
+        setShowUpgrade(true);
+      } else {
+        setErr(`Você usou ${u.used}/${u.limit} mensagens hoje. Volte amanhã.`);
+      }
       return;
     }
 
@@ -221,7 +228,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       persist(after);
       setStreamingText("");
       setLastUserText(null);
-      setUsage(bumpPlanUsage(user.id));
+      setUsage(bumpPlanUsage(user.id, user.plano));
     } catch (e) {
       clearTimeout(safetyTimer);
       console.error("[PlanChat] stream failed:", e);
@@ -284,7 +291,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           <Sparkles className="w-3 h-3" /> Planejar com IA
         </span>
         <span className="tabular">
-          {usage.remaining} / {usage.limit} hoje
+          {usage.remaining} / {usage.limit} {usage.tipo === "lifetime" ? "no total" : "hoje"}
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="ml-2 text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />
@@ -354,20 +361,23 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       <form onSubmit={handleSubmit} className="flex items-center gap-2 py-3 relative z-10">
         <input
           className="input input-dark flex-1"
-          placeholder="Conta como vocês querem viajar…"
+          placeholder={usage.remaining <= 0 && !isPaid(user.plano) ? "Limite Free atingido — assine pra continuar…" : "Conta como vocês querem viajar…"}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={busy || usage.remaining <= 0}
+          disabled={busy || (usage.remaining <= 0 && isPaid(user.plano))}
+          onFocus={() => { if (usage.remaining <= 0 && !isPaid(user.plano)) setShowUpgrade(true); }}
         />
         <button
           type="submit"
           className="btn-primary !p-3 rounded-full inline-flex items-center justify-center"
-          disabled={!input.trim() || busy || usage.remaining <= 0}
+          disabled={!input.trim() || busy}
           aria-label="Enviar"
         >
           <Send className="w-4 h-4" />
         </button>
       </form>
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="ia" user={user} />
     </div>
   );
 }

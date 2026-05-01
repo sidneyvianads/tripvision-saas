@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Share2, Users, LogOut, Shield, Check } from "lucide-react";
+import { ArrowLeft, Share2, Users, LogOut, Shield, Check, UserCircle } from "lucide-react";
 import Avatar from "./Avatar";
 import People from "./People";
 import Profile from "./Profile";
+import PlanBadge from "./PlanBadge";
 import Mountains from "./ambient/Mountains";
 
 export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, children }) {
@@ -40,7 +41,10 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
           </Link>
           <div className="text-2xl">{trip.cover_emoji ?? "🧳"}</div>
           <div className="flex-1 min-w-0">
-            <div className="font-display font-extrabold text-lg leading-tight truncate">{trip.nome}</div>
+            <div className="font-display font-extrabold text-lg leading-tight truncate flex items-center gap-2">
+              <span className="truncate">{trip.nome}</span>
+              <PlanBadge plano={user?.plano} />
+            </div>
             <div className="text-[#7CB9E8] text-xs truncate font-display font-bold">
               {trip.cidades?.length ? trip.cidades.slice(0, 3).join(" · ") : "—"}
             </div>
@@ -72,6 +76,14 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
           >
             {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Share2 className="w-4 h-4" />}
           </button>
+          <Link
+            to="/conta"
+            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
+            aria-label="Minha conta"
+            title="Minha conta"
+          >
+            <UserCircle className="w-4 h-4" />
+          </Link>
           {onLogout && (
             <button
               onClick={onLogout}

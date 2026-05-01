@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import Snow from "../components/ambient/Snow";
@@ -10,7 +11,8 @@ const REDIRECT_DELAY_MS = 1800;
 
 export default function Welcome() {
   const { signIn, signUp, loading } = useAuth();
-  const [mode, setMode] = useState("login");
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState(params.get("mode") === "signup" ? "signup" : "login");
   const [err, setErr] = useState(null);
 
   const [email, setEmail] = useState("");

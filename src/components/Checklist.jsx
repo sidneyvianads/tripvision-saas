@@ -1,12 +1,18 @@
 import { useState } from "react";
-import { Check, Plus, Trash2, Loader2 } from "lucide-react";
+import { Check, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
 import { useChecklist } from "../hooks/useChecklist";
+import { getLimits } from "../data/plans";
+import UpgradeModal from "./UpgradeModal";
 
 export default function Checklist({ viagemId, user, isAdmin }) {
   const { items, loading, error, toggle, addItem, deleteItem } = useChecklist(viagemId);
   const [newTitle, setNewTitle] = useState("");
   const [newCat, setNewCat] = useState("antes");
   const [adding, setAdding] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const limits = getLimits(user?.plano);
+  const atLimit = limits.checklist != null && items.length >= limits.checklist;
 
   const total = items.length;
   const done = items.filter((i) => i.concluido).length;
@@ -17,6 +23,7 @@ export default function Checklist({ viagemId, user, isAdmin }) {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    if (atLimit) { setShowUpgrade(true); return; }
     setAdding(true);
     try {
       await addItem({ titulo: newTitle, categoria: newCat });
@@ -49,9 +56,10 @@ export default function Checklist({ viagemId, user, isAdmin }) {
       <form onSubmit={handleAdd} className="card p-3 mt-3 flex gap-2">
         <input
           className="input flex-1"
-          placeholder="Novo item…"
+          placeholder={atLimit ? `Limite Free: ${limits.checklist} itens. Assine pra ilimitado.` : "Novo item…"}
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
+          onFocus={() => { if (atLimit) setShowUpgrade(true); }}
           maxLength={120}
         />
         <select className="input" style={{ maxWidth: 130 }} value={newCat} onChange={(e) => setNewCat(e.target.value)}>
@@ -60,9 +68,11 @@ export default function Checklist({ viagemId, user, isAdmin }) {
           <option value="depois">📷 Depois</option>
         </select>
         <button type="submit" className="btn-fire !px-3 inline-flex items-center" disabled={!newTitle.trim() || adding}>
-          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : atLimit ? <Sparkles className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
         </button>
       </form>
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="checklist" user={user} />
 
       {loading && <div className="text-center text-[#7CB9E8]/70 text-sm py-8">Carregando…</div>}
       {error && <div className="text-center text-red-300 text-sm py-2">{error}</div>}

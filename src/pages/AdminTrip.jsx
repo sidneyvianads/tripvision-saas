@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link, Navigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Save, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Loader2, AlertTriangle, Lock, Sparkles } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrip } from "../hooks/useTrips";
 import { useRoteiro, addDia, updateDia, deleteDia, addAtividade, updateAtividade, deleteAtividade } from "../hooks/useRoteiro";
 import { ACTIVITY_TYPES, TYPE_OPTIONS, STATUS_OPTIONS } from "../data/types";
+import { getLimits } from "../data/plans";
 import Mountains from "../components/ambient/Mountains";
+import UpgradeModal from "../components/UpgradeModal";
 import { FullscreenLoader } from "../App";
 
 export default function AdminTrip() {
@@ -13,10 +15,36 @@ export default function AdminTrip() {
   const { user } = useAuth();
   const { trip, isAdmin, loading } = useTrip(slug, user?.id);
   const [editingDay, setEditingDay] = useState(null);
+  const [showUpgrade, setShowUpgrade] = useState(true);
 
   if (loading) return <FullscreenLoader />;
   if (!trip) return <Navigate to="/" replace />;
   if (!isAdmin) return <Navigate to={`/v/${slug}`} replace />;
+
+  const limits = getLimits(user?.plano);
+  if (!limits.admin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-winter p-4">
+        <div className="card p-8 max-w-sm text-center">
+          <Lock className="w-10 h-10 text-[#7CB9E8] mx-auto" />
+          <h3 className="font-display font-extrabold text-[#0F1B2D] text-xl mt-3">Painel admin é Pro</h3>
+          <p className="text-[#1A3A4A]/75 text-sm mt-2">
+            Edição manual fina do roteiro está disponível a partir do Pro. Use a aba <strong>✨ Planejar com IA</strong> pra montar conversando.
+          </p>
+          <button
+            onClick={() => setShowUpgrade(true)}
+            className="btn-primary mt-5 inline-flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" /> Assinar Pro
+          </button>
+          <Link to={`/v/${slug}`} className="mt-3 block text-sm text-[#2E86C1] hover:underline font-display font-bold">
+            Voltar
+          </Link>
+        </div>
+        <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="admin" user={user} />
+      </div>
+    );
+  }
 
   return editingDay
     ? <DayEditor day={editingDay} trip={trip} onClose={() => setEditingDay(null)} />
