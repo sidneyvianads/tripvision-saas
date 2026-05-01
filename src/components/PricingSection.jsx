@@ -9,20 +9,20 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
     <section className={`relative ${compact ? "py-4" : "py-14"} px-4`}>
       {!compact && (
         <div className="max-w-3xl mx-auto text-center mb-10">
-          <div className="text-xs font-display font-extrabold tracking-widest text-[#7CB9E8] uppercase">
+          <div className="text-xs font-display font-extrabold tracking-widest text-[#6366F1] uppercase">
             Preços simples
           </div>
-          <h2 className="text-3xl sm:text-4xl text-snow font-display font-extrabold mt-2">
+          <h2 className="text-3xl sm:text-4xl text-[#1F2937] font-display font-extrabold mt-2">
             Comece grátis. Cresça quando quiser.
           </h2>
-          <p className="text-[#E8F0FE]/75 mt-3 text-sm sm:text-base">
+          <p className="text-[#6B7280] mt-3 text-sm sm:text-base">
             Sem letra miúda, sem surpresa. Cancele a qualquer momento.
           </p>
         </div>
       )}
 
       <div className="flex justify-center mb-8">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full" style={{ background: "rgba(124,185,232,0.10)", border: "1px solid rgba(124,185,232,0.25)" }}>
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white" style={{ border: "1px solid #E5E7EB" }}>
           {["mensal", "anual"].map((c) => {
             const active = cycle === c;
             return (
@@ -31,9 +31,9 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
                 onClick={() => setCycle(c)}
                 className="px-4 py-1.5 rounded-full text-xs font-display font-extrabold tracking-wide uppercase transition-all"
                 style={{
-                  background: active ? "linear-gradient(135deg, #7CB9E8 0%, #2E86C1 100%)" : "transparent",
-                  color: active ? "#0F1B2D" : "#E8F0FE",
-                  boxShadow: active ? "0 4px 12px rgba(124,185,232,0.30)" : "none",
+                  background: active ? "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" : "transparent",
+                  color: active ? "#FFFFFF" : "#6B7280",
+                  boxShadow: active ? "0 4px 12px rgba(99, 102, 241, 0.30)" : "none",
                 }}
               >
                 {c === "anual" ? "Anual · -33%" : "Mensal"}

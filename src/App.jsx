@@ -44,10 +44,10 @@ export default function App() {
 
 function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center gradient-winter text-center p-6">
+    <div className="min-h-screen flex items-center justify-center bg-app text-center p-6">
       <div>
         <div className="text-6xl mb-3">🧭</div>
-        <h1 className="text-2xl text-snow">Página não encontrada</h1>
+        <h1 className="text-2xl text-[#1F2937]">Página não encontrada</h1>
         <a href="/" className="text-ice mt-2 inline-block">Voltar pra home</a>
       </div>
     </div>
@@ -56,7 +56,7 @@ function NotFound() {
 
 export function FullscreenLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center gradient-winter">
+    <div className="min-h-screen flex items-center justify-center bg-app">
       <Loader2 className="w-8 h-8 animate-spin text-[#7CB9E8]" />
     </div>
   );

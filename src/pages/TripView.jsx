@@ -50,10 +50,10 @@ export default function TripView() {
   if (loading) return <FullscreenLoader />;
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center gradient-winter text-center p-6">
+      <div className="min-h-screen flex items-center justify-center bg-app text-center p-6">
         <div>
           <div className="text-6xl mb-3">🧭</div>
-          <h1 className="text-2xl text-snow">{error}</h1>
+          <h1 className="text-2xl text-[#1F2937]">{error}</h1>
           <a href="/" className="text-ice mt-2 inline-block">Voltar</a>
         </div>
       </div>

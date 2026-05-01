@@ -29,7 +29,7 @@ export default function Profile({ onClose }) {
         style={{ background: "linear-gradient(180deg, #E8F0FE 0%, #FFFFFF 100%)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="gradient-header text-white px-4 py-3 flex items-center gap-2">
+        <div className="gradient-primary text-white px-4 py-3 flex items-center gap-2">
           <div className="text-xl">✏️</div>
           <div className="font-display font-extrabold flex-1">Editar perfil</div>
           <button onClick={onClose} className="p-1 rounded-full bg-white/15 hover:bg-white/25" aria-label="Fechar">

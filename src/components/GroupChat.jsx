@@ -36,7 +36,7 @@ export default function GroupChat({ viagemId, user }) {
           style={{ background: "rgba(232, 240, 254, 0.06)", border: "1px solid rgba(124, 185, 232, 0.30)" }}
         >
           <Lock className="w-10 h-10 text-[#7CB9E8] mx-auto" />
-          <h3 className="font-display font-extrabold text-snow text-xl mt-3">Chat do grupo é Pro</h3>
+          <h3 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Chat do grupo é Pro</h3>
           <p className="text-[#E8F0FE]/75 text-sm mt-2">
             Conversa em tempo real com sua família/grupo dentro do app — incluído a partir do plano Pro.
           </p>

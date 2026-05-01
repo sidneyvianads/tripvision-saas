@@ -52,13 +52,18 @@ export default function Welcome() {
     }
   };
 
+  // Validação rigorosa: 6+ chars, pelo menos 1 letra, pelo menos 1 número
+  const senhaForca = passwordStrength(senha);
+  const senhaValida = senhaForca?.valid === true;
+  const senhasIguais = senha && senha === senha2;
+
   const handleSignup = async (e) => {
     e.preventDefault();
     setErr(null);
     const nomeClean = nome.trim();
     if (!nomeClean) return setErr("Digite seu nome.");
     if (nomeClean.length > 50) return setErr("Nome muito longo (máx 50 caracteres).");
-    if (senha.length < 6) return setErr("Senha precisa ter no mínimo 6 caracteres.");
+    if (!senhaValida) return setErr("Senha muito fraca — use no mínimo 6 caracteres com letras e números.");
     if (senha !== senha2) return setErr("As senhas não conferem.");
     try {
       const created = await signUp({ nome: nomeClean, email, senha, avatar_cor: cor, avatar_url: photo });
@@ -67,9 +72,6 @@ export default function Welcome() {
       setErr(e.message);
     }
   };
-
-  // Indicador de força da senha
-  const senhaForca = passwordStrength(senha);
 
   return (
     <div
@@ -154,8 +156,10 @@ export default function Welcome() {
                 <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${senhaForca.pct}%`, background: senhaForca.color }} />
                 </div>
-                <div className="text-[11px] mt-1 font-display font-bold" style={{ color: senhaForca.color }}>
-                  Força: {senhaForca.label}
+                <div className="text-[11px] mt-1 font-display font-bold flex items-center gap-1.5" style={{ color: senhaForca.color }}>
+                  <span>{senhaForca.valid ? "✓" : "⚠"}</span>
+                  <span>Força: {senhaForca.label}</span>
+                  {senhaForca.hint && <span className="text-[10px] opacity-80 font-display font-semibold normal-case">— {senhaForca.hint}</span>}
                 </div>
               </div>
             )}
@@ -187,16 +191,22 @@ export default function Welcome() {
               </div>
             </div>
 
+            {senha && senha2 && !senhasIguais && !success && (
+              <div className="text-[11px] text-red-600 px-1 -mt-1">As senhas não conferem.</div>
+            )}
+
             <button
               type="submit"
               className="btn-primary w-full inline-flex items-center justify-center gap-2 mt-2"
-              disabled={isBusy}
+              disabled={isBusy || !senhaValida || !senhasIguais || !nome.trim()}
             >
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando conta…</>
                 : success
                   ? <><CheckCircle2 className="w-4 h-4" /> Conta criada!</>
-                  : <>Criar conta <ArrowRight className="w-4 h-4" /></>}
+                  : !senhaValida && senha
+                    ? <>Senha muito fraca</>
+                    : <>Criar conta <ArrowRight className="w-4 h-4" /></>}
             </button>
 
             {err && <ErrorBox msg={err} />}
@@ -257,14 +267,23 @@ function ErrorBox({ msg }) {
 
 function passwordStrength(s) {
   if (!s) return null;
-  let score = 0;
-  if (s.length >= 6) score++;
+  const hasLength = s.length >= 6;
+  const hasLetter = /[A-Za-z]/.test(s);
+  const hasNumber = /\d/.test(s);
+  const hasMixCase = /[a-z]/.test(s) && /[A-Z]/.test(s);
+  const hasSymbol = /[^A-Za-z0-9]/.test(s);
+  const valid = hasLength && hasLetter && hasNumber;
+
+  if (!hasLength) return { valid: false, label: "muito curta", color: "#EF4444", pct: 15, hint: "mínimo 6 caracteres" };
+  if (!hasLetter) return { valid: false, label: "muito fraca", color: "#EF4444", pct: 25, hint: "precisa de pelo menos 1 letra" };
+  if (!hasNumber) return { valid: false, label: "muito fraca", color: "#EF4444", pct: 25, hint: "precisa de pelo menos 1 número" };
+
+  // valid daqui pra baixo
+  let score = 1;
   if (s.length >= 10) score++;
-  if (/[A-Z]/.test(s) && /[a-z]/.test(s)) score++;
-  if (/\d/.test(s)) score++;
-  if (/[^A-Za-z0-9]/.test(s)) score++;
-  if (s.length < 6) return { label: "muito curta", color: "#EF4444", pct: 10 };
-  if (score <= 2) return { label: "fraca", color: "#EF4444", pct: 33 };
-  if (score === 3) return { label: "média", color: "#F59E0B", pct: 66 };
-  return { label: "forte", color: "#10B981", pct: 100 };
+  if (hasMixCase) score++;
+  if (hasSymbol) score++;
+  if (score === 1) return { valid: true, label: "ok", color: "#F59E0B", pct: 60, hint: null };
+  if (score === 2) return { valid: true, label: "boa", color: "#10B981", pct: 80, hint: null };
+  return { valid: true, label: "forte", color: "#10B981", pct: 100, hint: null };
 }

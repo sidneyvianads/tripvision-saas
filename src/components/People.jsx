@@ -36,7 +36,7 @@ export default function People({ viagemId, onClose }) {
         style={{ background: "linear-gradient(180deg, #E8F0FE 0%, #FFFFFF 100%)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="gradient-header text-white px-4 py-3 flex items-center gap-2">
+        <div className="gradient-primary text-white px-4 py-3 flex items-center gap-2">
           <div className="text-xl">❄️</div>
           <div className="flex-1">
             <div className="font-display font-extrabold leading-tight">Quem vai</div>

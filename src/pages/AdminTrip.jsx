@@ -25,11 +25,11 @@ export default function AdminTrip() {
   const limits = getLimits(user?.plano);
   if (!limits.admin) {
     return (
-      <div className="min-h-screen flex items-center justify-center gradient-winter p-4">
+      <div className="min-h-screen flex items-center justify-center bg-app p-4">
         <div className="card p-8 max-w-sm text-center">
-          <Lock className="w-10 h-10 text-[#7CB9E8] mx-auto" />
-          <h3 className="font-display font-extrabold text-[#0F1B2D] text-xl mt-3">Painel admin é Pro</h3>
-          <p className="text-[#1A3A4A]/75 text-sm mt-2">
+          <Lock className="w-10 h-10 text-[#6366F1] mx-auto" />
+          <h3 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Painel admin é Pro</h3>
+          <p className="text-[#374151]/75 text-sm mt-2">
             Edição manual fina do roteiro está disponível a partir do Pro. Use a aba <strong>✨ Planejar com IA</strong> pra montar conversando.
           </p>
           <button
@@ -129,9 +129,8 @@ function DayList({ trip, onEdit }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col gradient-winter">
-      <header className="gradient-header text-white safe-top relative overflow-hidden">
-        <Mountains className="h-16" color="#7CB9E8" />
+    <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
+      <header className="gradient-tema text-white safe-top relative overflow-hidden">
         <div className="px-4 pt-4 pb-5 flex items-center gap-3 relative z-10">
           <Link to={`/v/${trip.slug}`} className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />
@@ -155,8 +154,8 @@ function DayList({ trip, onEdit }) {
             ? (
               <div className="card p-6 text-center">
                 <div className="text-3xl mb-2">🗺️</div>
-                <div className="font-display font-extrabold text-[#0F1B2D]">Sem dias ainda</div>
-                <p className="text-sm text-[#1A3A4A]/70 mt-1">Adicione o primeiro dia abaixo.</p>
+                <div className="font-display font-extrabold text-[#1F2937]">Sem dias ainda</div>
+                <p className="text-sm text-[#374151]/70 mt-1">Adicione o primeiro dia abaixo.</p>
               </div>
             )
             : (
@@ -168,11 +167,11 @@ function DayList({ trip, onEdit }) {
                 >
                   <div className="text-2xl">{d.cover_emoji ?? "🗓️"}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] uppercase font-display font-bold text-[#1A3A4A]/60 tabular tracking-wide">
+                    <div className="text-[11px] uppercase font-display font-bold text-[#374151]/60 tabular tracking-wide">
                       Dia {d.dia_numero}{d.data ? ` · ${d.data.slice(8, 10)}/${d.data.slice(5, 7)}` : ""}
                     </div>
-                    <div className="font-display font-extrabold truncate text-[#0F1B2D]">{d.titulo || "(sem título)"}</div>
-                    <div className="text-xs text-[#1A3A4A]/70">{d.atividades?.length ?? 0} atividades · {d.cidade ?? "—"}</div>
+                    <div className="font-display font-extrabold truncate text-[#1F2937]">{d.titulo || "(sem título)"}</div>
+                    <div className="text-xs text-[#374151]/70">{d.atividades?.length ?? 0} atividades · {d.cidade ?? "—"}</div>
                   </div>
                   <button onClick={(e) => handleCopy(d, e)} className="text-[#6B7280] hover:text-[#1F2937] p-1" aria-label="Duplicar dia" title="Duplicar dia">
                     <Copy className="w-4 h-4" />
@@ -273,9 +272,8 @@ function DayEditor({ day: initial, trip, onClose }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col gradient-winter">
-      <header className="gradient-header text-white safe-top relative overflow-hidden">
-        <Mountains className="h-16" color="#7CB9E8" />
+    <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
+      <header className="gradient-tema text-white safe-top relative overflow-hidden">
         <div className="px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
           <button onClick={onClose} className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />
@@ -287,7 +285,7 @@ function DayEditor({ day: initial, trip, onClose }) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-full bg-white text-[#1B4F72] px-3 py-2 inline-flex items-center gap-1.5 text-sm font-display font-extrabold disabled:opacity-50"
+            className="rounded-full bg-white text-[#6366F1] px-3 py-2 inline-flex items-center gap-1.5 text-sm font-display font-extrabold disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Salvar
@@ -322,8 +320,8 @@ function DayEditor({ day: initial, trip, onClose }) {
 
         <section className="space-y-2">
           <div className="flex items-center justify-between px-1">
-            <div className="font-display font-extrabold text-snow">Atividades ({atividades.length})</div>
-            <button onClick={addAtv} className="text-sm font-display font-bold text-[#7CB9E8] inline-flex items-center gap-1">
+            <div className="font-display font-extrabold text-[#1F2937]">Atividades ({atividades.length})</div>
+            <button onClick={addAtv} className="text-sm font-display font-bold text-[#6366F1] inline-flex items-center gap-1">
               <Plus className="w-4 h-4" /> Adicionar
             </button>
           </div>
@@ -337,8 +335,8 @@ function DayEditor({ day: initial, trip, onClose }) {
                     <option key={t} value={t}>{ACTIVITY_TYPES[t].icon} {ACTIVITY_TYPES[t].label}</option>
                   ))}
                 </select>
-                <button onClick={() => moveAtv(idx, -1)} className="text-[#7CB9E8] px-1" aria-label="Subir">↑</button>
-                <button onClick={() => moveAtv(idx, +1)} className="text-[#7CB9E8] px-1" aria-label="Descer">↓</button>
+                <button onClick={() => moveAtv(idx, -1)} className="text-[#6366F1] px-1" aria-label="Subir">↑</button>
+                <button onClick={() => moveAtv(idx, +1)} className="text-[#6366F1] px-1" aria-label="Descer">↓</button>
                 <button onClick={() => removeAtv(idx)} className="text-red-400 p-1" aria-label="Remover">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -363,7 +361,7 @@ function DayEditor({ day: initial, trip, onClose }) {
           ))}
 
           {atividades.length === 0 && (
-            <div className="card p-6 text-center text-[#1A3A4A]/60 text-sm">Nenhuma atividade. Clique em "Adicionar".</div>
+            <div className="card p-6 text-center text-[#374151]/60 text-sm">Nenhuma atividade. Clique em "Adicionar".</div>
           )}
         </section>
 
