@@ -8,6 +8,7 @@ import { ACTIVITY_TYPES, TYPE_OPTIONS, STATUS_OPTIONS } from "../data/types";
 import { getLimits } from "../data/plans";
 import { logEdit, fetchLastEdit } from "../lib/editLog";
 import { temaCssVars } from "../lib/applyTema";
+import { getTema } from "../data/themes";
 import UpgradeModal from "../components/UpgradeModal";
 import { FullscreenLoader } from "../App";
 
@@ -128,9 +129,14 @@ function DayList({ trip, onEdit }) {
     }
   };
 
+  const tema = getTema(trip.tema);
+
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
-      <header className="gradient-tema text-white safe-top relative overflow-hidden">
+      <header
+        className="text-white safe-top relative overflow-hidden"
+        style={{ background: tema.gradient }}
+      >
         <div className="px-4 pt-4 pb-5 flex items-center gap-3 relative z-10">
           <Link to={`/v/${trip.slug}`} className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />
@@ -271,9 +277,14 @@ function DayEditor({ day: initial, trip, onClose }) {
     } finally { setSaving(false); }
   };
 
+  const tema = getTema(trip.tema);
+
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
-      <header className="gradient-tema text-white safe-top relative overflow-hidden">
+      <header
+        className="text-white safe-top relative overflow-hidden"
+        style={{ background: tema.gradient }}
+      >
         <div className="px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
           <button onClick={onClose} className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />

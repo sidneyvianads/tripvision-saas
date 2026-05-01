@@ -374,7 +374,31 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         </div>
       )}
 
-      {!busy && (
+      {/* Banner de limite atingido (Free) */}
+      {usage.remaining <= 0 && !isPaid(user.plano) && (
+        <div
+          className="relative z-10 mx-1 mb-2 rounded-xl px-4 py-3 flex flex-col gap-2"
+          style={{ background: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "1px solid #F59E0B" }}
+        >
+          <div className="flex items-start gap-2">
+            <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#92400E]" />
+            <div className="text-[#92400E] text-sm">
+              <strong>Você usou suas {usage.limit} mensagens gratuitas.</strong>
+              <div className="text-[12px] mt-0.5">Assine o Pro pra IA ilimitada com pesquisa online em tempo real.</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowUpgrade(true)}
+            className="btn-primary inline-flex items-center justify-center gap-1.5 !py-2 text-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Assinar Pro
+          </button>
+        </div>
+      )}
+
+      {/* Chips: ocultos se atingiu o limite */}
+      {!busy && usage.remaining > 0 && (
         <div className="scroll-x-snap scrollbar-hide relative z-10 -mx-1 px-1 pb-1">
           {SUGESTOES.map((s) => (
             <button
@@ -393,17 +417,27 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       <form onSubmit={handleSubmit} className="flex items-center gap-2 py-3 relative z-10">
         <input
           className="input input-dark flex-1"
-          placeholder={usage.remaining <= 0 && !isPaid(user.plano) ? "Limite Free atingido — assine pra continuar…" : "Conta como vocês querem viajar…"}
+          placeholder={
+            usage.remaining <= 0
+              ? (isPaid(user.plano) ? "Você atingiu o limite de hoje." : "Você usou suas mensagens gratuitas.")
+              : "Conta como vocês querem viajar…"
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={busy || (usage.remaining <= 0 && isPaid(user.plano))}
+          disabled={busy || usage.remaining <= 0}
           onFocus={() => { if (usage.remaining <= 0 && !isPaid(user.plano)) setShowUpgrade(true); }}
         />
         <button
           type="submit"
           className="btn-primary !p-3 rounded-full inline-flex items-center justify-center"
-          disabled={!input.trim() || busy}
+          disabled={!input.trim() || busy || usage.remaining <= 0}
           aria-label="Enviar"
+          onClick={(e) => {
+            if (usage.remaining <= 0 && !isPaid(user.plano)) {
+              e.preventDefault();
+              setShowUpgrade(true);
+            }
+          }}
         >
           <Send className="w-4 h-4" />
         </button>
