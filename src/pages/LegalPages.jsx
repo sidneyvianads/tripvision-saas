@@ -110,7 +110,7 @@ export function PrivacidadePage() {
           <li><strong>Supabase</strong> (banco de dados, hospedado em São Paulo)</li>
           <li><strong>Anthropic</strong> (IA Claude — recebe apenas contexto da viagem e sua mensagem)</li>
           <li><strong>Netlify</strong> (hospedagem do site)</li>
-          <li><strong>Mercado Pago</strong> (somente pra processar pagamentos do Pro/Grupo)</li>
+          <li><strong>Mercado Pago</strong> (somente pra processar pagamentos do Pro)</li>
         </ul>
       </Section>
       <Section title="Seus direitos">

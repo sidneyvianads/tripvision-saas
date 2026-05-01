@@ -159,17 +159,21 @@ export default async (req) => {
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
 
-  const { message, history = [], viagem = {} } = body ?? {};
+  const { message, history = [], viagem = {}, user_plano = "free" } = body ?? {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
   }
+  const allowSearch = user_plano === "pro";
 
   const sanitizedHistory = (Array.isArray(history) ? history : [])
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
     .slice(-20)
     .map((m) => ({ role: m.role, content: m.content }));
 
-  const SYSTEM = SYSTEM_TEMPLATE(viagem);
+  let SYSTEM = SYSTEM_TEMPLATE(viagem);
+  if (!allowSearch) {
+    SYSTEM += `\n\nIMPORTANTE — VOCÊ ESTÁ NO PLANO FREE:\nVocê NÃO TEM acesso a web_search neste momento. Não tente pesquisar online — não há ferramenta disponível. Quando o usuário pedir preços, hotéis ou restaurantes específicos, diga: "Pra te trazer preços e endereços atualizados em tempo real, preciso do Pro 🔍 ✨ — assim você desbloqueia a pesquisa online. Por enquanto posso te ajudar a estruturar o roteiro e dar dicas gerais!". Continue ajudando com sugestões baseadas no seu conhecimento, mas seja honesto sobre não ter dados em tempo real.`;
+  }
 
   let upstream;
   try {
@@ -187,9 +191,9 @@ export default async (req) => {
         system: [
           { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
         ],
-        tools: [
-          { type: "web_search_20250305", name: "web_search", max_uses: 2 },
-        ],
+        ...(allowSearch
+          ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }] }
+          : {}),
         messages: [
           ...sanitizedHistory,
           { role: "user", content: message.trim() },

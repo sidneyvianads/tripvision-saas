@@ -1,5 +1,5 @@
 // Rate limiting client-side via localStorage.
-// Free: lifetime counter. Pro/Grupo: daily counter.
+// Free: lifetime counter. Pro: daily counter.
 // Não é à prova de fraude — protege custo da maioria dos casos.
 
 import { getLimits } from "../data/plans";

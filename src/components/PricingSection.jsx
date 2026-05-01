@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, X, Sparkles, Star } from "lucide-react";
+import { Check, X, Sparkles } from "lucide-react";
 import { PLANS, PRICES } from "../data/plans";
 
 export default function PricingSection({ onChoose, currentPlan = null, compact = false }) {
@@ -43,10 +43,9 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-        <PlanCard plan={PLANS.free}  cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} />
-        <PlanCard plan={PLANS.pro}   cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} highlight />
-        <PlanCard plan={PLANS.grupo} cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+        <PlanCard plan={PLANS.free} cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} />
+        <PlanCard plan={PLANS.pro}  cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} highlight />
       </div>
     </section>
   );
@@ -60,19 +59,17 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight }) {
     <div
       className="relative rounded-2xl p-5 flex flex-col h-full"
       style={{
-        background: highlight
-          ? "linear-gradient(180deg, rgba(232, 240, 254, 0.99) 0%, rgba(212, 165, 116, 0.10) 100%)"
-          : "linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(232, 240, 254, 0.92) 100%)",
-        border: highlight ? "2px solid #D4A574" : "1px solid rgba(124, 185, 232, 0.30)",
+        background: "#FFFFFF",
+        border: highlight ? "2px solid #F59E0B" : "1px solid #E5E7EB",
         boxShadow: highlight
-          ? "0 12px 36px rgba(212, 165, 116, 0.30)"
-          : "0 4px 16px rgba(15, 27, 45, 0.18)",
+          ? "0 12px 36px rgba(245, 158, 11, 0.20)"
+          : "0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04)",
       }}
     >
       {plan.badge && (
         <div
-          className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest"
-          style={{ background: "#D4A574", color: "#0F1B2D" }}
+          className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest text-white"
+          style={{ background: "linear-gradient(135deg, #F59E0B, #FBBF24)" }}
         >
           {plan.badge}
         </div>
@@ -126,12 +123,8 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight }) {
         ) : plan.id === "free" ? (
           <button
             onClick={() => onChoose?.(plan.id, cycle)}
-            className="w-full px-4 py-2.5 rounded-xl font-display font-extrabold text-sm border-2 transition"
-            style={{
-              borderColor: "#7CB9E8",
-              color: "#1A3A4A",
-              background: "rgba(124, 185, 232, 0.08)",
-            }}
+            className="w-full px-4 py-2.5 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F9FAFB]"
+            style={{ borderColor: "#E5E7EB", color: "#1F2937", background: "white" }}
           >
             Começar grátis
           </button>
@@ -140,15 +133,11 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight }) {
             onClick={() => onChoose?.(plan.id, cycle)}
             className="w-full px-4 py-2.5 rounded-xl font-display font-extrabold text-sm text-white inline-flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
             style={{
-              background: highlight
-                ? "linear-gradient(135deg, #D4A574 0%, #E8834A 100%)"
-                : "linear-gradient(135deg, #7CB9E8 0%, #2E86C1 100%)",
-              boxShadow: highlight
-                ? "0 4px 16px rgba(232, 131, 74, 0.40)"
-                : "0 4px 16px rgba(124, 185, 232, 0.40)",
+              background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+              boxShadow: "0 4px 16px rgba(99, 102, 241, 0.40)",
             }}
           >
-            {plan.id === "pro" ? <Sparkles className="w-4 h-4" /> : <Star className="w-4 h-4" />}
+            <Sparkles className="w-4 h-4" />
             Assinar {plan.nome}
           </button>
         )}

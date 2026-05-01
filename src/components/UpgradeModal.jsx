@@ -16,25 +16,29 @@ export default function UpgradeModal({
 
   const heading = (
     {
-      ia:        "✨ Libere o poder da IA",
-      viagens:   "📁 Mais viagens, menos limite",
-      chat:      "💬 Chat do grupo é Pro",
-      admin:     "🛡️ Painel admin é Pro",
-      checklist: "✅ Checklist ilimitado",
-      membros:   "👥 Mais pessoas no grupo",
+      ia:           "✨ Libere o poder da IA",
+      viagens:      "📁 Mais viagens, menos limite",
+      chat:         "💬 Chat do grupo é Pro",
+      admin:        "🛡️ Painel admin é Pro",
+      checklist:    "✅ Checklist ilimitado",
+      membros:      "👥 Mais pessoas no grupo",
+      compartilhar: "🔗 Compartilhar viagem é Pro",
+      pesquisa:     "🔍 Pesquisa online é Pro",
     }[reason]
   ) ?? "✨ Libere o TripVision Pro";
 
   const desc = (
     {
-      ia:        "Suas mensagens gratuitas acabaram. Assina o Pro pra planejamento ilimitado com pesquisa real online.",
-      viagens:   "O Free permite 1 viagem ativa. Assina o Pro pra criar até 5 (ou Grupo pra 10).",
-      chat:      "O chat do grupo está disponível no Pro. Conversa com a galera sem sair do app.",
-      admin:     "Edição manual fina do roteiro está no Pro. Combine com a IA pra ajustar detalhes.",
-      checklist: "O Free permite 5 itens. Pro e Grupo são ilimitados.",
-      membros:   "O Free permite 5 pessoas. Pro suporta 15, Grupo suporta 30.",
+      ia:           "Suas mensagens gratuitas acabaram. Assina o Pro pra planejamento ilimitado com pesquisa online em tempo real.",
+      viagens:      "O Free permite 1 viagem ativa. Assina o Pro pra criar até 3.",
+      chat:         "O chat do grupo está disponível no Pro. Conversa com a galera sem sair do app.",
+      admin:        "Edição manual fina do roteiro está no Pro. Combine com a IA pra ajustar detalhes.",
+      checklist:    "O Free permite 5 itens. No Pro é ilimitado.",
+      membros:      "O Free é só pra você. Pro permite até 5 pessoas no grupo.",
+      compartilhar: "Compartilhar a viagem com o grupo é exclusivo do Pro. Mande o link pra quem vai junto e todos veem o roteiro pelo app.",
+      pesquisa:     "A pesquisa online em tempo real (preços, hotéis, restaurantes atualizados) é exclusiva do Pro. Free só conversa com a IA sem pesquisa.",
     }[reason]
-  ) ?? "Veja os planos e escolha o que faz sentido pra vocês.";
+  ) ?? "Veja o plano Pro e libere todos os recursos.";
 
   const handleAssinar = async (plano, ciclo) => {
     setErr(null);
@@ -93,9 +97,8 @@ export default function UpgradeModal({
         <div className="flex-1 overflow-y-auto p-5">
           <p className="text-sm text-[#1A3A4A]">{desc}</p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+          <div className="mt-5">
             <PlanQuick plan={PLANS.pro} priceM={PRICES.pro.mensal} priceA={PRICES.pro.anual} onAssinar={handleAssinar} disabled={busy} highlight />
-            <PlanQuick plan={PLANS.grupo} priceM={PRICES.grupo.mensal} priceA={PRICES.grupo.anual} onAssinar={handleAssinar} disabled={busy} />
           </div>
 
           {info && (

@@ -190,6 +190,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         {
           message: trimmed,
           history: historyForApi,
+          user_plano: user.plano ?? "free",
           viagem: {
             nome: trip.nome,
             data_inicio: trip.data_inicio,

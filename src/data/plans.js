@@ -5,50 +5,36 @@ export const PLANS = {
   free: {
     id: "free",
     nome: "Free",
-    icon: "❄️",
-    cor: "#7CB9E8",
-    tagline: "Pra começar",
+    icon: "🧳",
+    cor: "#6366F1",
+    tagline: "Pra experimentar",
     features: [
-      "1 viagem ativa",
-      "Roteiro montado por formulário",
-      "5 mensagens de IA (lifetime)",
-      "Até 5 pessoas no grupo",
+      "1 viagem",
+      "5 mensagens de IA (no total)",
+      "Editar roteiro manualmente",
       "Checklist básico (5 itens)",
-      "Suporte por comunidade",
     ],
-    excluidos: ["Chat do grupo", "Painel admin", "IA ilimitada"],
+    excluidos: [
+      "Compartilhar com o grupo",
+      "Chat do grupo",
+      "Pesquisa online da IA",
+    ],
   },
   pro: {
     id: "pro",
     nome: "Pro",
     icon: "✨",
-    cor: "#D4A574",
-    tagline: "Pro nosso uso real",
+    cor: "#8B5CF6",
+    tagline: "Pra viajar de verdade",
     badge: "MAIS POPULAR",
     features: [
-      "5 viagens ativas",
-      "IA conversacional ilimitada",
+      "Até 3 viagens",
+      "IA com pesquisa online (preços reais)",
       "50 mensagens IA por dia",
-      "Até 15 pessoas no grupo",
+      "Compartilhar com até 5 pessoas",
       "Chat do grupo realtime",
-      "Painel admin (editar roteiro)",
       "Checklist ilimitado",
-      "Suporte por email",
-    ],
-  },
-  grupo: {
-    id: "grupo",
-    nome: "Grupo",
-    icon: "⭐",
-    cor: "#E8834A",
-    tagline: "Pra grupos grandes",
-    features: [
-      "10 viagens ativas",
-      "IA conversacional ilimitada",
-      "100 mensagens IA por dia",
-      "Até 30 pessoas no grupo",
-      "Chat + admin + tudo do Pro",
-      "Suporte prioritário",
+      "Editar roteiro completo",
     ],
   },
 };
@@ -58,17 +44,32 @@ export const PRICES = {
     mensal: { amount: 14.9,  cycle: "mensal", display: "R$ 14,90/mês",  full: "R$ 14,90 por mês" },
     anual:  { amount: 119.9, cycle: "anual",  display: "R$ 119,90/ano", full: "R$ 119,90 por ano (economize 33%)" },
   },
-  grupo: {
-    mensal: { amount: 29.9,  cycle: "mensal", display: "R$ 29,90/mês",  full: "R$ 29,90 por mês" },
-    anual:  { amount: 239.9, cycle: "anual",  display: "R$ 239,90/ano", full: "R$ 239,90 por ano (economize 33%)" },
-  },
 };
 
 // Limites técnicos aplicados em runtime
 export const LIMITS = {
-  free:  { viagens: 1,  iaMsgsLifetime: 5,  iaMsgsDia: null, membros: 5,  checklist: 5,    chat: false, admin: false },
-  pro:   { viagens: 5,  iaMsgsLifetime: null, iaMsgsDia: 50,  membros: 15, checklist: null, chat: true,  admin: true  },
-  grupo: { viagens: 10, iaMsgsLifetime: null, iaMsgsDia: 100, membros: 30, checklist: null, chat: true,  admin: true  },
+  free: {
+    viagens: 1,
+    iaMsgsLifetime: 5,
+    iaMsgsDia: null,
+    membros: 1,         // só o dono — não compartilha
+    checklist: 5,
+    chat: false,
+    admin: true,        // free pode editar manualmente o próprio roteiro
+    pesquisa: false,    // sem web_search
+    compartilhar: false,
+  },
+  pro: {
+    viagens: 3,
+    iaMsgsLifetime: null,
+    iaMsgsDia: 50,
+    membros: 5,
+    checklist: null,
+    chat: true,
+    admin: true,
+    pesquisa: true,
+    compartilhar: true,
+  },
 };
 
 export function getLimits(plano) {
@@ -80,9 +81,9 @@ export function planName(plano) {
 }
 
 export function planIcon(plano) {
-  return PLANS[plano]?.icon ?? "❄️";
+  return PLANS[plano]?.icon ?? "🧳";
 }
 
 export function isPaid(plano) {
-  return plano === "pro" || plano === "grupo";
+  return plano === "pro";
 }
