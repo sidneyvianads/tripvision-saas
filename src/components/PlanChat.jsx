@@ -114,6 +114,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(0);
   const [usage, setUsage] = useState(() => getPlanUsage(user?.id, user?.plano));
+
+  useEffect(() => {
+    console.log("[PlanChat] usage:", usage, "user.plano:", user?.plano, "isPaid:", isPaid(user?.plano));
+  }, [usage, user?.plano]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -307,7 +311,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           >
             📋 Resumir
           </button>
-          <span>{usage.remaining} / {usage.limit} {usage.tipo === "lifetime" ? "total" : "hoje"}</span>
+          <span>{usage.used}/{usage.limit} {usage.tipo === "lifetime" ? "no total" : "hoje"}</span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />

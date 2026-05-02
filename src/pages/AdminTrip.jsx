@@ -130,6 +130,7 @@ function DayList({ trip, onEdit }) {
   };
 
   const tema = getTema(trip.tema);
+  console.log("[AdminTrip] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
@@ -278,6 +279,7 @@ function DayEditor({ day: initial, trip, onClose }) {
   };
 
   const tema = getTema(trip.tema);
+  console.log("[AdminTrip] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>

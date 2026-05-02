@@ -43,6 +43,7 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   };
 
   const tema = getTema(trip.tema);
+  console.log("[TripLayout] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
