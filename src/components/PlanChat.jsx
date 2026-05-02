@@ -97,13 +97,13 @@ const MD_COMPONENTS_LIGHT = {
   ul:     ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
   ol:     ({ children }) => <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>,
   li:     ({ children }) => <li className="leading-relaxed">{children}</li>,
-  strong: ({ children }) => <strong className="font-display font-extrabold text-[#0F1B2D]">{children}</strong>,
+  strong: ({ children }) => <strong className="font-display font-extrabold text-[#1F2937]">{children}</strong>,
   em:     ({ children }) => <em className="italic">{children}</em>,
-  code:   ({ children }) => <code className="px-1 py-0.5 rounded bg-[#1A3A4A]/10 text-[#1A3A4A] text-[0.9em]">{children}</code>,
-  a:      ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-[#2E86C1] underline break-words">{children}</a>,
-  h1:     ({ children }) => <h1 className="text-base font-display font-extrabold text-[#0F1B2D] mt-1">{children}</h1>,
-  h2:     ({ children }) => <h2 className="text-sm font-display font-extrabold text-[#0F1B2D] mt-1">{children}</h2>,
-  h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#0F1B2D] mt-1">{children}</h3>,
+  code:   ({ children }) => <code className="px-1 py-0.5 rounded bg-[#F3F4F6] text-[#374151] text-[0.9em]">{children}</code>,
+  a:      ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="underline break-words" style={{ color: "var(--tv-accent-dark)" }}>{children}</a>,
+  h1:     ({ children }) => <h1 className="text-base font-display font-extrabold text-[#1F2937] mt-1">{children}</h1>,
+  h2:     ({ children }) => <h2 className="text-sm font-display font-extrabold text-[#1F2937] mt-1">{children}</h2>,
+  h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#1F2937] mt-1">{children}</h3>,
 };
 
 export default function PlanChat({ trip, user, onGoToRoteiro }) {
@@ -158,6 +158,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     if (!trimmed) return;
 
     const u = getPlanUsage(user.id, user.plano);
+    console.log("[PlanChat GATE CHECK]", { remaining: u.remaining, used: u.used, limit: u.limit, plano: user.plano, isPaid: isPaid(user.plano) });
     if (u.remaining <= 0) {
       if (!isPaid(user.plano)) {
         setShowUpgrade(true);
@@ -295,10 +296,13 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   return (
     <div
       className="flex flex-col h-[calc(100vh-180px)] px-3 relative overflow-hidden"
-      style={{ background: "linear-gradient(180deg, #0D1B2A 0%, #0F1B2D 100%)" }}
+      style={{ background: "var(--tv-bg-light)" }}
     >
 
-      <div className="relative z-10 px-1 pt-2 pb-1 flex items-center justify-between text-[10px] font-display font-bold tracking-wide text-[#7CB9E8]/80 uppercase">
+      <div
+        className="relative z-10 px-1 pt-2 pb-1 flex items-center justify-between text-[10px] font-display font-bold tracking-wide uppercase"
+        style={{ color: "var(--tv-accent-dark)" }}
+      >
         <span className="inline-flex items-center gap-1">
           <Sparkles className="w-3 h-3" /> Planejar com IA
         </span>
@@ -306,14 +310,15 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           <button
             onClick={() => runSend("Resuma todo o roteiro montado até agora, dia a dia.")}
             disabled={busy}
-            className="text-[#7CB9E8] hover:text-white normal-case font-display font-bold disabled:opacity-50"
+            className="normal-case font-display font-bold disabled:opacity-50 hover:opacity-80"
+            style={{ color: "var(--tv-accent-dark)" }}
             title="Resumir roteiro"
           >
             📋 Resumir
           </button>
-          <span>{usage.used}/{usage.limit} {usage.tipo === "lifetime" ? "no total" : "hoje"}</span>
+          <span>{usage.used}/{usage.limit} {usage.tipo === "lifetime" ? "usadas" : "hoje"}</span>
           {messages.length > 0 && !busy && (
-            <button onClick={handleReset} className="text-red-300 hover:text-red-200 inline-flex items-center gap-1" title="Apagar conversa">
+            <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />
             </button>
           )}
@@ -322,7 +327,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 
       <div ref={scrollerRef} className="flex-1 overflow-y-auto py-2 space-y-2.5 scrollbar-hide relative z-10">
         {convLoading && (
-          <div className="text-center text-[#7CB9E8]/60 text-sm py-6">Carregando conversa…</div>
+          <div className="text-center text-[#6B7280] text-sm py-6">Carregando conversa…</div>
         )}
 
         {renderedMessages.map((m, idx) => (
@@ -341,10 +346,14 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             <BotAvatar />
             <div
               className="max-w-[80%] rounded-2xl rounded-bl-sm px-3 py-2 text-sm whitespace-pre-wrap break-words"
-              style={{ background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
+              style={{ background: "#FFFFFF", color: "#1F2937", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)" }}
             >
               <ReactMarkdown components={MD_COMPONENTS_LIGHT}>{cleanedStream}</ReactMarkdown>
-              <span className="inline-block w-1.5 h-4 ml-0.5 align-middle bg-[#2E86C1] animate-pulse" aria-hidden />
+              <span
+                className="inline-block w-1.5 h-4 ml-0.5 align-middle animate-pulse"
+                style={{ background: "var(--tv-accent-dark)" }}
+                aria-hidden
+              />
             </div>
           </div>
         )}
@@ -355,16 +364,16 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             <BotAvatar />
             <div
               className="rounded-2xl rounded-bl-sm px-4 py-3 max-w-[80%]"
-              style={{ background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
+              style={{ background: "#FFFFFF", color: "#1F2937", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)" }}
             >
               <div className="flex items-center gap-2 text-sm">
                 <span>{currentPhase.icon}</span>
                 <span>{currentPhase.text}</span>
               </div>
               <div className="flex gap-1 mt-1.5">
-                <span className="dot w-1.5 h-1.5 rounded-full bg-[#7CB9E8]" />
-                <span className="dot w-1.5 h-1.5 rounded-full bg-[#7CB9E8]" />
-                <span className="dot w-1.5 h-1.5 rounded-full bg-[#7CB9E8]" />
+                <span className="dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--tv-accent)" }} />
+                <span className="dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--tv-accent)" }} />
+                <span className="dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--tv-accent)" }} />
               </div>
             </div>
           </div>
@@ -410,7 +419,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
               type="button"
               onClick={() => runSend(s)}
               className="shrink-0 text-[12px] px-3 py-1.5 rounded-full font-display font-bold whitespace-nowrap"
-              style={{ background: "rgba(124, 185, 232, 0.15)", color: "#7CB9E8", border: "1px solid rgba(124, 185, 232, 0.30)" }}
+              style={{ background: "#FFFFFF", color: "var(--tv-accent-dark)", border: "1px solid var(--tv-card-border)" }}
             >
               {s}
             </button>
@@ -420,7 +429,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2 py-3 relative z-10">
         <input
-          className="input input-dark flex-1"
+          className="input flex-1"
           placeholder={
             usage.remaining <= 0
               ? (isPaid(user.plano) ? "Você atingiu o limite de hoje." : "Você usou suas mensagens gratuitas.")
@@ -456,9 +465,9 @@ function BotAvatar() {
   return (
     <div
       className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-base"
-      style={{ background: "linear-gradient(135deg, #7CB9E8 0%, #2E86C1 100%)", boxShadow: "0 0 12px rgba(124, 185, 232, 0.5)" }}
+      style={{ background: "var(--tv-gradient)", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}
     >
-      <span>❄️</span>
+      <span>✨</span>
     </div>
   );
 }
@@ -473,8 +482,8 @@ function Message({ message, user, onGoToRoteiro, onRetry }) {
           <div
             className={`rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${isUser ? "rounded-br-sm text-white" : "rounded-bl-sm"}`}
             style={isUser
-              ? { background: "linear-gradient(135deg, #2E86C1 0%, #1B4F72 100%)", boxShadow: "0 2px 12px rgba(46, 134, 193, 0.30)" }
-              : { background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
+              ? { background: "var(--tv-gradient)", boxShadow: "0 2px 12px rgba(0, 0, 0, 0.12)" }
+              : { background: "#FFFFFF", color: "#1F2937", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)" }}
           >
             {isUser ? (
               message.content
@@ -488,7 +497,7 @@ function Message({ message, user, onGoToRoteiro, onRetry }) {
           <button
             onClick={onRetry}
             className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold"
-            style={{ background: "rgba(124, 185, 232, 0.18)", color: "#7CB9E8", border: "1px solid rgba(124, 185, 232, 0.45)" }}
+            style={{ background: "#FFFFFF", color: "var(--tv-accent-dark)", border: "1px solid var(--tv-card-border)" }}
           >
             <RotateCw className="w-3 h-3" />
             Tentar de novo

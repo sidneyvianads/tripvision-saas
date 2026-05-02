@@ -56,18 +56,18 @@ export default function Checklist({ viagemId, user, isAdmin }) {
     <div className="px-4 pb-6">
       <div className="card p-4 mt-4">
         <div className="flex items-baseline justify-between">
-          <div className="font-display font-extrabold text-base text-[#0F1B2D]">Progresso</div>
-          <div className="text-sm text-[#1A3A4A]/70">
-            <span className="font-display font-extrabold text-[#2E86C1] tabular">{done}</span>
-            <span className="text-[#1A3A4A]/50"> / {total} concluídos</span>
+          <div className="font-display font-extrabold text-base text-[#1F2937]">Progresso</div>
+          <div className="text-sm text-[#6B7280]">
+            <span className="font-display font-extrabold tabular" style={{ color: "var(--tv-accent-dark)" }}>{done}</span>
+            <span className="text-[#9CA3AF]"> / {total} concluídos</span>
           </div>
         </div>
-        <div className="mt-3 h-3 rounded-full overflow-hidden" style={{ background: "rgba(124, 185, 232, 0.18)" }}>
+        <div className="mt-3 h-3 rounded-full overflow-hidden" style={{ background: "#F3F4F6" }}>
           <div
             className="h-full rounded-full transition-all"
             style={{
               width: `${pct}%`,
-              background: `linear-gradient(90deg, #7CB9E8 0%, #2E86C1 ${Math.max(40, 100 - pct)}%, #27AE60 100%)`,
+              background: pct >= 100 ? "#27AE60" : "var(--tv-gradient)",
             }}
           />
         </div>
@@ -104,12 +104,12 @@ export default function Checklist({ viagemId, user, isAdmin }) {
 
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="checklist" user={user} />
 
-      {loading && <div className="text-center text-[#7CB9E8]/70 text-sm py-8">Carregando…</div>}
-      {error && <div className="text-center text-red-300 text-sm py-2">{error}</div>}
+      {loading && <div className="text-center text-[#6B7280] text-sm py-8">Carregando…</div>}
+      {error && <div className="text-center text-red-600 text-sm py-2">{error}</div>}
 
       {!loading && items.length === 0 && (
-        <div className="text-center text-[#7CB9E8]/60 text-sm py-10">
-          Nenhum item ainda. Use o campo acima pra adicionar. ❄️
+        <div className="text-center text-[#6B7280] text-sm py-10">
+          Nenhum item ainda. Use o campo acima pra adicionar.
         </div>
       )}
 
@@ -148,7 +148,7 @@ function PrazoBadge({ prazo }) {
 function Section({ title, list, toggle, user, isAdmin, onDelete }) {
   return (
     <section className="mt-5">
-      <div className="font-display font-extrabold text-base text-[#E8F0FE] px-1 mb-2">{title}</div>
+      <div className="font-display font-extrabold text-base text-[#1F2937] px-1 mb-2">{title}</div>
       <ul className="space-y-2">
         {list.map((item) => (
           <li key={item.id}>
@@ -162,7 +162,7 @@ function Section({ title, list, toggle, user, isAdmin, onDelete }) {
                   className="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
                   style={{
                     background: item.concluido ? "#27AE60" : "white",
-                    border: `2px solid ${item.concluido ? "#27AE60" : "rgba(124, 185, 232, 0.4)"}`,
+                    border: `2px solid ${item.concluido ? "#27AE60" : "var(--tv-accent)"}`,
                   }}
                 >
                   {item.concluido && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
