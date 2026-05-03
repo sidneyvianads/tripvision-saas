@@ -9,6 +9,10 @@ const PRICES = {
     mensal: { amount: 14.9,  reason: "TripVision Pro — Mensal", frequency: 1,  type: "months" },
     anual:  { amount: 119.9, reason: "TripVision Pro — Anual",  frequency: 12, type: "months" },
   },
+  grupo: {
+    mensal: { amount: 29.9,  reason: "TripVision Grupo — Mensal", frequency: 1,  type: "months" },
+    anual:  { amount: 239.9, reason: "TripVision Grupo — Anual",  frequency: 12, type: "months" },
+  },
 };
 
 function jsonResponse(obj, status = 200) {

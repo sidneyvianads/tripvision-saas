@@ -102,7 +102,8 @@ export function AuthProvider({ children }) {
       const cleanNome  = (nome ?? "").trim();
       const cleanEmail = normalizeEmail(email);
       const cleanSenha = normalizePassword(senha);
-      const cleanPlano = (plano === "pro" ? "pro" : "free");
+      // SEMPRE cria como Free. Upgrade só após webhook do Mercado Pago confirmar pagamento.
+      const cleanPlano = "free";
       if (!cleanNome)  throw new Error("Informe seu nome.");
       if (!cleanEmail) throw new Error("Informe seu e-mail.");
       if (cleanSenha.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");

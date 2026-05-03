@@ -37,12 +37,32 @@ export const PLANS = {
       "Editar roteiro completo",
     ],
   },
+  grupo: {
+    id: "grupo",
+    nome: "Grupo",
+    icon: "⭐",
+    cor: "#F59E0B",
+    tagline: "Pra família grande / equipe",
+    features: [
+      "Até 5 viagens",
+      "IA com pesquisa online (preços reais)",
+      "200 mensagens IA por dia",
+      "Compartilhar com até 20 pessoas",
+      "Chat do grupo realtime",
+      "Checklist ilimitado",
+      "Editar roteiro completo",
+    ],
+  },
 };
 
 export const PRICES = {
   pro: {
     mensal: { amount: 14.9,  cycle: "mensal", display: "R$ 14,90/mês",  full: "R$ 14,90 por mês" },
     anual:  { amount: 119.9, cycle: "anual",  display: "R$ 119,90/ano", full: "R$ 119,90 por ano (economize 33%)" },
+  },
+  grupo: {
+    mensal: { amount: 29.9,  cycle: "mensal", display: "R$ 29,90/mês",  full: "R$ 29,90 por mês" },
+    anual:  { amount: 239.9, cycle: "anual",  display: "R$ 239,90/ano", full: "R$ 239,90 por ano (economize 33%)" },
   },
 };
 
@@ -52,11 +72,11 @@ export const LIMITS = {
     viagens: 1,
     iaMsgsLifetime: 5,
     iaMsgsDia: null,
-    membros: 1,         // só o dono — não compartilha
+    membros: 1,
     checklist: 5,
     chat: false,
-    admin: true,        // free pode editar manualmente o próprio roteiro
-    pesquisa: false,    // sem web_search
+    admin: true,
+    pesquisa: false,
     compartilhar: false,
   },
   pro: {
@@ -64,6 +84,17 @@ export const LIMITS = {
     iaMsgsLifetime: null,
     iaMsgsDia: 50,
     membros: 5,
+    checklist: null,
+    chat: true,
+    admin: true,
+    pesquisa: true,
+    compartilhar: true,
+  },
+  grupo: {
+    viagens: 5,
+    iaMsgsLifetime: null,
+    iaMsgsDia: 200,
+    membros: 20,
     checklist: null,
     chat: true,
     admin: true,
@@ -85,5 +116,20 @@ export function planIcon(plano) {
 }
 
 export function isPaid(plano) {
-  return plano === "pro";
+  return plano === "pro" || plano === "grupo";
+}
+
+// Formatação curta de preço pra cards / botões.
+export function priceLabel(plano, ciclo) {
+  const p = PRICES[plano]?.[ciclo];
+  if (!p) return "—";
+  return p.display;
+}
+
+// Preço/mês equivalente quando ciclo=anual (pra mostrar "R$ 10/mês" embaixo do anual).
+export function monthlyEquivalent(plano, ciclo) {
+  const p = PRICES[plano]?.[ciclo];
+  if (!p) return null;
+  if (ciclo === "anual") return Math.round((p.amount / 12) * 100) / 100;
+  return p.amount;
 }

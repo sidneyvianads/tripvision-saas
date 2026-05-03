@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
-import { PLANS, PRICES } from "../data/plans";
+import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
 
 const REDIRECT_DELAY_MS = 1800;
 
@@ -75,8 +75,8 @@ export default function Welcome() {
     setSignupStep("plano");
   };
 
-  // Etapa 2: cria a conta com o plano escolhido
-  const handleConfirmPlan = async (plano) => {
+  // Etapa 2: cria SEMPRE como Free. Se escolheu pago, redireciona pra checkout MP.
+  const handleConfirmPlan = async (plano, ciclo = "mensal") => {
     setErr(null);
     try {
       const created = await signUp({
@@ -85,9 +85,44 @@ export default function Welcome() {
         senha,
         avatar_cor: cor,
         avatar_url: photo,
-        plano,
+        plano: "free", // SEMPRE free no cadastro — paid só após pagamento confirmado
       });
-      setSuccess({ email: created.email, nome: created.nome, plano });
+
+      // Free: vai direto pro fluxo de login
+      if (plano === "free") {
+        setSuccess({ email: created.email, nome: created.nome, plano: "free" });
+        return;
+      }
+
+      // Paid: chama create-subscription e redireciona pro Mercado Pago
+      try {
+        const res = await fetch("/api/create-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plano,
+            ciclo,
+            userId: created.id,
+            userEmail: created.email,
+          }),
+        });
+        const data = await res.json();
+        if (res.status === 503 && data?.placeholder) {
+          setErr("Pagamento ainda em configuração. Conta criada como Free — pode usar o app normal e fazer upgrade depois.");
+          setSuccess({ email: created.email, nome: created.nome, plano: "free" });
+          return;
+        }
+        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+        if (data?.init_point) {
+          window.location.href = data.init_point;
+          return;
+        }
+        throw new Error("Resposta sem URL de pagamento.");
+      } catch (e) {
+        console.error("[Welcome] checkout failed:", e);
+        setErr(`Conta criada como Free. Não consegui abrir o pagamento agora (${e.message}). Faça upgrade depois pelo painel.`);
+        setSuccess({ email: created.email, nome: created.nome, plano: "free" });
+      }
     } catch (e) {
       setErr(e.message);
     }
@@ -268,14 +303,18 @@ export default function Welcome() {
 }
 
 function PlanPicker({ onChoose, onBack, loading, success, err }) {
-  const free = PLANS.free;
-  const pro  = PLANS.pro;
-  const proAnual = PRICES.pro.anual;
-  const proMensal = PRICES.pro.mensal;
+  const [ciclo, setCiclo] = useState("mensal");
+  const free  = PLANS.free;
+  const pro   = PLANS.pro;
+  const grupo = PLANS.grupo;
+  const proPrice   = PRICES.pro[ciclo];
+  const grupoPrice = PRICES.grupo[ciclo];
+  const proMonthly   = monthlyEquivalent("pro", ciclo);
+  const grupoMonthly = monthlyEquivalent("grupo", ciclo);
+  const isAnual = ciclo === "anual";
 
   return (
     <div className="mt-6 space-y-3 animate-pop">
-      {/* Step indicator */}
       <div className="flex items-center justify-center gap-1.5 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
         <span className="w-6 h-1 rounded-full bg-[#E5E7EB]" />
         <span className="w-6 h-1 rounded-full bg-[#6366F1]" />
@@ -285,83 +324,72 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       <div className="text-center">
         <div className="text-3xl mb-1">✨</div>
         <h2 className="font-display font-extrabold text-[#1F2937] text-xl">Escolha seu plano</h2>
-        <p className="text-[#6B7280] text-xs mt-1">Pode trocar depois nas configurações.</p>
+        <p className="text-[#6B7280] text-xs mt-1">Você pode trocar depois nas configurações.</p>
       </div>
 
+      <CycleToggle ciclo={ciclo} setCiclo={setCiclo} />
+
       {/* Card Free */}
-      <button
-        type="button"
+      <PlanCard
+        plan={free}
+        priceLine="R$ 0"
+        sublabel="pra sempre"
+        bullets={["1 viagem", "5 mensagens de IA", "Só você (sem chat)"]}
+        ctaLabel="Começar grátis"
+        ctaIcon={ArrowRight}
+        ctaStyle={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
+        accent="#6366F1"
         onClick={() => onChoose("free")}
         disabled={loading || !!success}
-        className="card w-full p-4 text-left active:scale-[0.99] transition disabled:opacity-60"
-        style={{ borderLeft: "4px solid #6366F1" }}
-      >
-        <div className="flex items-baseline justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{free.icon}</span>
-            <span className="font-display font-extrabold text-[#1F2937]">{free.nome}</span>
-          </div>
-          <div className="font-display font-extrabold tabular text-[#1F2937]">R$ 0</div>
-        </div>
-        <p className="text-[12px] text-[#6B7280] mt-0.5">1 viagem · planeje sozinho · 5 msgs IA</p>
-        <div className="mt-2 inline-flex items-center gap-1 text-[12px] font-display font-bold text-[#6366F1]">
-          Começar grátis <ArrowRight className="w-3.5 h-3.5" />
-        </div>
-      </button>
+      />
 
       {/* Card Pro */}
-      <button
-        type="button"
-        onClick={() => onChoose("pro")}
+      <PlanCard
+        plan={pro}
+        badge="MAIS POPULAR"
+        priceLine={isAnual
+          ? `R$ ${formatPrice(proPrice.amount)}/ano`
+          : `R$ ${formatPrice(proPrice.amount)}/mês`}
+        priceStrike={isAnual ? `R$ ${formatPrice(PRICES.pro.mensal.amount * 12)}/ano` : null}
+        sublabel={isAnual ? `equivale a R$ ${formatPrice(proMonthly)}/mês — economize 33%` : "cobrança mensal recorrente"}
+        bullets={[
+          "Até 3 viagens",
+          "50 mensagens IA por dia",
+          "Compartilhar com 5 pessoas",
+          "Chat do grupo realtime",
+          "Pesquisa online em tempo real",
+        ]}
+        ctaLabel={`Assinar R$ ${formatPrice(proPrice.amount)}${isAnual ? "/ano" : "/mês"}`}
+        ctaIcon={Sparkles}
+        ctaStyle={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
+        accent="#8B5CF6"
+        onClick={() => onChoose("pro", ciclo)}
         disabled={loading || !!success}
-        className="w-full p-4 rounded-2xl text-left active:scale-[0.99] transition disabled:opacity-60 relative"
-        style={{
-          background: "#FFFFFF",
-          border: "2px solid #F59E0B",
-          boxShadow: "0 8px 24px rgba(245, 158, 11, 0.20)",
-        }}
-      >
-        <span
-          className="absolute -top-2.5 left-3 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold tracking-widest text-white"
-          style={{ background: "linear-gradient(135deg, #F59E0B, #FBBF24)" }}
-        >
-          MAIS POPULAR
-        </span>
-        <div className="flex items-baseline justify-between mt-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{pro.icon}</span>
-            <span className="font-display font-extrabold text-[#1F2937]">{pro.nome}</span>
-          </div>
-          <div className="text-right">
-            <div className="font-display font-extrabold tabular text-[#1F2937]">{proMensal.display.replace("/mês", "")}<span className="text-[11px] font-normal text-[#6B7280]">/mês</span></div>
-            <div className="text-[10px] text-[#6B7280]">ou {proAnual.display} (-33%)</div>
-          </div>
-        </div>
-        <ul className="mt-2 space-y-0.5">
-          {[
-            "3 viagens",
-            "IA com pesquisa online",
-            "Compartilhar com 5 pessoas",
-            "Chat do grupo realtime",
-            "Checklist ilimitado",
-          ].map((f, i) => (
-            <li key={i} className="flex items-start gap-1.5 text-[12px] text-[#374151]">
-              <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-600" />
-              <span>{f}</span>
-            </li>
-          ))}
-        </ul>
-        <div
-          className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-display font-extrabold text-white w-full"
-          style={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          Escolher Pro
-        </div>
-        <div className="mt-1.5 text-center text-[10px] text-amber-700 font-display font-bold">
-          ⏳ Período de teste — aproveite o Pro grátis enquanto liberamos pagamento
-        </div>
-      </button>
+        highlight
+      />
+
+      {/* Card Grupo */}
+      <PlanCard
+        plan={grupo}
+        priceLine={isAnual
+          ? `R$ ${formatPrice(grupoPrice.amount)}/ano`
+          : `R$ ${formatPrice(grupoPrice.amount)}/mês`}
+        priceStrike={isAnual ? `R$ ${formatPrice(PRICES.grupo.mensal.amount * 12)}/ano` : null}
+        sublabel={isAnual ? `equivale a R$ ${formatPrice(grupoMonthly)}/mês — economize 33%` : "pra família grande / equipe"}
+        bullets={[
+          "Até 5 viagens",
+          "200 mensagens IA por dia",
+          "Compartilhar com 20 pessoas",
+          "Chat realtime",
+          "Pesquisa online + tudo do Pro",
+        ]}
+        ctaLabel={`Assinar R$ ${formatPrice(grupoPrice.amount)}${isAnual ? "/ano" : "/mês"}`}
+        ctaIcon={Star}
+        ctaStyle={{ background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)" }}
+        accent="#F59E0B"
+        onClick={() => onChoose("grupo", ciclo)}
+        disabled={loading || !!success}
+      />
 
       {err && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-red-700 text-sm">{err}</div>
@@ -371,12 +399,111 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         type="button"
         onClick={onBack}
         disabled={loading || !!success}
-        className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold w-full text-center disabled:opacity-50"
+        className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold w-full text-center disabled:opacity-50 pt-1"
       >
         ← Voltar e ajustar dados
       </button>
+
+      <p className="text-center text-[11px] text-[#9CA3AF] pt-1">
+        Pagamento via Mercado Pago. Cancele quando quiser.
+      </p>
     </div>
   );
+}
+
+function CycleToggle({ ciclo, setCiclo }) {
+  return (
+    <div className="flex items-center justify-center">
+      <div className="inline-flex p-1 rounded-full" style={{ background: "#F3F4F6" }}>
+        {[
+          { id: "mensal", label: "Mensal" },
+          { id: "anual",  label: "Anual" },
+        ].map((opt) => {
+          const active = ciclo === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setCiclo(opt.id)}
+              className="px-4 py-1.5 rounded-full text-[12px] font-display font-extrabold transition-all flex items-center gap-1.5"
+              style={{
+                background: active ? "#FFFFFF" : "transparent",
+                color: active ? "#1F2937" : "#6B7280",
+                boxShadow: active ? "0 2px 6px rgba(15,23,42,0.08)" : "none",
+              }}
+            >
+              {opt.label}
+              {opt.id === "anual" && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full text-white" style={{ background: "#10B981" }}>
+                  -33%
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({
+  plan, badge, priceLine, priceStrike, sublabel, bullets,
+  ctaLabel, ctaIcon: CtaIcon, ctaStyle, accent, onClick, disabled, highlight,
+}) {
+  return (
+    <div
+      className="w-full p-4 rounded-2xl relative"
+      style={{
+        background: "#FFFFFF",
+        border: highlight ? `2px solid ${accent}` : "1px solid #E5E7EB",
+        boxShadow: highlight ? `0 8px 24px ${accent}33` : "0 1px 3px rgba(15,23,42,0.06)",
+      }}
+    >
+      {badge && (
+        <span
+          className="absolute -top-2.5 left-3 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold tracking-widest text-white"
+          style={{ background: accent }}
+        >
+          {badge}
+        </span>
+      )}
+      <div className="flex items-baseline justify-between mt-1 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xl">{plan.icon}</span>
+          <span className="font-display font-extrabold text-[#1F2937] truncate">{plan.nome}</span>
+        </div>
+        <div className="text-right">
+          {priceStrike && (
+            <div className="text-[10px] text-[#9CA3AF] line-through tabular">{priceStrike}</div>
+          )}
+          <div className="font-display font-extrabold tabular text-[#1F2937] text-lg leading-tight">{priceLine}</div>
+          {sublabel && <div className="text-[10px] text-[#6B7280] leading-tight">{sublabel}</div>}
+        </div>
+      </div>
+      <ul className="mt-2 space-y-0.5">
+        {bullets.map((f, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-[12px] text-[#374151]">
+            <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-600" />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-display font-extrabold text-white w-full disabled:opacity-60"
+        style={ctaStyle}
+      >
+        {disabled ? <Loader2 className="w-4 h-4 animate-spin" /> : <CtaIcon className="w-4 h-4" />}
+        {ctaLabel}
+      </button>
+    </div>
+  );
+}
+
+function formatPrice(n) {
+  return n.toFixed(2).replace(".", ",");
 }
 
 function Field({ icon: Icon, type, placeholder, value, onChange, autoFocus, maxLength, autoComplete, disabled }) {
