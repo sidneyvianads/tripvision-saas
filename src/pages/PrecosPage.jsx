@@ -7,10 +7,10 @@ export default function PrecosPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const handleChoose = (plano) => {
+  const handleChoose = (plano, ciclo = "mensal") => {
     if (!user) { navigate("/welcome?mode=signup"); return; }
     if (plano === "free") { navigate("/"); return; }
-    navigate("/conta?upgrade=" + plano);
+    navigate(`/conta?upgrade=${plano}&ciclo=${ciclo}`);
   };
 
   return (
