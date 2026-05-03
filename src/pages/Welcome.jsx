@@ -354,7 +354,7 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         sublabel={isAnual ? `equivale a R$ ${formatPrice(proMonthly)}/mês — economize 33%` : "cobrança mensal recorrente"}
         bullets={[
           "Até 3 viagens",
-          "50 mensagens IA por dia",
+          "500 mensagens IA por mês",
           "Compartilhar com 5 pessoas",
           "Chat do grupo realtime",
           "Pesquisa online em tempo real",
@@ -378,7 +378,7 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         sublabel={isAnual ? `equivale a R$ ${formatPrice(grupoMonthly)}/mês — economize 33%` : "pra família grande / equipe"}
         bullets={[
           "Até 5 viagens",
-          "200 mensagens IA por dia",
+          "2.000 mensagens IA por mês",
           "Compartilhar com 20 pessoas",
           "Chat realtime",
           "Pesquisa online + tudo do Pro",

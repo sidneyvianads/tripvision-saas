@@ -7,7 +7,7 @@ import { useIaConversa } from "../hooks/useIaConversa";
 import { useRoteiro } from "../hooks/useRoteiro";
 import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroUpdates } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
-import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
+import { getPlanUsage, bumpPlanUsage, setMonthlyUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner } from "../data/plans";
 import { supabase } from "../lib/supabase";
@@ -151,33 +151,40 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   }, [freeUsed, freeBlocked, user?.plano, blocked]);
 
   // Sincroniza contador local com o BANCO (fonte da verdade) ao montar.
-  // localStorage é cache pra UX rápida; servidor é a barreira real.
+  // Free: count lifetime. Pro/Grupo: count this month. localStorage é cache pra UX.
   useEffect(() => {
-    if (!user?.id || !isFree) return;
+    if (!user?.id || isOwner(user?.plano)) return;
     let active = true;
     (async () => {
       try {
-        const { data, error } = await supabase.rpc("count_ia_user_messages", { uid: user.id });
+        const rpcName = isFree ? "count_ia_user_messages" : "count_ia_user_messages_in_month";
+        const { data, error } = await supabase.rpc(rpcName, { uid: user.id });
         if (!active) return;
         if (error) {
           console.warn("[PlanChat] count rpc error:", error);
           return;
         }
         const serverCount = typeof data === "number" ? data : 0;
-        const localCount = getFreeUsed(user.id);
-        // Sempre confia no maior valor — protege contra reset de cache/aba anônima.
-        const truth = Math.max(serverCount, localCount);
-        if (truth !== localCount) {
-          try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
+        if (isFree) {
+          const localCount = getFreeUsed(user.id);
+          const truth = Math.max(serverCount, localCount);
+          if (truth !== localCount) {
+            try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
+          }
+          setFreeUsed(truth);
+          console.log("[PlanChat] free sync:", { server: serverCount, local: localCount, truth });
+        } else {
+          // Pro/Grupo: substitui contador local pelo do servidor (mensal autoritativo).
+          setMonthlyUsage(user.id, serverCount);
+          setUsage(getPlanUsage(user.id, user.plano));
+          console.log("[PlanChat] monthly sync:", { server: serverCount, plano: user.plano });
         }
-        setFreeUsed(truth);
-        console.log("[PlanChat] sync from DB:", { server: serverCount, local: localCount, truth });
       } catch (e) {
         console.warn("[PlanChat] sync failed:", e);
       }
     })();
     return () => { active = false; };
-  }, [user?.id, isFree]);
+  }, [user?.id, user?.plano, isFree]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -235,7 +242,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     if (isPaid(user.plano)) {
       const u = getPlanUsage(user.id, user.plano);
       if (u.remaining <= 0) {
-        setErr(`Você usou ${u.used}/${u.limit} mensagens hoje. Volte amanhã.`);
+        setErr(`Você usou ${u.used}/${u.limit} mensagens este mês. Renova no dia 1.`);
         return;
       }
     }
@@ -412,7 +419,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
               ? "👑 sem limite"
               : isFree
                 ? `${freeUsed}/${FREE_LIMIT} usadas`
-                : `${usage.used}/${usage.limit} hoje`}
+                : `${usage.used}/${usage.limit} este mês`}
           </span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">
@@ -534,7 +541,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           className="input flex-1"
           placeholder={
             freeBlocked ? "Você usou suas mensagens gratuitas."
-            : proBlocked ? "Você atingiu o limite de hoje."
+            : proBlocked ? "Você atingiu o limite deste mês."
             : "Conta como vocês querem viajar…"
           }
           value={input}

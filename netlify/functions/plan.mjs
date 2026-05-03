@@ -141,6 +141,7 @@ REGRAS TÉCNICAS:
 `;
 
 const FREE_IA_LIMIT = 5;
+const MONTHLY_LIMITS = { pro: 500, grupo: 2000 };
 const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
@@ -174,33 +175,36 @@ async function fetchUserPlan(uid) {
   }
 }
 
-// Conta mensagens role=user (excluindo welcome) do usuário em todas as ia_conversas via RPC.
-async function countFreeUserMessages(uid) {
+async function callRpc(name, payload) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.warn("[plan] SUPABASE_URL/KEY ausente — gate server-side desativado.");
+    console.warn(`[plan] SUPABASE_URL/KEY ausente — RPC ${name} desativado.`);
     return null;
   }
   try {
-    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/count_ia_user_messages`, {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/${name}`, {
       method: "POST",
       headers: {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ uid }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      console.error("[plan] count rpc failed:", res.status, await res.text());
+      console.error(`[plan] rpc ${name} failed:`, res.status, await res.text());
       return null;
     }
     const n = await res.json();
     return typeof n === "number" ? n : null;
   } catch (e) {
-    console.error("[plan] count rpc error:", e);
+    console.error(`[plan] rpc ${name} error:`, e);
     return null;
   }
 }
+
+// Free: lifetime. Pro/Grupo: mês corrente.
+async function countFreeUserMessages(uid)        { return callRpc("count_ia_user_messages",          { uid }); }
+async function countMonthlyUserMessages(uid)     { return callRpc("count_ia_user_messages_in_month", { uid }); }
 
 export default async (req) => {
   if (req.method !== "POST") {
@@ -235,15 +239,30 @@ export default async (req) => {
   }
   const isPaidPlan = PAID_PLANS.has(effectivePlan);
 
-  // ===== GATE SERVER-SIDE FREE =====
-  if (!isPaidPlan && user_id) {
-    const used = await countFreeUserMessages(user_id);
-    if (used != null && used >= FREE_IA_LIMIT) {
-      console.log("[plan] FREE GATE blocked", { user_id, used, limit: FREE_IA_LIMIT });
-      return jsonResponse(
-        { error: "Limite Free atingido", upgrade: true, used, limit: FREE_IA_LIMIT },
-        403
-      );
+  // ===== GATE SERVER-SIDE =====
+  // Free: contador lifetime. Pro/Grupo: contador mensal. Owner: bypass total.
+  if (effectivePlan !== "owner" && user_id) {
+    if (!isPaidPlan) {
+      const used = await countFreeUserMessages(user_id);
+      if (used != null && used >= FREE_IA_LIMIT) {
+        console.log("[plan] FREE GATE blocked", { user_id, used, limit: FREE_IA_LIMIT });
+        return jsonResponse(
+          { error: "Limite Free atingido", upgrade: true, used, limit: FREE_IA_LIMIT, scope: "lifetime" },
+          403
+        );
+      }
+    } else {
+      const monthlyLimit = MONTHLY_LIMITS[effectivePlan];
+      if (monthlyLimit != null) {
+        const used = await countMonthlyUserMessages(user_id);
+        if (used != null && used >= monthlyLimit) {
+          console.log("[plan] MONTHLY GATE blocked", { user_id, plan: effectivePlan, used, limit: monthlyLimit });
+          return jsonResponse(
+            { error: `Limite mensal atingido (${used}/${monthlyLimit})`, upgrade: true, used, limit: monthlyLimit, scope: "monthly" },
+            403
+          );
+        }
+      }
     }
   }
   // ===== /GATE =====

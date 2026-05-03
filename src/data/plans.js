@@ -30,7 +30,7 @@ export const PLANS = {
     features: [
       "Até 3 viagens",
       "IA com pesquisa online (preços reais)",
-      "50 mensagens IA por dia",
+      "500 mensagens IA por mês",
       "Compartilhar com até 5 pessoas",
       "Chat do grupo realtime",
       "Checklist ilimitado",
@@ -46,7 +46,7 @@ export const PLANS = {
     features: [
       "Até 5 viagens",
       "IA com pesquisa online (preços reais)",
-      "200 mensagens IA por dia",
+      "2.000 mensagens IA por mês",
       "Compartilhar com até 20 pessoas",
       "Chat do grupo realtime",
       "Checklist ilimitado",
@@ -86,7 +86,7 @@ export const LIMITS = {
   free: {
     viagens: 1,
     iaMsgsLifetime: 5,
-    iaMsgsDia: null,
+    iaMsgsMes: null,
     membros: 1,
     checklist: 5,
     chat: false,
@@ -97,7 +97,7 @@ export const LIMITS = {
   pro: {
     viagens: 3,
     iaMsgsLifetime: null,
-    iaMsgsDia: 50,
+    iaMsgsMes: 500,
     membros: 5,
     checklist: null,
     chat: true,
@@ -108,7 +108,7 @@ export const LIMITS = {
   grupo: {
     viagens: 5,
     iaMsgsLifetime: null,
-    iaMsgsDia: 200,
+    iaMsgsMes: 2000,
     membros: 20,
     checklist: null,
     chat: true,
@@ -119,7 +119,7 @@ export const LIMITS = {
   owner: {
     viagens: Infinity,
     iaMsgsLifetime: null,
-    iaMsgsDia: Infinity,
+    iaMsgsMes: Infinity,
     membros: Infinity,
     checklist: Infinity,
     chat: true,

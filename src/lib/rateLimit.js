@@ -1,13 +1,15 @@
 // Rate limiting client-side via localStorage.
-// Free: lifetime counter. Pro: daily counter.
+// Free: lifetime counter. Pro/Grupo: monthly counter (YYYY-MM).
 // Não é à prova de fraude — protege custo da maioria dos casos.
+// O servidor (/api/plan) tem o gate autoritativo via RPC no Postgres.
 
 import { getLimits } from "../data/plans";
 
-const KEY = "tripvision-saas:plan-usage:v2";
+const KEY = "tripvision-saas:plan-usage:v3";
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+function monthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; // YYYY-MM
 }
 
 function readState() {
@@ -32,10 +34,10 @@ export function getPlanUsage(userId, plano = "free") {
     const limit = limits.iaMsgsLifetime;
     return { used, limit, remaining: Math.max(0, limit - used), tipo: "lifetime" };
   }
-  const day = todayKey();
-  const used = s[`${userId}:${day}`] ?? 0;
-  const limit = limits.iaMsgsDia ?? 999;
-  return { used, limit, remaining: Math.max(0, limit - used), tipo: "diario", day };
+  const month = monthKey();
+  const used = s[`${userId}:${month}`] ?? 0;
+  const limit = limits.iaMsgsMes ?? 999;
+  return { used, limit, remaining: Math.max(0, limit - used), tipo: "mensal", month };
 }
 
 export function bumpPlanUsage(userId, plano = "free") {
@@ -46,18 +48,29 @@ export function bumpPlanUsage(userId, plano = "free") {
     const k = `${userId}:lifetime`;
     s[k] = (s[k] ?? 0) + 1;
   } else {
-    const day = todayKey();
-    const k = `${userId}:${day}`;
+    const month = monthKey();
+    const k = `${userId}:${month}`;
     s[k] = (s[k] ?? 0) + 1;
   }
 
-  // GC dos contadores diários antigos
-  const cutoff = Date.now() - 7 * 86400000;
+  // GC dos contadores mensais antigos (>3 meses)
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - 3);
+  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
   for (const key of Object.keys(s)) {
-    const datePart = key.split(":").pop();
-    if (!datePart || datePart === "lifetime" || isNaN(Date.parse(datePart))) continue;
-    if (Date.parse(datePart) < cutoff) delete s[key];
+    const part = key.split(":").pop();
+    if (!part || part === "lifetime") continue;
+    // formato YYYY-MM
+    if (/^\d{4}-\d{2}$/.test(part) && part < cutoffKey) delete s[key];
   }
   writeState(s);
   return getPlanUsage(userId, plano);
+}
+
+// Permite override do contador mensal a partir do servidor (single source of truth).
+export function setMonthlyUsage(userId, count) {
+  if (!userId || typeof count !== "number") return;
+  const s = readState();
+  s[`${userId}:${monthKey()}`] = Math.max(0, count);
+  writeState(s);
 }
