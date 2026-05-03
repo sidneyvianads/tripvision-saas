@@ -80,7 +80,7 @@ function buildHtml(trip, days, contatos, tema) {
       ${contatosHtml}
 
       <footer style="margin-top:18px;text-align:center;color:#9CA3AF;font-size:11px;">
-        Gerado por Viajjei — tripvision-saas.netlify.app
+        Gerado por Viajjei — viajjei.com.br
       </footer>
     </div>
   `;

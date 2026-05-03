@@ -1,6 +1,6 @@
 # Viajjei
 
-> **Juntos na Jornada.** — planeje sua viagem conversando com IA.
+> **Sempre Juntos.** — planeje sua viagem conversando com um assistente inteligente.
 
 App de planejamento de viagens onde a IA pesquisa hotéis/restaurantes/passeios com preços reais
 e monta o roteiro pra você. Compartilhe com o grupo em 1 clique.
@@ -63,5 +63,5 @@ Gates: cliente em `src/lib/rateLimit.js`; servidor em `/api/plan` via RPC `count
 ## Notas
 
 - Repo: `sidneyvianads/tripvision-saas` (nome legacy, mantido).
-- Site: `tripvision-saas.netlify.app` (legacy, até apontar domínio próprio).
+- Site: `viajjei.com.br` (Netlify legacy: `tripvision-saas.netlify.app` → 301 → apex).
 - Tabelas e variáveis no código mantêm nomes antigos pra não quebrar dados.

@@ -67,7 +67,7 @@ export default function MyTrips() {
     : sorted;
 
   return (
-    <div className="min-h-screen flex flex-col bg-app">
+    <div className="min-h-screen flex flex-col bg-soft">
       <header className="bg-white safe-top" style={{ borderBottom: "1px solid #E5E7EB" }}>
         <div className="px-4 pt-4 pb-3 flex items-center gap-3">
           <div className="text-2xl">🧳</div>

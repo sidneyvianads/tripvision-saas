@@ -20,6 +20,21 @@
   function = "og"
   path = "/v/:slug"
 
+# Canonical: força tudo em tripvision-saas.netlify.app pra viajjei.com.br
+[[redirects]]
+  from = "https://tripvision-saas.netlify.app/*"
+  to = "https://viajjei.com.br/:splat"
+  status = 301
+  force = true
+
+# www → apex
+[[redirects]]
+  from = "https://www.viajjei.com.br/*"
+  to = "https://viajjei.com.br/:splat"
+  status = 301
+  force = true
+
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"

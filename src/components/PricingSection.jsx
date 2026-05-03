@@ -91,25 +91,27 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
       <div className="mt-4">
         {plan.id === "free" ? (
           <>
-            <div className="font-display font-extrabold text-4xl text-[#1F2937] tabular">R$ 0</div>
-            <div className="text-[12px] text-[#6B7280]">pra sempre</div>
+            <div className="font-display font-extrabold text-5xl text-[#0F172A] tabular leading-none">R$ 0</div>
+            <div className="text-[13px] text-[#64748B] mt-1">pra sempre</div>
           </>
         ) : (
           <>
-            {strikeYear && (
-              <div className="text-[11px] text-[#9CA3AF] line-through tabular">
-                R$ {formatPrice(strikeYear)}/ano
-              </div>
-            )}
-            <div className="font-display font-extrabold text-4xl text-[#1F2937] tabular leading-tight">
-              R$ {formatPrice(price.amount)}
-              <span className="text-[14px] font-bold text-[#6B7280]">/{isAnual ? "ano" : "mês"}</span>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-extrabold text-5xl text-[#0F172A] tabular leading-none">
+                R$ {formatPrice(isAnual ? monthlyEq : price.amount)}
+              </span>
+              <span className="text-[15px] font-bold text-[#64748B]">/mês</span>
             </div>
-            <div className="text-[11px] text-emerald-700 font-display font-bold mt-0.5">
+            <div className="text-[13px] text-[#64748B] mt-1">
               {isAnual
-                ? `equivale a R$ ${formatPrice(monthlyEq)}/mês — economize 33%`
-                : "cobrança mensal recorrente"}
+                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
+                : "cobrado mensalmente"}
             </div>
+            {isAnual && (
+              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+                economize 33% vs mensal
+              </span>
+            )}
           </>
         )}
       </div>
@@ -157,7 +159,7 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
             }}
           >
             <Icon className="w-4 h-4" />
-            Assinar R$ {formatPrice(price.amount)}{isAnual ? "/ano" : "/mês"}
+            Assinar por R$ {formatPrice(isAnual ? monthlyEq : price.amount)}/mês →
           </button>
         )}
       </div>

@@ -506,7 +506,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#92400E]" />
             <div className="text-[#92400E] text-sm">
               <strong>Você usou suas {FREE_LIMIT} mensagens gratuitas.</strong>
-              <div className="text-[12px] mt-0.5">Assine o Pro pra IA ilimitada com pesquisa online em tempo real.</div>
+              <div className="text-[12px] mt-0.5">Assine o Pro pra ter o assistente sem limite e pesquisa de preços reais.</div>
             </div>
           </div>
           <button

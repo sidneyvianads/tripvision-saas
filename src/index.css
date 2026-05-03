@@ -1,21 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta neutra (default do app — landing, login, dashboard, conta) */
-  --color-bg:        #FAFBFC;
+  /* Paleta limpa Wanderlog-style (landing, login, dashboard, conta) */
+  --color-bg:        #FFFFFF;
+  --color-bg-soft:   #F8FAFC;
   --color-card:      #FFFFFF;
-  --color-ink:       #1F2937;
-  --color-ink-light: #6B7280;
-  --color-ink-muted: #9CA3AF;
-  --color-border:    #E5E7EB;
+  --color-ink:       #0F172A;
+  --color-ink-light: #64748B;
+  --color-ink-muted: #94A3B8;
+  --color-border:    #E2E8F0;
 
-  /* Primário neutro (índigo → violeta) */
+  /* Primário: índigo (links, destaques secundários) */
   --color-primary:        #6366F1;
   --color-primary-dark:   #4F46E5;
   --color-primary-light:  #A78BFA;
   --color-violet:         #8B5CF6;
 
-  /* Secundário (CTAs, destaques) */
+  /* CTA principal: laranja vibrante */
+  --color-orange:         #F97316;
+  --color-orange-dark:    #EA580C;
   --color-amber:          #F59E0B;
   --color-amber-dark:     #D97706;
 
@@ -50,8 +53,9 @@ html, body, #root {
 
 body {
   font-family: "DM Sans", system-ui, sans-serif;
-  background: #FAFBFC;
-  color: #1F2937;
+  background: #FFFFFF;
+  color: #0F172A;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
@@ -71,18 +75,18 @@ h1, h2, h3, h4, h5, h6 {
 
 @layer components {
   .btn-primary {
-    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    background: #F97316;
     color: white;
     font-family: "Nunito", system-ui, sans-serif;
     font-weight: 700;
     border-radius: 12px;
     padding: 0.75rem 1.25rem;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.30);
-    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.30);
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
   }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99, 102, 241, 0.40); filter: brightness(1.05); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(249, 115, 22, 0.40); background: #EA580C; }
   .btn-primary:active { transform: translateY(0); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; filter: none; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
   .btn-amber {
     background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
@@ -208,7 +212,8 @@ h1, h2, h3, h4, h5, h6 {
 .text-amber   { color: #F59E0B; }
 .text-tema    { color: var(--tv-accent); }
 
-.bg-app    { background: #FAFBFC; }
+.bg-app    { background: #FFFFFF; }
+.bg-soft   { background: #F8FAFC; }
 .bg-card   { background: #FFFFFF; }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }

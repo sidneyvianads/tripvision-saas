@@ -131,9 +131,7 @@ export default function Welcome() {
   return (
     <div
       className="min-h-screen w-full flex items-center justify-center px-5 py-10 relative overflow-hidden"
-      style={{
-        background: "radial-gradient(circle at top right, rgba(139, 92, 246, 0.08), transparent 50%), radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.06), transparent 50%), #FAFBFC",
-      }}
+      style={{ background: "#F8FAFC" }}
     >
       {success && (
         <div
@@ -158,7 +156,7 @@ export default function Welcome() {
             Planeje sua viagem conversando.
           </p>
           <p className="text-primary text-xs font-display font-bold uppercase tracking-widest mt-0.5">
-            Juntos na Jornada
+            Sempre Juntos
           </p>
         </div>
 
@@ -303,7 +301,7 @@ export default function Welcome() {
 }
 
 function PlanPicker({ onChoose, onBack, loading, success, err }) {
-  const [ciclo, setCiclo] = useState("mensal");
+  const [ciclo, setCiclo] = useState("anual");
   const free  = PLANS.free;
   const pro   = PLANS.pro;
   const grupo = PLANS.grupo;
@@ -332,12 +330,10 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       {/* Card Free */}
       <PlanCard
         plan={free}
-        priceLine="R$ 0"
-        sublabel="pra sempre"
-        bullets={["1 viagem", "5 mensagens de IA", "Só você (sem chat)"]}
+        ciclo={ciclo}
+        bullets={["1 viagem", "5 mensagens", "Só você (sem chat)"]}
         ctaLabel="Começar grátis"
         ctaIcon={ArrowRight}
-        ctaStyle={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
         accent="#6366F1"
         onClick={() => onChoose("free")}
         disabled={loading || !!success}
@@ -346,23 +342,17 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       {/* Card Pro */}
       <PlanCard
         plan={pro}
+        ciclo={ciclo}
         badge="MAIS POPULAR"
-        priceLine={isAnual
-          ? `R$ ${formatPrice(proPrice.amount)}/ano`
-          : `R$ ${formatPrice(proPrice.amount)}/mês`}
-        priceStrike={isAnual ? `R$ ${formatPrice(PRICES.pro.mensal.amount * 12)}/ano` : null}
-        sublabel={isAnual ? `equivale a R$ ${formatPrice(proMonthly)}/mês — economize 33%` : "cobrança mensal recorrente"}
         bullets={[
           "Até 3 viagens",
-          "500 mensagens IA por mês",
+          "500 mensagens por mês",
           "Compartilhar com 5 pessoas",
-          "Chat do grupo realtime",
-          "Pesquisa online em tempo real",
+          "Chat do grupo (atualiza na hora)",
+          "Pesquisa preços reais",
         ]}
-        ctaLabel={`Assinar R$ ${formatPrice(proPrice.amount)}${isAnual ? "/ano" : "/mês"}`}
         ctaIcon={Sparkles}
-        ctaStyle={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
-        accent="#8B5CF6"
+        accent="#F97316"
         onClick={() => onChoose("pro", ciclo)}
         disabled={loading || !!success}
         highlight
@@ -371,21 +361,15 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       {/* Card Grupo */}
       <PlanCard
         plan={grupo}
-        priceLine={isAnual
-          ? `R$ ${formatPrice(grupoPrice.amount)}/ano`
-          : `R$ ${formatPrice(grupoPrice.amount)}/mês`}
-        priceStrike={isAnual ? `R$ ${formatPrice(PRICES.grupo.mensal.amount * 12)}/ano` : null}
-        sublabel={isAnual ? `equivale a R$ ${formatPrice(grupoMonthly)}/mês — economize 33%` : "pra família grande / equipe"}
+        ciclo={ciclo}
         bullets={[
           "Até 5 viagens",
-          "2.000 mensagens IA por mês",
+          "2.000 mensagens por mês",
           "Compartilhar com 20 pessoas",
-          "Chat realtime",
-          "Pesquisa online + tudo do Pro",
+          "Chat do grupo",
+          "Tudo do Pro + escala maior",
         ]}
-        ctaLabel={`Assinar R$ ${formatPrice(grupoPrice.amount)}${isAnual ? "/ano" : "/mês"}`}
         ctaIcon={Star}
-        ctaStyle={{ background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)" }}
         accent="#F59E0B"
         onClick={() => onChoose("grupo", ciclo)}
         disabled={loading || !!success}
@@ -399,12 +383,12 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         type="button"
         onClick={onBack}
         disabled={loading || !!success}
-        className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold w-full text-center disabled:opacity-50 pt-1"
+        className="text-sm text-[#64748B] hover:text-[#0F172A] font-display font-bold w-full text-center disabled:opacity-50 pt-1"
       >
         ← Voltar e ajustar dados
       </button>
 
-      <p className="text-center text-[11px] text-[#9CA3AF] pt-1">
+      <p className="text-center text-[11px] text-[#94A3B8] pt-1">
         Pagamento via Mercado Pago. Cancele quando quiser.
       </p>
     </div>
@@ -447,15 +431,22 @@ function CycleToggle({ ciclo, setCiclo }) {
 }
 
 function PlanCard({
-  plan, badge, priceLine, priceStrike, sublabel, bullets,
-  ctaLabel, ctaIcon: CtaIcon, ctaStyle, accent, onClick, disabled, highlight,
+  plan, ciclo, badge, bullets,
+  ctaLabel, ctaIcon: CtaIcon, accent, onClick, disabled, highlight,
 }) {
+  const isFree = plan.id === "free";
+  const isAnual = ciclo === "anual";
+  const price = isFree ? null : PRICES[plan.id]?.[ciclo];
+  const monthlyEq = isFree ? null : monthlyEquivalent(plan.id, ciclo);
+  const ctaText = ctaLabel ?? (isFree
+    ? "Começar grátis"
+    : `Assinar por R$ ${formatPrice(monthlyEq)}/mês →`);
+
   return (
     <div
-      className="w-full p-4 rounded-2xl relative"
+      className="w-full p-4 rounded-2xl relative bg-white"
       style={{
-        background: "#FFFFFF",
-        border: highlight ? `2px solid ${accent}` : "1px solid #E5E7EB",
+        border: highlight ? `2px solid ${accent}` : "1px solid #E2E8F0",
         boxShadow: highlight ? `0 8px 24px ${accent}33` : "0 1px 3px rgba(15,23,42,0.06)",
       }}
     >
@@ -467,20 +458,40 @@ function PlanCard({
           {badge}
         </span>
       )}
-      <div className="flex items-baseline justify-between mt-1 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xl">{plan.icon}</span>
-          <span className="font-display font-extrabold text-[#1F2937] truncate">{plan.nome}</span>
-        </div>
-        <div className="text-right">
-          {priceStrike && (
-            <div className="text-[10px] text-[#9CA3AF] line-through tabular">{priceStrike}</div>
-          )}
-          <div className="font-display font-extrabold tabular text-[#1F2937] text-lg leading-tight">{priceLine}</div>
-          {sublabel && <div className="text-[10px] text-[#6B7280] leading-tight">{sublabel}</div>}
-        </div>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-xl">{plan.icon}</span>
+        <span className="font-display font-extrabold text-[#0F172A]">{plan.nome}</span>
       </div>
-      <ul className="mt-2 space-y-0.5">
+
+      <div className="mt-2">
+        {isFree ? (
+          <>
+            <div className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">R$ 0</div>
+            <div className="text-[12px] text-[#64748B] mt-1">pra sempre</div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
+                R$ {formatPrice(monthlyEq)}
+              </span>
+              <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
+            </div>
+            <div className="text-[12px] text-[#64748B] mt-1">
+              {isAnual
+                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
+                : "cobrado mensalmente"}
+            </div>
+            {isAnual && (
+              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+                economize 33% vs mensal
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      <ul className="mt-3 space-y-0.5">
         {bullets.map((f, i) => (
           <li key={i} className="flex items-start gap-1.5 text-[12px] text-[#374151]">
             <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-600" />
@@ -488,15 +499,16 @@ function PlanCard({
           </li>
         ))}
       </ul>
+
       <button
         type="button"
         onClick={onClick}
         disabled={disabled}
         className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-display font-extrabold text-white w-full disabled:opacity-60"
-        style={ctaStyle}
+        style={{ background: isFree ? "#6366F1" : "#F97316" }}
       >
         {disabled ? <Loader2 className="w-4 h-4 animate-spin" /> : <CtaIcon className="w-4 h-4" />}
-        {ctaLabel}
+        {ctaText}
       </button>
     </div>
   );

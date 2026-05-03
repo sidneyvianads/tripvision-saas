@@ -31,7 +31,7 @@ export default function Landing() {
           <button
             onClick={goSignup}
             className="text-sm font-display font-extrabold text-white px-3 py-1.5 rounded-full"
-            style={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)", boxShadow: "0 2px 8px rgba(99, 102, 241, 0.30)" }}
+            style={{ background: "#F97316", boxShadow: "0 2px 8px rgba(249, 115, 22, 0.30)" }}
           >
             Criar conta grátis
           </button>
@@ -41,16 +41,14 @@ export default function Landing() {
       {/* Hero */}
       <section
         className="relative pt-28 pb-16 px-4 overflow-hidden"
-        style={{
-          background: "radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.10), transparent 60%), radial-gradient(circle at 80% 60%, rgba(245, 158, 11, 0.08), transparent 50%), #FAFBFC",
-        }}
+        style={{ background: "#FFFFFF" }}
       >
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase mb-4"
-            style={{ background: "#EEF2FF", color: "#6366F1", border: "1px solid #C7D2FE" }}
+            style={{ background: "#FFF7ED", color: "#EA580C", border: "1px solid #FED7AA" }}
           >
-            <Sparkles className="w-3 h-3" /> Planejamento conversacional com IA
+            <Sparkles className="w-3 h-3" /> Converse e planeje
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-display font-extrabold text-[#1F2937] leading-tight tracking-tight">
@@ -59,21 +57,21 @@ export default function Landing() {
               conversando.
             </span>
           </h1>
-          <div className="text-2xl sm:text-3xl font-display font-extrabold mt-3" style={{ background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Juntos na Jornada.
+          <div className="text-2xl sm:text-3xl font-display font-extrabold mt-3 text-[#F97316]">
+            Sempre Juntos.
           </div>
-          <p className="text-lg sm:text-xl text-[#4B5563] mt-5 max-w-2xl mx-auto">
-            A IA pesquisa hotéis, restaurantes e passeios com <strong className="text-[#6366F1]">preços reais</strong> e
+          <p className="text-lg sm:text-xl text-[#475569] mt-5 max-w-2xl mx-auto">
+            O assistente pesquisa hotéis, restaurantes e passeios com <strong className="text-[#F97316]">preços reais</strong> e
             monta o roteiro pra você. Compartilhe com o grupo em 1 clique.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <button
               onClick={goSignup}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-base font-display font-extrabold text-white"
-              style={{ background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)", boxShadow: "0 8px 20px rgba(245, 158, 11, 0.35)" }}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-base font-display font-extrabold text-white transition"
+              style={{ background: "#F97316", boxShadow: "0 8px 20px rgba(249, 115, 22, 0.35)" }}
             >
-              Começar grátis <ArrowRight className="w-4 h-4" />
+              Criar conta grátis <ArrowRight className="w-4 h-4" />
             </button>
             <button
               onClick={() => document.getElementById("como-funciona")?.scrollIntoView({ behavior: "smooth" })}
@@ -104,14 +102,14 @@ export default function Landing() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Step n={1} icon={MessagesSquare} title="Conte sobre sua viagem" desc='"Vou pra Gramado com a família, 5 dias, hotel Serra Azul, chegando dia 10/07 às 14h."' />
-            <Step n={2} icon={Search} title="A IA pesquisa tudo" desc="Hotéis, restaurantes e passeios com preço e endereço atualizados em tempo real." />
-            <Step n={3} icon={CalendarCheck2} title="Roteiro pronto pra compartilhar" desc="Dia a dia montado automaticamente. Mande o link pro grupo e todos veem pelo app." />
+            <Step n={2} icon={Search} title="O assistente pesquisa tudo" desc="Hotéis, restaurantes e passeios com preço e endereço atualizados." />
+            <Step n={3} icon={CalendarCheck2} title="Roteiro pronto pra compartilhar" desc="Dia a dia montado automaticamente. Mande o link pro grupo e todos veem pelo celular." />
           </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="px-4 py-14 bg-app">
+      <section className="px-4 py-14 bg-soft">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">
             <div className="text-xs font-display font-extrabold tracking-widest text-[#6366F1] uppercase">Tudo que você precisa</div>
@@ -119,11 +117,11 @@ export default function Landing() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Feature icon={Sparkles} title="Planejamento por IA" desc="Conversa natural, pesquisa preços reais." />
+            <Feature icon={Sparkles} title="Assistente inteligente" desc="Conversa natural, pesquisa preços reais." />
             <Feature icon={CalendarCheck2} title="Roteiro automático" desc="Se monta sozinho a partir da conversa." />
-            <Feature icon={MessageCircle} title="Chat do grupo" desc="Todos conversam dentro do app, em tempo real." />
+            <Feature icon={MessageCircle} title="Chat do grupo" desc="Todos conversam dentro do app — atualiza na hora." />
             <Feature icon={CheckSquare} title="Checklist compartilhado" desc="Pendências, reservas, lembretes — todos veem." />
-            <Feature icon={Smartphone} title="Instala no celular" desc="PWA, funciona como app sem passar por loja." />
+            <Feature icon={Smartphone} title="Instala como app" desc="Funciona no celular como qualquer aplicativo, sem loja." />
             <Feature icon={Share2} title="Compartilhe com 1 clique" desc="Link único, grupo entra direto na viagem." />
           </div>
         </div>
@@ -135,7 +133,7 @@ export default function Landing() {
       </section>
 
       {/* Depoimento */}
-      <section className="px-4 py-14 bg-app">
+      <section className="px-4 py-14 bg-soft">
         <div className="max-w-3xl mx-auto text-center">
           <div className="text-5xl mb-3">💬</div>
           <p className="text-xl sm:text-2xl text-[#1F2937] font-display font-bold leading-relaxed">
@@ -146,17 +144,14 @@ export default function Landing() {
       </section>
 
       {/* CTA final */}
-      <section
-        className="px-4 py-16"
-        style={{ background: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)" }}
-      >
+      <section className="px-4 py-16" style={{ background: "#F8FAFC" }}>
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl sm:text-4xl text-white font-display font-extrabold">Pronto pra planejar sua próxima viagem?</h2>
-          <p className="text-white/90 mt-3">Comece grátis. Sem cartão de crédito.</p>
+          <h2 className="text-3xl sm:text-4xl text-[#0F172A] font-display font-extrabold">Pronto pra planejar sua próxima viagem?</h2>
+          <p className="text-[#475569] mt-3">Comece grátis. Sem cartão de crédito.</p>
           <button
             onClick={goSignup}
-            className="mt-6 inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-base font-display font-extrabold"
-            style={{ background: "white", color: "#6366F1", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.18)" }}
+            className="mt-6 inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-base font-display font-extrabold text-white transition"
+            style={{ background: "#F97316", boxShadow: "0 8px 24px rgba(249, 115, 22, 0.30)" }}
           >
             Criar conta grátis <ArrowRight className="w-4 h-4" />
           </button>
@@ -165,7 +160,7 @@ export default function Landing() {
 
       <footer className="px-4 py-8 bg-white" style={{ borderTop: "1px solid #E5E7EB" }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
-          <div className="font-display font-bold">Viajjei · Juntos na Jornada · Grupo Multvision · © 2026</div>
+          <div className="font-display font-bold">Viajjei · Sempre Juntos · Grupo Multvision · © 2026</div>
           <div className="flex gap-4">
             <Link to="/precos" className="hover:text-[#1F2937]">Preços</Link>
             <Link to="/termos" className="hover:text-[#1F2937]">Termos de Uso</Link>

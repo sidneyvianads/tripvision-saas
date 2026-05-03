@@ -6,7 +6,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
-  const [ciclo, setCiclo] = useState("mensal");
+  const [ciclo, setCiclo] = useState("anual");
 
   if (!open) return null;
 
@@ -25,14 +25,14 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
 
   const desc = (
     {
-      ia:           "Suas mensagens gratuitas acabaram. Assine pra planejamento ilimitado com pesquisa online em tempo real.",
+      ia:           "Suas mensagens gratuitas acabaram. Assine pra planejamento ilimitado e pesquisa de preços reais.",
       viagens:      "O Free permite 1 viagem ativa. Pro: até 3. Grupo: até 5.",
       chat:         "O chat do grupo está disponível a partir do Pro.",
       admin:        "Edição manual fina do roteiro está no Pro.",
       checklist:    "O Free permite 5 itens. Pro/Grupo: ilimitado.",
       membros:      "Pro: até 5 pessoas. Grupo: até 20.",
       compartilhar: "Compartilhar a viagem com o grupo é exclusivo do Pro.",
-      pesquisa:     "A pesquisa online em tempo real (preços, hotéis, restaurantes) é exclusiva do Pro.",
+      pesquisa:     "A pesquisa de preços reais (hotéis, restaurantes, passeios) é exclusiva do Pro.",
     }[reason]
   ) ?? "Veja os planos pagos e libere todos os recursos.";
 
@@ -208,19 +208,21 @@ function UpgradeCard({ plan, ciclo, onAssinar, busy, accent, highlight, badge })
       </div>
 
       <div className="mt-2">
-        {strike && (
-          <div className="text-[11px] text-[#9CA3AF] line-through tabular">
-            R$ {formatPrice(strike)}/ano
-          </div>
-        )}
-        <div className="font-display font-extrabold tabular text-[#1F2937] text-2xl leading-tight">
-          R$ {formatPrice(price.amount)}
-          <span className="text-[12px] font-bold text-[#6B7280]">/{isAnual ? "ano" : "mês"}</span>
+        <div className="flex items-baseline gap-1">
+          <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
+            R$ {formatPrice(monthlyEq)}
+          </span>
+          <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
+        </div>
+        <div className="text-[12px] text-[#64748B] mt-1">
+          {isAnual
+            ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
+            : "cobrado mensalmente"}
         </div>
         {isAnual && (
-          <div className="text-[11px] text-emerald-700 font-display font-bold">
-            equivale a R$ {formatPrice(monthlyEq)}/mês
-          </div>
+          <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+            economize 33% vs mensal
+          </span>
         )}
       </div>
 
@@ -238,14 +240,10 @@ function UpgradeCard({ plan, ciclo, onAssinar, busy, accent, highlight, badge })
         onClick={onAssinar}
         disabled={busy}
         className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-display font-extrabold text-white w-full disabled:opacity-60"
-        style={{
-          background: highlight
-            ? "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)"
-            : "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
-        }}
+        style={{ background: "#F97316" }}
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
-        Assinar R$ {formatPrice(price.amount)}{isAnual ? "/ano" : "/mês"}
+        Assinar por R$ {formatPrice(monthlyEq)}/mês →
       </button>
     </div>
   );

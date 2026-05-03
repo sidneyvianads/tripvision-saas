@@ -2,7 +2,7 @@
 // Quando MERCADOPAGO_ACCESS_TOKEN não está configurado, retorna 503
 // com placeholder: true pra frontend mostrar "em breve" gracefully.
 
-const SITE_BASE = "https://tripvision-saas.netlify.app";
+const SITE_BASE = "https://viajjei.com.br";
 
 const PRICES = {
   pro: {

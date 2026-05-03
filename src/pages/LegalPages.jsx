@@ -108,7 +108,7 @@ export function PrivacidadePage() {
         marketing. Compartilhamentos restritos com fornecedores essenciais:
         <ul className="list-disc pl-5 space-y-1 mt-1">
           <li><strong>Supabase</strong> (banco de dados, hospedado em São Paulo)</li>
-          <li><strong>Anthropic</strong> (IA Claude — recebe apenas contexto da viagem e sua mensagem)</li>
+          <li><strong>Provedor de inteligência artificial</strong> (recebe apenas o contexto da viagem e sua mensagem)</li>
           <li><strong>Netlify</strong> (hospedagem do site)</li>
           <li><strong>Mercado Pago</strong> (somente pra processar pagamentos do Pro)</li>
         </ul>

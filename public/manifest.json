@@ -1,11 +1,12 @@
 {
   "name": "Viajjei",
   "short_name": "Viajjei",
-  "description": "Planeje sua viagem conversando. A IA faz o resto.",
+  "description": "Planeje sua viagem conversando. Sempre Juntos.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0F1B2D",
-  "theme_color": "#0F1B2D",
+  "background_color": "#FFFFFF",
+  "theme_color": "#F97316",
   "icons": [
     {
       "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%A7%B3</text></svg>",
