@@ -202,7 +202,9 @@ async function callRpc(name, payload) {
   }
 }
 
-// Free: dia corrente. Pro/Grupo: mês corrente. (RPC lifetime mantida pra futuras métricas.)
+// Free: dia corrente em America/Sao_Paulo (reset à meia-noite BRT).
+// Pro/Grupo: mês corrente em UTC.
+// (RPC lifetime mantida pra futuras métricas.)
 async function countDailyUserMessages(uid)   { return callRpc("count_ia_user_messages_today",    { uid }); }
 async function countMonthlyUserMessages(uid) { return callRpc("count_ia_user_messages_in_month", { uid }); }
 
