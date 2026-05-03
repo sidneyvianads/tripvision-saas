@@ -117,6 +117,8 @@ export function AuthProvider({ children }) {
       else if (existing) throw new Error("Esse e-mail já está cadastrado. Faça login.");
 
       const hash = await sha256Hex(cleanSenha);
+      const avatarLen = (avatar_url ?? "").length;
+      console.log("[Viajjei] signUp inserindo:", { email: cleanEmail, hasAvatarUrl: !!avatar_url, avatarLen });
       const { data, error } = await supabase
         .from("users")
         .insert({
@@ -135,6 +137,7 @@ export function AuthProvider({ children }) {
         if (error.code === "23505") throw new Error("Esse e-mail já está cadastrado. Faça login.");
         throw new Error(`Erro ao criar conta: ${error.message ?? "desconhecido"}`);
       }
+      console.log("[Viajjei] signUp ok:", { id: data.id, hasAvatarUrl: !!data.avatar_url, avatarLenSaved: (data.avatar_url ?? "").length });
       return data;
     } finally {
       setLoading(false);
@@ -159,6 +162,7 @@ export function AuthProvider({ children }) {
 
     setLoading(true);
     try {
+      console.log("[Viajjei] updateProfile:", { fields: Object.keys(updates), avatarLen: (updates.avatar_url ?? "").length });
       const { data, error } = await supabase
         .from("users")
         .update(updates)

@@ -140,7 +140,7 @@ REGRAS TÉCNICAS:
 - Após o update, sempre confirme em texto curto: "Adicionei: [resumo]"
 `;
 
-const FREE_IA_LIMIT = 5;
+const FREE_DAILY_LIMIT = 5;
 const MONTHLY_LIMITS = { pro: 500, grupo: 2000 };
 const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
@@ -202,9 +202,9 @@ async function callRpc(name, payload) {
   }
 }
 
-// Free: lifetime. Pro/Grupo: mês corrente.
-async function countFreeUserMessages(uid)        { return callRpc("count_ia_user_messages",          { uid }); }
-async function countMonthlyUserMessages(uid)     { return callRpc("count_ia_user_messages_in_month", { uid }); }
+// Free: dia corrente. Pro/Grupo: mês corrente. (RPC lifetime mantida pra futuras métricas.)
+async function countDailyUserMessages(uid)   { return callRpc("count_ia_user_messages_today",    { uid }); }
+async function countMonthlyUserMessages(uid) { return callRpc("count_ia_user_messages_in_month", { uid }); }
 
 export default async (req) => {
   if (req.method !== "POST") {
@@ -240,14 +240,16 @@ export default async (req) => {
   const isPaidPlan = PAID_PLANS.has(effectivePlan);
 
   // ===== GATE SERVER-SIDE =====
-  // Free: contador lifetime. Pro/Grupo: contador mensal. Owner: bypass total.
+  // Free: contador DIÁRIO (5/dia, reseta meia-noite UTC).
+  // Pro/Grupo: contador MENSAL.
+  // Owner: bypass total.
   if (effectivePlan !== "owner" && user_id) {
     if (!isPaidPlan) {
-      const used = await countFreeUserMessages(user_id);
-      if (used != null && used >= FREE_IA_LIMIT) {
-        console.log("[plan] FREE GATE blocked", { user_id, used, limit: FREE_IA_LIMIT });
+      const used = await countDailyUserMessages(user_id);
+      if (used != null && used >= FREE_DAILY_LIMIT) {
+        console.log("[plan] FREE DAILY GATE blocked", { user_id, used, limit: FREE_DAILY_LIMIT });
         return jsonResponse(
-          { error: "Limite Free atingido", upgrade: true, used, limit: FREE_IA_LIMIT, scope: "lifetime" },
+          { error: "Limite diário atingido", upgrade: true, used, limit: FREE_DAILY_LIMIT, scope: "daily" },
           403
         );
       }

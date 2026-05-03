@@ -331,7 +331,7 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       <PlanCard
         plan={free}
         ciclo={ciclo}
-        bullets={["1 viagem", "5 mensagens", "Só você (sem chat)"]}
+        bullets={["1 viagem", "5 mensagens por dia", "Só você (sem chat)"]}
         ctaLabel="Começar grátis"
         ctaIcon={ArrowRight}
         accent="#6366F1"

@@ -10,7 +10,7 @@ export const PLANS = {
     tagline: "Pra experimentar",
     features: [
       "1 viagem",
-      "5 mensagens de IA (no total)",
+      "5 mensagens de IA por dia",
       "Editar roteiro manualmente",
       "Checklist básico (5 itens)",
     ],
@@ -85,7 +85,7 @@ export const PRICES = {
 export const LIMITS = {
   free: {
     viagens: 1,
-    iaMsgsLifetime: 5,
+    iaMsgsDia: 5,
     iaMsgsMes: null,
     membros: 1,
     checklist: 5,
@@ -96,7 +96,7 @@ export const LIMITS = {
   },
   pro: {
     viagens: 3,
-    iaMsgsLifetime: null,
+    iaMsgsDia: null,
     iaMsgsMes: 500,
     membros: 5,
     checklist: null,
@@ -107,7 +107,7 @@ export const LIMITS = {
   },
   grupo: {
     viagens: 5,
-    iaMsgsLifetime: null,
+    iaMsgsDia: null,
     iaMsgsMes: 2000,
     membros: 20,
     checklist: null,
@@ -118,7 +118,7 @@ export const LIMITS = {
   },
   owner: {
     viagens: Infinity,
-    iaMsgsLifetime: null,
+    iaMsgsDia: null,
     iaMsgsMes: Infinity,
     membros: Infinity,
     checklist: Infinity,

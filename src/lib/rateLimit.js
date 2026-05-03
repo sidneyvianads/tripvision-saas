@@ -1,11 +1,17 @@
 // Rate limiting client-side via localStorage.
-// Free: lifetime counter. Pro/Grupo: monthly counter (YYYY-MM).
-// Não é à prova de fraude — protege custo da maioria dos casos.
-// O servidor (/api/plan) tem o gate autoritativo via RPC no Postgres.
+// Free: contador DIÁRIO (5 msgs/dia, reseta meia-noite).
+// Pro/Grupo: contador MENSAL.
+// Owner: bypass total no servidor; client renderiza "sem limite".
+// Servidor (/api/plan) é a fonte autoritativa via RPC no Postgres.
 
 import { getLimits } from "../data/plans";
 
 const KEY = "tripvision-saas:plan-usage:v3";
+
+function dayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; // YYYY-MM-DD
+}
 
 function monthKey() {
   const d = new Date();
@@ -25,52 +31,52 @@ function writeState(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
 }
 
+function bucketFor(limits) {
+  if (limits.iaMsgsDia != null) return { window: "diario", key: dayKey(), limit: limits.iaMsgsDia };
+  if (limits.iaMsgsMes != null) return { window: "mensal", key: monthKey(), limit: limits.iaMsgsMes };
+  return null;
+}
+
 export function getPlanUsage(userId, plano = "free") {
   const limits = getLimits(plano);
+  const b = bucketFor(limits);
+  if (!b) return { used: 0, limit: 999, remaining: 999, tipo: "ilimitado" };
   const s = readState();
-
-  if (limits.iaMsgsLifetime != null) {
-    const used = s[`${userId}:lifetime`] ?? 0;
-    const limit = limits.iaMsgsLifetime;
-    return { used, limit, remaining: Math.max(0, limit - used), tipo: "lifetime" };
-  }
-  const month = monthKey();
-  const used = s[`${userId}:${month}`] ?? 0;
-  const limit = limits.iaMsgsMes ?? 999;
-  return { used, limit, remaining: Math.max(0, limit - used), tipo: "mensal", month };
+  const used = s[`${userId}:${b.key}`] ?? 0;
+  return { used, limit: b.limit, remaining: Math.max(0, b.limit - used), tipo: b.window, period: b.key };
 }
 
 export function bumpPlanUsage(userId, plano = "free") {
   const limits = getLimits(plano);
+  const b = bucketFor(limits);
+  if (!b) return getPlanUsage(userId, plano);
   const s = readState();
+  const k = `${userId}:${b.key}`;
+  s[k] = (s[k] ?? 0) + 1;
 
-  if (limits.iaMsgsLifetime != null) {
-    const k = `${userId}:lifetime`;
-    s[k] = (s[k] ?? 0) + 1;
-  } else {
-    const month = monthKey();
-    const k = `${userId}:${month}`;
-    s[k] = (s[k] ?? 0) + 1;
-  }
-
-  // GC dos contadores mensais antigos (>3 meses)
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - 3);
-  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
+  // GC: remove diários >7 dias e mensais >3 meses.
+  const today = new Date();
+  const cutoffDay = new Date(today); cutoffDay.setDate(today.getDate() - 7);
+  const cutoffDayKey = `${cutoffDay.getFullYear()}-${String(cutoffDay.getMonth() + 1).padStart(2, "0")}-${String(cutoffDay.getDate()).padStart(2, "0")}`;
+  const cutoffMonth = new Date(today); cutoffMonth.setMonth(today.getMonth() - 3);
+  const cutoffMonthKey = `${cutoffMonth.getFullYear()}-${String(cutoffMonth.getMonth() + 1).padStart(2, "0")}`;
   for (const key of Object.keys(s)) {
     const part = key.split(":").pop();
-    if (!part || part === "lifetime") continue;
-    // formato YYYY-MM
-    if (/^\d{4}-\d{2}$/.test(part) && part < cutoffKey) delete s[key];
+    if (!part) continue;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(part) && part < cutoffDayKey)  delete s[key];
+    if (/^\d{4}-\d{2}$/.test(part)        && part < cutoffMonthKey) delete s[key];
   }
   writeState(s);
   return getPlanUsage(userId, plano);
 }
 
-// Permite override do contador mensal a partir do servidor (single source of truth).
-export function setMonthlyUsage(userId, count) {
+// Override do contador a partir do servidor (single source of truth).
+// Usa o mesmo bucket atual conforme o plano do user.
+export function setPlanUsageFromServer(userId, plano, count) {
   if (!userId || typeof count !== "number") return;
+  const b = bucketFor(getLimits(plano));
+  if (!b) return;
   const s = readState();
-  s[`${userId}:${monthKey()}`] = Math.max(0, count);
+  s[`${userId}:${b.key}`] = Math.max(0, count);
   writeState(s);
 }

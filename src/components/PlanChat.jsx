@@ -7,7 +7,7 @@ import { useIaConversa } from "../hooks/useIaConversa";
 import { useRoteiro } from "../hooks/useRoteiro";
 import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroUpdates } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
-import { getPlanUsage, bumpPlanUsage, setMonthlyUsage } from "../lib/rateLimit";
+import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner } from "../data/plans";
 import { supabase } from "../lib/supabase";
@@ -31,10 +31,14 @@ const LOADING_PHASES = [
 const ROTEIRO_OPEN = "<roteiro_update>";
 const ROTEIRO_CLOSE = "</roteiro_update>";
 
-// HARD GATE: contador local simples por user. Para FREE = lifetime, limite 5.
-// Chave dedicada — não depende do sistema rateLimit antigo.
+// HARD GATE: contador local simples por user, DIÁRIO (reseta meia-noite).
+// Chave: tripvision:ia_msgs:USER_ID:YYYY-MM-DD. Servidor é a verdade final.
 const FREE_LIMIT = 5;
-const HARD_KEY = (uid) => `tripvision:ia_msgs:${uid}`;
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const HARD_KEY = (uid) => `tripvision:ia_msgs:${uid}:${todayStr()}`;
 function getFreeUsed(uid) {
   if (!uid) return 0;
   try { return parseInt(localStorage.getItem(HARD_KEY(uid)) || "0", 10) || 0; }
@@ -151,13 +155,13 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   }, [freeUsed, freeBlocked, user?.plano, blocked]);
 
   // Sincroniza contador local com o BANCO (fonte da verdade) ao montar.
-  // Free: count lifetime. Pro/Grupo: count this month. localStorage é cache pra UX.
+  // Free: count today. Pro/Grupo: count this month. localStorage é cache pra UX.
   useEffect(() => {
     if (!user?.id || isOwner(user?.plano)) return;
     let active = true;
     (async () => {
       try {
-        const rpcName = isFree ? "count_ia_user_messages" : "count_ia_user_messages_in_month";
+        const rpcName = isFree ? "count_ia_user_messages_today" : "count_ia_user_messages_in_month";
         const { data, error } = await supabase.rpc(rpcName, { uid: user.id });
         if (!active) return;
         if (error) {
@@ -172,10 +176,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
           }
           setFreeUsed(truth);
-          console.log("[PlanChat] free sync:", { server: serverCount, local: localCount, truth });
+          console.log("[PlanChat] free daily sync:", { server: serverCount, local: localCount, truth });
         } else {
           // Pro/Grupo: substitui contador local pelo do servidor (mensal autoritativo).
-          setMonthlyUsage(user.id, serverCount);
+          setPlanUsageFromServer(user.id, user.plano, serverCount);
           setUsage(getPlanUsage(user.id, user.plano));
           console.log("[PlanChat] monthly sync:", { server: serverCount, plano: user.plano });
         }
@@ -418,7 +422,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             {isOwner(user?.plano)
               ? "👑 sem limite"
               : isFree
-                ? `${freeUsed}/${FREE_LIMIT} usadas`
+                ? `${freeUsed}/${FREE_LIMIT} usadas hoje`
                 : `${usage.used}/${usage.limit} este mês`}
           </span>
           {messages.length > 0 && !busy && (
@@ -499,22 +503,30 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       {/* Banner de limite atingido (Free) */}
       {freeBlocked && (
         <div
-          className="relative z-10 mx-1 mb-2 rounded-xl px-4 py-3 flex flex-col gap-2"
+          className="relative z-10 mx-1 mb-2 rounded-xl px-4 py-3"
           style={{ background: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "1px solid #F59E0B" }}
         >
-          <div className="flex items-start gap-2">
-            <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#92400E]" />
-            <div className="text-[#92400E] text-sm">
-              <strong>Você usou suas {FREE_LIMIT} mensagens gratuitas.</strong>
-              <div className="text-[12px] mt-0.5">Assine o Pro pra ter o assistente sem limite e pesquisa de preços reais.</div>
+          <div className="text-[#92400E]">
+            <div className="font-display font-extrabold text-sm flex items-center gap-1.5">
+              ☀️ Você usou suas {FREE_LIMIT} mensagens de hoje!
+            </div>
+            <div className="text-[13px] mt-1 leading-snug">
+              Volte amanhã pra continuar planejando, ou assine o Pro pra mensagens ilimitadas.
             </div>
           </div>
           <button
             type="button"
             onClick={() => setShowUpgrade(true)}
-            className="btn-primary inline-flex items-center justify-center gap-1.5 !py-2 text-sm"
+            className="btn-primary mt-2.5 inline-flex items-center justify-center gap-1.5 !py-2 text-sm w-full"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Assinar Pro
+            <Sparkles className="w-3.5 h-3.5" /> Assinar Pro — R$ 9,99/mês →
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowUpgrade(false)}
+            className="block w-full text-center mt-2 text-[12px] text-[#92400E]/80 hover:text-[#92400E] font-display font-bold"
+          >
+            Volto amanhã
           </button>
         </div>
       )}
@@ -540,7 +552,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <input
           className="input flex-1"
           placeholder={
-            freeBlocked ? "Você usou suas mensagens gratuitas."
+            freeBlocked ? "Você usou suas mensagens de hoje. Volte amanhã!"
             : proBlocked ? "Você atingiu o limite deste mês."
             : "Conta como vocês querem viajar…"
           }

@@ -25,7 +25,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
 
   const desc = (
     {
-      ia:           "Suas mensagens gratuitas acabaram. Assine pra planejamento ilimitado e pesquisa de preços reais.",
+      ia:           "Você usou suas mensagens de hoje. Volte amanhã ou assine pra ter mensagens ilimitadas e pesquisa de preços reais.",
       viagens:      "O Free permite 1 viagem ativa. Pro: até 3. Grupo: até 5.",
       chat:         "O chat do grupo está disponível a partir do Pro.",
       admin:        "Edição manual fina do roteiro está no Pro.",

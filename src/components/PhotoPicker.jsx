@@ -14,15 +14,24 @@ export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", 
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
+    console.log("[Viajjei] PhotoPicker file selected:", { hasFile: !!file, name: file?.name, type: file?.type, fileSize: file?.size });
     if (!file) return;
+    // HEIC/HEIF (iOS default) — Canvas API não decodifica em Chrome/Firefox.
+    if (/heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name)) {
+      setErr("Formato HEIC não suportado. Salve como JPG/PNG e tente de novo.");
+      console.warn("[Viajjei] PhotoPicker: HEIC rejeitado");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     setErr(null);
     setBusy(true);
     try {
       const dataUrl = await fileToResizedDataUrl(file, 200, 0.7);
+      console.log("[Viajjei] PhotoPicker resized:", { fileSize: file.size, base64Length: dataUrl.length, base64Preview: dataUrl.slice(0, 40) + "…" });
       onChange(dataUrl);
     } catch (err) {
-      console.error("[Viajjei] PhotoPicker:", err);
-      setErr("Não consegui processar essa imagem.");
+      console.error("[Viajjei] PhotoPicker erro no resize:", err);
+      setErr(`Não consegui processar essa imagem (${err.message ?? "erro desconhecido"}).`);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
