@@ -9,7 +9,7 @@ import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroU
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
-import { isPaid } from "../data/plans";
+import { isPaid, isOwner } from "../data/plans";
 import { supabase } from "../lib/supabase";
 
 const SUGESTOES = [
@@ -408,9 +408,11 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             📋 Resumir
           </button>
           <span>
-            {isFree
-              ? `${freeUsed}/${FREE_LIMIT} usadas`
-              : `${usage.used}/${usage.limit} hoje`}
+            {isOwner(user?.plano)
+              ? "👑 sem limite"
+              : isFree
+                ? `${freeUsed}/${FREE_LIMIT} usadas`
+                : `${usage.used}/${usage.limit} hoje`}
           </span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">

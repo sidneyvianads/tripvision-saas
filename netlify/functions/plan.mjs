@@ -141,6 +141,7 @@ REGRAS TÉCNICAS:
 `;
 
 const FREE_IA_LIMIT = 5;
+const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 
@@ -198,7 +199,9 @@ export default async (req) => {
 
   // ===== GATE SERVER-SIDE FREE =====
   // Fonte da verdade: ia_conversas no banco. localStorage é só UX.
-  if (user_plano !== "pro" && user_id) {
+  // Owner/Pro/Grupo passam direto.
+  const isPaidPlan = PAID_PLANS.has(user_plano);
+  if (!isPaidPlan && user_id) {
     const used = await countFreeUserMessages(user_id);
     if (used != null && used >= FREE_IA_LIMIT) {
       console.log("[plan] FREE GATE blocked", { user_id, used, limit: FREE_IA_LIMIT });
@@ -210,7 +213,8 @@ export default async (req) => {
   }
   // ===== /GATE =====
 
-  const allowSearch = user_plano === "pro";
+  // Web search liberado pra qualquer plano pago.
+  const allowSearch = isPaidPlan;
 
   const sanitizedHistory = (Array.isArray(history) ? history : [])
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())

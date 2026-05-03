@@ -53,6 +53,21 @@ export const PLANS = {
       "Editar roteiro completo",
     ],
   },
+  // Plano interno — não aparece em PricingSection nem PlanPicker.
+  // Atribuído manualmente via SQL pra owners do produto.
+  owner: {
+    id: "owner",
+    nome: "Owner",
+    icon: "👑",
+    cor: "#EAB308",
+    tagline: "Acesso total",
+    features: [
+      "Tudo ilimitado",
+      "Sem cobrança",
+      "Bypass em todos os gates",
+    ],
+    hidden: true, // sinal pra UI pública pular esse plano
+  },
 };
 
 export const PRICES = {
@@ -101,6 +116,17 @@ export const LIMITS = {
     pesquisa: true,
     compartilhar: true,
   },
+  owner: {
+    viagens: Infinity,
+    iaMsgsLifetime: null,
+    iaMsgsDia: Infinity,
+    membros: Infinity,
+    checklist: Infinity,
+    chat: true,
+    admin: true,
+    pesquisa: true,
+    compartilhar: true,
+  },
 };
 
 export function getLimits(plano) {
@@ -116,7 +142,11 @@ export function planIcon(plano) {
 }
 
 export function isPaid(plano) {
-  return plano === "pro" || plano === "grupo";
+  return plano === "pro" || plano === "grupo" || plano === "owner";
+}
+
+export function isOwner(plano) {
+  return plano === "owner";
 }
 
 // Formatação curta de preço pra cards / botões.

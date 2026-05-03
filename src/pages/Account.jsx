@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase, sha256Hex, normalizePassword } from "../lib/supabase";
-import { PLANS, planName, planIcon, isPaid } from "../data/plans";
+import { PLANS, planName, planIcon, isPaid, isOwner } from "../data/plans";
 import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
@@ -107,6 +107,7 @@ export default function Account() {
   const plano = user.plano ?? "free";
   const planoData = PLANS[plano];
   const isFree = !isPaid(plano);
+  const isOwnerUser = isOwner(plano);
 
   return (
     <div className="min-h-screen flex flex-col bg-app">
@@ -152,7 +153,7 @@ export default function Account() {
             </div>
           )}
 
-          {!isFree && (
+          {!isFree && !isOwnerUser && (
             <div className="mt-4 flex flex-wrap gap-2">
               <a
                 href="https://www.mercadopago.com.br/subscriptions"
@@ -170,6 +171,12 @@ export default function Account() {
               >
                 Trocar plano
               </button>
+            </div>
+          )}
+
+          {isOwnerUser && (
+            <div className="mt-3 rounded-xl px-3 py-2 text-[13px] font-display font-bold" style={{ background: "rgba(234, 179, 8, 0.12)", color: "#854D0E", border: "1px solid #EAB308" }}>
+              👑 Acesso interno — sem cobrança, sem limites.
             </div>
           )}
 
