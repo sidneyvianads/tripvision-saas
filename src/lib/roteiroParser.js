@@ -98,6 +98,9 @@ export async function applyRoteiroUpdates(viagemId, updates) {
     try {
       switch (u.action) {
         case "add_day": {
+          // Pra suportar undo: só consideramos "criado" se NÃO existia antes.
+          // Upsert + select retorna sempre o id, mas só guardamos pra undo se created.
+          const existedBefore = await getDiaId(viagemId, Number(u.dia_numero));
           const payload = {
             viagem_id: viagemId,
             dia_numero: Number(u.dia_numero),
@@ -111,10 +114,19 @@ export async function applyRoteiroUpdates(viagemId, updates) {
             alerta: u.alerta ?? null,
             cover_emoji: u.cover_emoji ?? "📍",
           };
-          const { error } = await supabase
+          const { data: row, error } = await supabase
             .from("roteiro_dias")
-            .upsert(payload, { onConflict: "viagem_id,dia_numero" });
-          results.push({ action: "add_day", dia_numero: payload.dia_numero, titulo: payload.titulo, success: !error, error: error?.message });
+            .upsert(payload, { onConflict: "viagem_id,dia_numero" })
+            .select("id")
+            .single();
+          results.push({
+            action: "add_day",
+            dia_numero: payload.dia_numero,
+            titulo: payload.titulo,
+            success: !error,
+            error: error?.message,
+            created_id: !existedBefore && row?.id ? row.id : null,
+          });
           break;
         }
 
@@ -147,7 +159,11 @@ export async function applyRoteiroUpdates(viagemId, updates) {
             results.push({ action: "add_activity", success: false, error: "Atividade sem título." });
             break;
           }
-          const { error } = await supabase.from("roteiro_atividades").insert(payload);
+          const { data: actRow, error } = await supabase
+            .from("roteiro_atividades")
+            .insert(payload)
+            .select("id")
+            .single();
           results.push({
             action: "add_activity",
             dia_numero: Number(u.dia_numero),
@@ -156,6 +172,7 @@ export async function applyRoteiroUpdates(viagemId, updates) {
             tipo: payload.tipo,
             success: !error,
             error: error?.message,
+            created_id: actRow?.id ?? null,
           });
           break;
         }
@@ -230,6 +247,26 @@ export async function applyRoteiroUpdates(viagemId, updates) {
   }
 
   return results;
+}
+
+// Desfaz inserções de um applyRoteiroUpdates anterior.
+// Só remove o que FOI inserido (created_id presente). Update/remove não tem undo.
+export async function undoRoteiroUpdates(results) {
+  if (!Array.isArray(results)) return { activities: 0, days: 0, errors: [] };
+  const actIds = results.filter((r) => r.action === "add_activity" && r.created_id).map((r) => r.created_id);
+  const dayIds = results.filter((r) => r.action === "add_day" && r.created_id).map((r) => r.created_id);
+  const errors = [];
+
+  // Apaga atividades primeiro (pra evitar cascade do dia)
+  if (actIds.length) {
+    const { error } = await supabase.from("roteiro_atividades").delete().in("id", actIds);
+    if (error) errors.push(error.message);
+  }
+  if (dayIds.length) {
+    const { error } = await supabase.from("roteiro_dias").delete().in("id", dayIds);
+    if (error) errors.push(error.message);
+  }
+  return { activities: actIds.length, days: dayIds.length, errors };
 }
 
 export function summarizeUpdates(results) {

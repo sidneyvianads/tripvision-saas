@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useParams, Navigate, useSearchParams, useNavigate } from "react-router-dom";
-import { Sparkles, PencilLine } from "lucide-react";
+import { Sparkles, PencilLine, Download, Loader2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrip } from "../hooks/useTrips";
 import { useRoteiro } from "../hooks/useRoteiro";
@@ -9,16 +9,22 @@ import TripLayout from "../components/TripLayout";
 import TabBar from "../components/TabBar";
 import Countdown from "../components/Countdown";
 import DayCard from "../components/DayCard";
-import GroupChat from "../components/GroupChat";
-import PlanChat from "../components/PlanChat";
-import Checklist from "../components/Checklist";
+import { supabase } from "../lib/supabase";
 import { FullscreenLoader } from "../App";
+import Skeleton, { TabSkeleton } from "../components/Skeleton";
+import ScrollToTop from "../components/ScrollToTop";
+
+const GroupChat = lazy(() => import("../components/GroupChat"));
+const PlanChat  = lazy(() => import("../components/PlanChat"));
+const Checklist = lazy(() => import("../components/Checklist"));
+const Diario    = lazy(() => import("../components/Diario"));
 
 const TAB_TITLES = {
   roteiro:  "📅 Roteiro",
   planejar: "✨ Planejar com IA",
   chat:     "💬 Chat do grupo",
   tarefas:  "✅ Tarefas",
+  diario:   "📸 Diário",
 };
 
 export default function TripView() {
@@ -70,12 +76,16 @@ export default function TripView() {
         user={user}
         onLogout={handleLogout}
       >
-        {tab === "roteiro"  && <RoteiroTab trip={trip} isAdmin={isAdmin} onPlanejar={() => setTab("planejar")} />}
-        {tab === "planejar" && <PlanChat   trip={trip} user={user} onGoToRoteiro={() => setTab("roteiro")} />}
-        {tab === "chat"     && <GroupChat  viagemId={trip.id} user={user} />}
-        {tab === "tarefas"  && <Checklist  viagemId={trip.id} user={user} isAdmin={isAdmin} />}
+        <Suspense fallback={<TabSkeleton />}>
+          {tab === "roteiro"  && <RoteiroTab trip={trip} isAdmin={isAdmin} onPlanejar={() => setTab("planejar")} />}
+          {tab === "planejar" && <PlanChat   trip={trip} user={user} onGoToRoteiro={() => setTab("roteiro")} />}
+          {tab === "chat"     && <GroupChat  viagemId={trip.id} user={user} />}
+          {tab === "tarefas"  && <Checklist  viagemId={trip.id} user={user} isAdmin={isAdmin} />}
+          {tab === "diario"   && <Diario     trip={trip} user={user} />}
+        </Suspense>
       </TripLayout>
       <TabBar active={tab} onChange={setTab} badges={{ chat: unreadChat }} />
+      <ScrollToTop />
     </>
   );
 }
@@ -83,7 +93,29 @@ export default function TripView() {
 function RoteiroTab({ trip, isAdmin, onPlanejar }) {
   const navigate = useNavigate();
   const { days, loading } = useRoteiro(trip.id);
+  const [exporting, setExporting] = useState(false);
   const todayKey = new Date().toISOString().slice(0, 10);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const [{ data: contatos }, { exportRoteiroPdf }] = await Promise.all([
+        supabase
+          .from("contatos")
+          .select("nome, telefone, endereco, categoria, favorito")
+          .eq("viagem_id", trip.id)
+          .order("favorito", { ascending: false }),
+        import("../lib/exportPdf"),
+      ]);
+      await exportRoteiroPdf({ trip, days, contatos: contatos ?? [] });
+    } catch (e) {
+      console.error("[exportPdf] failed:", e);
+      alert("Não consegui gerar o PDF: " + e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const initialExpanded = useMemo(() => {
     if (!days?.length) return null;
@@ -139,6 +171,17 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
         </div>
       ) : (
         <div className="px-4 mt-5 space-y-3 pb-4">
+          <div className="flex justify-end">
+            <button
+              onClick={handleExport}
+              disabled={exporting || days.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold bg-white border hover:bg-gray-50 disabled:opacity-50"
+              style={{ borderColor: "var(--tv-card-border)", color: "var(--tv-accent-dark)" }}
+            >
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Exportar PDF
+            </button>
+          </div>
           {days.map((day) => (
             <div id={`day-${day.dia_numero}`} key={day.id} style={{ scrollMarginTop: 16 }}>
               <DayCard

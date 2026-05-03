@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Share2, Users, LogOut, Shield, Check, UserCircle, Lock } from "lucide-react";
+import { ArrowLeft, Share2, Users, LogOut, Shield, UserCircle, Lock, BookUser } from "lucide-react";
 import Avatar from "./Avatar";
 import People from "./People";
 import Profile from "./Profile";
+import Contatos from "./Contatos";
+import ShareModal from "./ShareModal";
 import PlanBadge from "./PlanBadge";
 import UpgradeModal from "./UpgradeModal";
 import { temaCssVars } from "../lib/applyTema";
@@ -13,33 +15,17 @@ import { getLimits } from "../data/plans";
 export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, children }) {
   const navigate = useNavigate();
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [contatosOpen, setContatosOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
   const limits = getLimits(user?.plano);
   const canShare = limits.compartilhar === true;
 
-  const shareUrl = `${window.location.origin}/v/${trip.slug}`;
-  const cidades = trip.cidades?.length ? trip.cidades.join(", ") : "uma viagem incrível";
-  const emoji = trip.cover_emoji ?? "🧳";
-  const shareText = `Entra no app da nossa viagem pra ${cidades}! ${emoji}\n${shareUrl}`;
-
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!canShare) { setShowUpgrade(true); return; }
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: trip.nome, text: shareText, url: shareUrl });
-        return;
-      } catch { /* fall through */ }
-    }
-    try {
-      await navigator.clipboard.writeText(shareText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      prompt("Copie essa mensagem:", shareText);
-    }
+    setShareOpen(true);
   };
 
   const tema = getTema(trip.tema);
@@ -85,12 +71,20 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
             <Users className="w-4 h-4" />
           </button>
           <button
+            onClick={() => setContatosOpen(true)}
+            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
+            aria-label="Contatos da viagem"
+            title="Contatos"
+          >
+            <BookUser className="w-4 h-4" />
+          </button>
+          <button
             onClick={handleShare}
             className="rounded-full bg-white/15 hover:bg-white/25 transition p-2 relative"
             aria-label={canShare ? "Compartilhar" : "Compartilhar (Pro)"}
             title={canShare ? "Compartilhar" : "Compartilhar é Pro"}
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Share2 className="w-4 h-4" />}
+            <Share2 className="w-4 h-4" />
             {!canShare && (
               <span
                 className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center"
@@ -139,8 +133,10 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
 
       <main className="flex-1 overflow-y-auto pb-24">{children}</main>
 
-      {peopleOpen  && <People  viagemId={trip.id} onClose={() => setPeopleOpen(false)} />}
-      {profileOpen && <Profile onClose={() => setProfileOpen(false)} />}
+      {peopleOpen   && <People   viagemId={trip.id} onClose={() => setPeopleOpen(false)} />}
+      {contatosOpen && <Contatos viagemId={trip.id} isAdmin={isAdmin} onClose={() => setContatosOpen(false)} />}
+      {profileOpen  && <Profile  onClose={() => setProfileOpen(false)} />}
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} trip={trip} />
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="compartilhar" user={user} />
     </div>
   );

@@ -2,6 +2,7 @@
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"
+  edge_functions = "netlify/edge-functions"
 
 [context.production.environment]
   NODE_VERSION = "20"
@@ -14,6 +15,10 @@
 
 [functions."chat"]
   timeout = 26
+
+[[edge_functions]]
+  function = "og"
+  path = "/v/:slug"
 
 [[redirects]]
   from = "/*"

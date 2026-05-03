@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Plus, X, Minus } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrips } from "../hooks/useTrips";
-import { TEMAS, TEMA_KEYS, suggestTemaByCidades, getTema } from "../data/themes";
+import { TEMAS, TEMA_KEYS, suggestTemaByCidades, getTema, emojiForCidade } from "../data/themes";
 import { temaCssVars } from "../lib/applyTema";
 
 export default function NewTrip() {
@@ -65,7 +65,7 @@ export default function NewTrip() {
         cidades,
         num_pessoas: numPessoas ? Number(numPessoas) : null,
         descricao,
-        cover_emoji: tema.emoji,
+        cover_emoji: emojiForCidade(cidades[0]) ?? tema.emoji,
         cor_tema: tema.accent,
         tema: temaId,
       });

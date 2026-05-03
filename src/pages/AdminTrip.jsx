@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link, Navigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Save, Loader2, AlertTriangle, Lock, Sparkles, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Loader2, AlertTriangle, Lock, Sparkles, Copy, Eye } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrip } from "../hooks/useTrips";
 import { useRoteiro, addDia, updateDia, deleteDia, addAtividade, updateAtividade, deleteAtividade } from "../hooks/useRoteiro";
@@ -10,6 +10,7 @@ import { logEdit, fetchLastEdit } from "../lib/editLog";
 import { temaCssVars } from "../lib/applyTema";
 import { getTema } from "../data/themes";
 import UpgradeModal from "../components/UpgradeModal";
+import ActivityItem from "../components/ActivityItem";
 import { FullscreenLoader } from "../App";
 
 export default function AdminTrip() {
@@ -370,6 +371,16 @@ function DayEditor({ day: initial, trip, onClose }) {
                 onChange={(e) => setAtv(idx, { notas: e.target.value.slice(0, 200) })}
                 maxLength={200}
               />
+
+              {/* Preview live: como a atividade vai aparecer no roteiro */}
+              {(a.titulo || a.descricao || a.horario) && (
+                <div className="rounded-xl border border-dashed p-3 mt-1" style={{ borderColor: "var(--tv-card-border)", background: "var(--tv-bg-light)" }}>
+                  <div className="text-[10px] font-display font-bold uppercase tracking-wide mb-1.5 inline-flex items-center gap-1" style={{ color: "var(--tv-accent-dark)" }}>
+                    <Eye className="w-3 h-3" /> Preview
+                  </div>
+                  <ActivityItem activity={a} isLast={true} />
+                </div>
+              )}
             </div>
           ))}
 

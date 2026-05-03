@@ -1,10 +1,11 @@
-import { CalendarDays, MessageCircle, Sparkles, CheckSquare } from "lucide-react";
+import { CalendarDays, MessageCircle, Sparkles, CheckSquare, Camera } from "lucide-react";
 
 const TABS = [
   { id: "roteiro",  label: "Roteiro",  Icon: CalendarDays },
   { id: "planejar", label: "Planejar", Icon: Sparkles },
   { id: "chat",     label: "Chat",     Icon: MessageCircle },
   { id: "tarefas",  label: "Tarefas",  Icon: CheckSquare },
+  { id: "diario",   label: "Diário",   Icon: Camera },
 ];
 
 export default function TabBar({ active, onChange, badges = {} }) {
@@ -16,7 +17,7 @@ export default function TabBar({ active, onChange, badges = {} }) {
         boxShadow: "0 -2px 12px rgba(15, 23, 42, 0.06)",
       }}
     >
-      <div className="max-w-2xl mx-auto grid grid-cols-4">
+      <div className="max-w-2xl mx-auto grid grid-cols-5">
         {TABS.map(({ id, label, Icon }) => {
           const isActive = active === id;
           const badge = badges[id];

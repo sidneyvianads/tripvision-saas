@@ -5,7 +5,7 @@ import Avatar from "./Avatar";
 import UpgradeModal from "./UpgradeModal";
 import { useIaConversa } from "../hooks/useIaConversa";
 import { useRoteiro } from "../hooks/useRoteiro";
-import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates } from "../lib/roteiroParser";
+import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroUpdates } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
@@ -432,6 +432,11 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             user={user}
             onGoToRoteiro={onGoToRoteiro}
             onRetry={m._error ? handleRetry : null}
+            onUndo={async (applied) => {
+              const result = await undoRoteiroUpdates(applied);
+              await reloadRoteiro();
+              return result;
+            }}
           />
         ))}
 
@@ -567,7 +572,7 @@ function BotAvatar() {
   );
 }
 
-function Message({ message, user, onGoToRoteiro, onRetry }) {
+function Message({ message, user, onGoToRoteiro, onRetry, onUndo }) {
   const isUser = message.role === "user";
   return (
     <div className={`flex gap-2 items-end animate-pop ${isUser ? "justify-end" : "justify-start"}`}>
@@ -600,7 +605,7 @@ function Message({ message, user, onGoToRoteiro, onRetry }) {
         )}
 
         {!isUser && Array.isArray(message._applied) && message._applied.length > 0 && (
-          <UpdateCard applied={message._applied} onGoToRoteiro={onGoToRoteiro} />
+          <UpdateCard applied={message._applied} onGoToRoteiro={onGoToRoteiro} onUndo={onUndo} ts={message.ts} />
         )}
       </div>
       {isUser && user && <Avatar user={user} size={32} />}
@@ -608,10 +613,49 @@ function Message({ message, user, onGoToRoteiro, onRetry }) {
   );
 }
 
-function UpdateCard({ applied, onGoToRoteiro }) {
+const UNDO_WINDOW_MS = 30_000;
+function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
   const summary = summarizeUpdates(applied);
   const total = summary.added.length + summary.days.length + summary.updated.length + summary.removed.length;
   const hasErrors = summary.errors.length > 0;
+
+  // Undo só funciona se houver coisas inseridas (created_id) e dentro de 30s.
+  const undoable = applied.some((r) => r.created_id);
+  const [undone, setUndone] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!undoable || undone) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [undoable, undone]);
+  const elapsed = now - (ts ?? now);
+  const remaining = Math.max(0, UNDO_WINDOW_MS - elapsed);
+  const canUndo = undoable && !undone && remaining > 0;
+
+  const handleUndo = async () => {
+    if (!onUndo) return;
+    setUndoing(true);
+    try {
+      await onUndo(applied);
+      setUndone(true);
+    } catch (e) {
+      console.error("[UpdateCard] undo failed:", e);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  if (undone) {
+    return (
+      <div
+        className="rounded-2xl px-3 py-2 text-sm flex items-center gap-2"
+        style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#6B7280" }}
+      >
+        <span className="opacity-70">↩️ Desfeito</span>
+      </div>
+    );
+  }
 
   if (total === 0 && hasErrors) {
     return (
@@ -686,16 +730,30 @@ function UpdateCard({ applied, onGoToRoteiro }) {
         )}
       </div>
 
-      {onGoToRoteiro && (
-        <button
-          type="button"
-          onClick={onGoToRoteiro}
-          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold"
-          style={{ background: "#FFFFFF", color: "#065F46", border: "1px solid #FFFFFF" }}
-        >
-          Ver no roteiro →
-        </button>
-      )}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {onGoToRoteiro && (
+          <button
+            type="button"
+            onClick={onGoToRoteiro}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold"
+            style={{ background: "#FFFFFF", color: "#065F46", border: "1px solid #FFFFFF" }}
+          >
+            Ver no roteiro →
+          </button>
+        )}
+        {canUndo && onUndo && (
+          <button
+            type="button"
+            onClick={handleUndo}
+            disabled={undoing}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold disabled:opacity-60"
+            style={{ background: "rgba(255,255,255,0.15)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.40)" }}
+            title={`Desfazer (${Math.ceil(remaining / 1000)}s)`}
+          >
+            ↩️ Desfazer · {Math.ceil(remaining / 1000)}s
+          </button>
+        )}
+      </div>
     </div>
   );
 }

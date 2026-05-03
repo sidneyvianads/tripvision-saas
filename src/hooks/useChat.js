@@ -61,6 +61,8 @@ export function useUnreadCount(viagemId, userId) {
 export function useChat(viagemId) {
   const [messages, setMessages] = useState([]);
   const [profilesById, setProfilesById] = useState({});
+  // reactions: { [message_id]: [{id, user_id, emoji}, ...] }
+  const [reactionsByMsg, setReactionsByMsg] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -71,7 +73,7 @@ export function useChat(viagemId) {
     async function loadInitial() {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, viagem_id, user_id, content, created_at")
+        .select("id, viagem_id, user_id, content, created_at, reply_to, is_system")
         .eq("viagem_id", viagemId)
         .order("created_at", { ascending: false })
         .limit(200);
@@ -79,10 +81,26 @@ export function useChat(viagemId) {
       if (error) setError(error.message);
       else setMessages([...(data ?? [])].reverse());
       setLoading(false);
+
+      // Load reactions for these messages
+      const ids = (data ?? []).map((m) => m.id);
+      if (ids.length) {
+        const { data: rx } = await supabase
+          .from("reactions")
+          .select("id, message_id, user_id, emoji")
+          .in("message_id", ids);
+        if (active && rx) {
+          const grouped = {};
+          for (const r of rx) {
+            (grouped[r.message_id] = grouped[r.message_id] || []).push(r);
+          }
+          setReactionsByMsg(grouped);
+        }
+      }
     }
     loadInitial();
 
-    const channel = supabase
+    const msgChannel = supabase
       .channel(`messages-${viagemId}`)
       .on(
         "postgres_changes",
@@ -95,9 +113,42 @@ export function useChat(viagemId) {
       )
       .subscribe();
 
+    const rxChannel = supabase
+      .channel(`reactions-${viagemId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "reactions" },
+        (payload) => {
+          const r = payload.new;
+          setReactionsByMsg((prev) => {
+            const arr = prev[r.message_id] ?? [];
+            if (arr.some((x) => x.id === r.id)) return prev;
+            return { ...prev, [r.message_id]: [...arr, r] };
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "reactions" },
+        (payload) => {
+          const old = payload.old;
+          if (!old?.id) return;
+          setReactionsByMsg((prev) => {
+            const next = { ...prev };
+            for (const mid of Object.keys(next)) {
+              const filtered = next[mid].filter((r) => r.id !== old.id);
+              if (filtered.length !== next[mid].length) next[mid] = filtered;
+            }
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
     return () => {
       active = false;
-      supabase.removeChannel(channel);
+      supabase.removeChannel(msgChannel);
+      supabase.removeChannel(rxChannel);
     };
   }, [viagemId]);
 
@@ -122,13 +173,42 @@ export function useChat(viagemId) {
     return () => { active = false; };
   }, [messages, profilesById]);
 
-  const sendMessage = useCallback(async (content, userId) => {
+  const sendMessage = useCallback(async (content, userId, replyTo = null) => {
     if (!content?.trim() || !userId || !viagemId) return;
-    const { error } = await supabase
-      .from("messages")
-      .insert({ viagem_id: viagemId, user_id: userId, content: content.trim() });
+    const payload = { viagem_id: viagemId, user_id: userId, content: content.trim() };
+    if (replyTo) payload.reply_to = replyTo;
+    const { error } = await supabase.from("messages").insert(payload);
     if (error) setError(error.message);
   }, [viagemId]);
 
-  return { messages, profilesById, loading, error, sendMessage };
+  const toggleReaction = useCallback(async (messageId, userId, emoji) => {
+    if (!messageId || !userId || !emoji) return;
+    const arr = reactionsByMsg[messageId] ?? [];
+    const existing = arr.find((r) => r.user_id === userId && r.emoji === emoji);
+    if (existing) {
+      // optimistic remove
+      setReactionsByMsg((prev) => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== existing.id),
+      }));
+      const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
+      if (error) setError(error.message);
+    } else {
+      const { data, error } = await supabase
+        .from("reactions")
+        .insert({ message_id: messageId, user_id: userId, emoji })
+        .select("id, message_id, user_id, emoji")
+        .single();
+      if (error) { setError(error.message); return; }
+      if (data) {
+        setReactionsByMsg((prev) => {
+          const arr2 = prev[messageId] ?? [];
+          if (arr2.some((r) => r.id === data.id)) return prev;
+          return { ...prev, [messageId]: [...arr2, data] };
+        });
+      }
+    }
+  }, [reactionsByMsg]);
+
+  return { messages, profilesById, reactionsByMsg, loading, error, sendMessage, toggleReaction };
 }

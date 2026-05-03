@@ -1,14 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+const CACHE_KEY = (viagemId) => `tripvision:roteiro:${viagemId}`;
+
+function readCache(viagemId) {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY(viagemId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.days) ? parsed.days : null;
+  } catch { return null; }
+}
+function writeCache(viagemId, days) {
+  try { localStorage.setItem(CACHE_KEY(viagemId), JSON.stringify({ days, ts: Date.now() })); } catch {}
+}
+
 export function useRoteiro(viagemId) {
-  const [days, setDays] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Hidrata do cache imediato pra renderização instantânea
+  const [days, setDays] = useState(() => (viagemId ? (readCache(viagemId) ?? []) : []));
+  const [loading, setLoading] = useState(() => !viagemId || readCache(viagemId) == null);
   const [error, setError] = useState(null);
 
   const reload = useCallback(async () => {
     if (!viagemId) return;
-    setLoading(true);
     const { data: dias, error: dErr } = await supabase
       .from("roteiro_dias")
       .select("*")
@@ -21,6 +35,7 @@ export function useRoteiro(viagemId) {
     }
     if (!dias || dias.length === 0) {
       setDays([]);
+      writeCache(viagemId, []);
       setLoading(false);
       return;
     }
@@ -36,7 +51,9 @@ export function useRoteiro(viagemId) {
     for (const a of ats ?? []) {
       (byDia[a.dia_id] ||= []).push(a);
     }
-    setDays(dias.map((d) => ({ ...d, atividades: byDia[d.id] ?? [] })));
+    const merged = dias.map((d) => ({ ...d, atividades: byDia[d.id] ?? [] }));
+    setDays(merged);
+    writeCache(viagemId, merged);
     setLoading(false);
   }, [viagemId]);
 
