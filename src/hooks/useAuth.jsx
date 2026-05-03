@@ -39,11 +39,11 @@ export function AuthProvider({ children }) {
       .then(({ data, error }) => {
         if (!active) return;
         if (error) {
-          console.error("[TripVision] profile refresh:", error);
+          console.error("[Viajjei] profile refresh:", error);
           return;
         }
         if (!data) {
-          console.warn("[TripVision] sessão órfã. Limpando.");
+          console.warn("[Viajjei] sessão órfã. Limpando.");
           clearSession();
           setUser(null);
           return;
@@ -75,12 +75,12 @@ export function AuthProvider({ children }) {
         .ilike("email", cleanEmail)
         .maybeSingle();
       if (error) {
-        console.error("[TripVision] signIn error:", error);
+        console.error("[Viajjei] signIn error:", error);
         throw new Error(error.message);
       }
       if (!data) throw new Error("E-mail não encontrado. Cadastre-se primeiro.");
       if (data.senha_hash !== hash) {
-        console.error("[TripVision] signIn hash mismatch", {
+        console.error("[Viajjei] signIn hash mismatch", {
           esperado: data.senha_hash.slice(0, 8) + "…",
           recebido: hash.slice(0, 8) + "…",
           senhaLen: cleanSenha.length,
@@ -113,7 +113,7 @@ export function AuthProvider({ children }) {
         .select("id, email")
         .ilike("email", cleanEmail)
         .maybeSingle();
-      if (checkErr) console.error("[TripVision] signUp pre-check:", checkErr);
+      if (checkErr) console.error("[Viajjei] signUp pre-check:", checkErr);
       else if (existing) throw new Error("Esse e-mail já está cadastrado. Faça login.");
 
       const hash = await sha256Hex(cleanSenha);
@@ -131,7 +131,7 @@ export function AuthProvider({ children }) {
         .single();
 
       if (error) {
-        console.error("[TripVision] signUp insert:", error);
+        console.error("[Viajjei] signUp insert:", error);
         if (error.code === "23505") throw new Error("Esse e-mail já está cadastrado. Faça login.");
         throw new Error(`Erro ao criar conta: ${error.message ?? "desconhecido"}`);
       }
@@ -166,7 +166,7 @@ export function AuthProvider({ children }) {
         .select(PROFILE_COLS)
         .single();
       if (error) {
-        console.error("[TripVision] updateProfile:", error);
+        console.error("[Viajjei] updateProfile:", error);
         throw new Error(error.message);
       }
       saveSession(data);

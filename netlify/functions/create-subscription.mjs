@@ -6,12 +6,12 @@ const SITE_BASE = "https://tripvision-saas.netlify.app";
 
 const PRICES = {
   pro: {
-    mensal: { amount: 14.9,  reason: "Voyajei Pro — Mensal", frequency: 1,  type: "months" },
-    anual:  { amount: 119.9, reason: "Voyajei Pro — Anual",  frequency: 12, type: "months" },
+    mensal: { amount: 14.9,  reason: "Viajjei Pro — Mensal", frequency: 1,  type: "months" },
+    anual:  { amount: 119.9, reason: "Viajjei Pro — Anual",  frequency: 12, type: "months" },
   },
   grupo: {
-    mensal: { amount: 29.9,  reason: "Voyajei Grupo — Mensal", frequency: 1,  type: "months" },
-    anual:  { amount: 239.9, reason: "Voyajei Grupo — Anual",  frequency: 12, type: "months" },
+    mensal: { amount: 29.9,  reason: "Viajjei Grupo — Mensal", frequency: 1,  type: "months" },
+    anual:  { amount: 239.9, reason: "Viajjei Grupo — Anual",  frequency: 12, type: "months" },
   },
 };
 

@@ -66,7 +66,7 @@ async function ensureDia(viagemId, dia_numero, defaults = {}) {
     console.error("[roteiroParser] ensureDia create error:", error);
     return { diaId: null, created: false };
   }
-  console.log(`[TripVision] auto-criou Dia ${dia_numero} (id ${data.id})`);
+  console.log(`[Viajjei] auto-criou Dia ${dia_numero} (id ${data.id})`);
   return { diaId: data.id, created: true };
 }
 

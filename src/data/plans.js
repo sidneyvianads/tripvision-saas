@@ -1,4 +1,4 @@
-// Planos comerciais do TripVision SaaS — fonte única da verdade
+// Planos comerciais do Viajjei SaaS — fonte única da verdade
 // Mudanças aqui se propagam pra Pricing, paywall, limites e webhooks.
 
 export const PLANS = {

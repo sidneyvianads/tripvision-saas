@@ -6,7 +6,7 @@ const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON);
 
 if (!isSupabaseConfigured) {
-  console.warn("[TripVision] VITE_SUPABASE_URL/ANON_KEY ausentes — modo offline.");
+  console.warn("[Viajjei] VITE_SUPABASE_URL/ANON_KEY ausentes — modo offline.");
 }
 
 export const supabase = createClient(

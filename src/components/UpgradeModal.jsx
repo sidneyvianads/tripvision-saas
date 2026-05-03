@@ -21,7 +21,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
       compartilhar: "🔗 Compartilhar viagem é Pro",
       pesquisa:     "🔍 Pesquisa online é Pro",
     }[reason]
-  ) ?? "✨ Faça upgrade do Voyajei";
+  ) ?? "✨ Assine o Viajjei Pro";
 
   const desc = (
     {

@@ -1,9 +1,9 @@
-// /api/plan — motor de planejamento conversacional do TripVision.
+// /api/plan — motor de planejamento conversacional do Viajjei.
 // Streaming via SSE: forward direto da Anthropic API pra evitar 504.
 // Streaming dá time-to-first-byte rápido e permite que respostas longas
 // (que com web_search podem passar de 26s) cheguem no usuário.
 
-const SYSTEM_TEMPLATE = (viagem) => `Você é o Voyajei, um planejador de viagens inteligente, simpático e criterioso.
+const SYSTEM_TEMPLATE = (viagem) => `Você é o Viajjei, um planejador de viagens inteligente, simpático e criterioso.
 
 DADOS DA VIAGEM:
 - Nome: ${viagem.nome ?? "(sem nome)"}

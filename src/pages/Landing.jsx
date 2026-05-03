@@ -16,7 +16,7 @@ export default function Landing() {
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg flex items-center gap-1.5">
-            <span>🧳</span> Voyajei
+            <span>🧳</span> Viajjei
           </Link>
           <div className="flex-1" />
           <Link to="/precos" className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold hidden sm:inline">
@@ -59,6 +59,9 @@ export default function Landing() {
               conversando.
             </span>
           </h1>
+          <div className="text-2xl sm:text-3xl font-display font-extrabold mt-3" style={{ background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Juntos na Jornada.
+          </div>
           <p className="text-lg sm:text-xl text-[#4B5563] mt-5 max-w-2xl mx-auto">
             A IA pesquisa hotéis, restaurantes e passeios com <strong className="text-[#6366F1]">preços reais</strong> e
             monta o roteiro pra você. Compartilhe com o grupo em 1 clique.
@@ -162,7 +165,7 @@ export default function Landing() {
 
       <footer className="px-4 py-8 bg-white" style={{ borderTop: "1px solid #E5E7EB" }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
-          <div className="font-display font-bold">Voyajei · Grupo Multvision · © 2026</div>
+          <div className="font-display font-bold">Viajjei · Juntos na Jornada · Grupo Multvision · © 2026</div>
           <div className="flex gap-4">
             <Link to="/precos" className="hover:text-[#1F2937]">Preços</Link>
             <Link to="/termos" className="hover:text-[#1F2937]">Termos de Uso</Link>

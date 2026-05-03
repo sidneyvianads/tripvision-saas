@@ -21,7 +21,7 @@ export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", 
       const dataUrl = await fileToResizedDataUrl(file, 200, 0.7);
       onChange(dataUrl);
     } catch (err) {
-      console.error("[TripVision] PhotoPicker:", err);
+      console.error("[Viajjei] PhotoPicker:", err);
       setErr("Não consegui processar essa imagem.");
     } finally {
       setBusy(false);

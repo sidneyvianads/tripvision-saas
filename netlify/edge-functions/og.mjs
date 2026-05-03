@@ -63,7 +63,7 @@ export default async (request, context) => {
   if (datas) descParts.push(datas);
   if (cidades) descParts.push(cidades);
   if (trip.num_pessoas) descParts.push(`${trip.num_pessoas} pessoas`);
-  descParts.push("Planejado com Voyajei");
+  descParts.push("Planejado com Viajjei");
   const descricao = descParts.join(" · ");
 
   const ogImage = `${url.origin}/og-default.png`;
@@ -75,13 +75,13 @@ export default async (request, context) => {
     <meta property="og:description" content="${escapeHtml(descricao)}" />
     <meta property="og:url" content="${escapeHtml(pageUrl)}" />
     <meta property="og:image" content="${escapeHtml(ogImage)}" />
-    <meta property="og:site_name" content="Voyajei" />
+    <meta property="og:site_name" content="Viajjei" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(titulo)}" />
     <meta name="twitter:description" content="${escapeHtml(descricao)}" />
     <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
     <meta name="description" content="${escapeHtml(descricao)}" />
-    <title>${escapeHtml(titulo)} — Voyajei</title>
+    <title>${escapeHtml(titulo)} — Viajjei</title>
   `.trim();
 
   let html = await response.text();

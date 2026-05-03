@@ -38,7 +38,7 @@ export function buildWelcomeMessage(viagem) {
     return d && m ? `${d}/${m}` : iso;
   };
 
-  const intro = ["Olá! 👋 Vamos planejar"];
+  const intro = ["Olá! 👋 Sou o Viajjei. Vamos planejar"];
   if (viagem?.nome) intro.push(`"${viagem.nome}"`);
   intro.push("juntos!");
 

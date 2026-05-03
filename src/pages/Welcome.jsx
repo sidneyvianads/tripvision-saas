@@ -153,12 +153,12 @@ export default function Welcome() {
           <Link to="/" className="inline-block">
             <div className="text-5xl mb-2">🧳</div>
           </Link>
-          <h1 className="text-3xl text-[#1F2937]">Voyajei</h1>
+          <h1 className="text-3xl text-[#1F2937]">Viajjei</h1>
           <p className="text-[#6B7280] mt-1 font-display font-bold text-sm">
             Planeje sua viagem conversando.
           </p>
           <p className="text-primary text-xs font-display font-bold uppercase tracking-widest mt-0.5">
-            A IA faz o resto.
+            Juntos na Jornada
           </p>
         </div>
 
