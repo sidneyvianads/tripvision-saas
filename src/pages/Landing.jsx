@@ -146,9 +146,9 @@ function Header({ onSignup, onLogin }) {
 // ===== HERO ========================================================
 
 const HERO_PHOTOS = {
-  noronha:  "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=600&h=800&fit=crop",
-  gramado:  "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=300&fit=crop",
+  noronha:  "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=800&h=600&fit=crop",
   rio:      "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400&h=300&fit=crop",
+  lencois:  "https://images.unsplash.com/photo-1609693029653-10ed2fc02e43?w=400&h=300&fit=crop",
 };
 
 function Hero({ onSignup }) {
@@ -215,19 +215,19 @@ function PhotoCollage() {
           className="w-full h-full object-cover"
         />
       </div>
-      {/* Foto sobreposta — Gramado, canto superior esquerdo */}
+      {/* Foto sobreposta — Rio, canto superior esquerdo */}
       <div
         className="absolute -top-4 -left-4 w-[42%] aspect-[4/3] rounded-2xl overflow-hidden hidden sm:block"
         style={{ boxShadow: "0 12px 32px rgba(15, 23, 42, 0.22)", border: "4px solid white" }}
       >
-        <img src={HERO_PHOTOS.gramado} alt="Gramado" loading="eager" className="w-full h-full object-cover" />
+        <img src={HERO_PHOTOS.rio} alt="Rio de Janeiro" loading="eager" className="w-full h-full object-cover" />
       </div>
-      {/* Foto sobreposta — Rio, canto inferior direito */}
+      {/* Foto sobreposta — Lençóis Maranhenses, canto inferior direito */}
       <div
         className="absolute -bottom-6 -right-4 w-[48%] aspect-[4/3] rounded-2xl overflow-hidden hidden sm:block"
         style={{ boxShadow: "0 12px 32px rgba(15, 23, 42, 0.22)", border: "4px solid white" }}
       >
-        <img src={HERO_PHOTOS.rio} alt="Rio de Janeiro" loading="eager" className="w-full h-full object-cover" />
+        <img src={HERO_PHOTOS.lencois} alt="Lençóis Maranhenses" loading="eager" className="w-full h-full object-cover" />
       </div>
       {/* Pin emoji decorativo */}
       <div
@@ -445,10 +445,14 @@ function Features() {
 // ===== POPULAR DESTINATIONS ========================================
 
 const DESTINOS = [
-  { nome: "Gramado",            emoji: "🌲", url: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=300&fit=crop" },
-  { nome: "Fernando de Noronha", emoji: "🏝️", url: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=400&h=300&fit=crop" },
-  { nome: "Rio de Janeiro",      emoji: "🏖️", url: "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400&h=300&fit=crop" },
-  { nome: "Foz do Iguaçu",       emoji: "🌊", url: "https://images.unsplash.com/photo-1432405972618-c6b0351b4198?w=400&h=300&fit=crop" },
+  { nome: "Gramado",              emoji: "🌲", url: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=300&fit=crop" },
+  { nome: "Fernando de Noronha",  emoji: "🏝️", url: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=400&h=300&fit=crop" },
+  { nome: "Rio de Janeiro",       emoji: "🏖️", url: "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400&h=300&fit=crop" },
+  { nome: "Foz do Iguaçu",        emoji: "🌊", url: "https://images.unsplash.com/photo-1432405972618-c6b0351b4198?w=400&h=300&fit=crop" },
+  { nome: "Lençóis Maranhenses",  emoji: "🏜️", url: "https://images.unsplash.com/photo-1609693029653-10ed2fc02e43?w=400&h=300&fit=crop" },
+  { nome: "Chapada Diamantina",   emoji: "🌿", url: "https://images.unsplash.com/photo-1591302418462-eb55463b49d6?w=400&h=300&fit=crop" },
+  { nome: "Jericoacoara",         emoji: "☀️", url: "https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=400&h=300&fit=crop" },
+  { nome: "Salvador",             emoji: "🎭", url: "https://images.unsplash.com/photo-1516306580123-e6e52b1b7b5f?w=400&h=300&fit=crop" },
 ];
 
 function PopularDestinations() {
@@ -459,22 +463,21 @@ function PopularDestinations() {
           <h2 className="font-display font-extrabold text-[#0F172A]" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
             Pra onde você quer ir?
           </h2>
-          <p className="text-[#64748B] mt-3 text-base">Inspiração pra próxima viagem.</p>
+          <p className="text-[#64748B] mt-3 text-base">Planeje qualquer destino com a ajuda da IA.</p>
         </Reveal>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {DESTINOS.map((d, i) => (
             <Reveal key={d.nome} delay={(i % 4) * 80}>
               <div
-                className="relative aspect-[4/5] sm:aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer transition-transform hover:scale-[1.03]"
-                style={{ boxShadow: "0 4px 12px rgba(15, 23, 42, 0.08)" }}
+                className="relative aspect-[4/5] sm:aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.03] shadow-md hover:shadow-xl"
               >
                 <img src={d.url} alt={d.nome} loading="lazy" className="w-full h-full object-cover" />
                 <div
-                  className="absolute inset-x-0 bottom-0 h-3/5 pointer-events-none"
-                  style={{ background: "linear-gradient(to top, rgba(15,23,42,0.75), transparent)" }}
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ background: "linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.6) 100%)" }}
                 />
-                <div className="absolute bottom-3 left-3 right-3 text-white">
+                <div className="absolute bottom-4 left-4 right-4 text-white">
                   <div className="text-xl">{d.emoji}</div>
                   <div className="font-display font-extrabold text-base mt-0.5 leading-tight">{d.nome}</div>
                 </div>
