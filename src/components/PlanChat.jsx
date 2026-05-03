@@ -581,19 +581,19 @@ function UpdateCard({ applied, onGoToRoteiro }) {
     <div
       className="rounded-2xl px-3 py-3 text-sm"
       style={{
-        background: "linear-gradient(135deg, rgba(39, 174, 96, 0.18), rgba(39, 174, 96, 0.06))",
-        border: "1px solid rgba(39, 174, 96, 0.45)",
-        boxShadow: "0 2px 12px rgba(39, 174, 96, 0.18)",
-        color: "#E8F0FE",
+        background: "#065F46",
+        border: "1px solid #047857",
+        boxShadow: "0 4px 16px rgba(6, 95, 70, 0.25)",
+        color: "#FFFFFF",
       }}
     >
-      <div className="font-display font-extrabold text-[13px] flex items-center gap-1.5">
+      <div className="font-display font-extrabold text-[13px] flex items-center gap-1.5 text-white">
         ✅ Roteiro atualizado
       </div>
 
       <div className="mt-2 space-y-2">
         {summary.days.map((d, i) => (
-          <div key={`d-${i}`} className="flex items-center gap-1.5 text-[12px] text-emerald-200">
+          <div key={`d-${i}`} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#D1FAE5" }}>
             <MapPin className="w-3 h-3" />
             <span className="font-display font-bold">Dia {d.dia_numero}</span>
             <span className="opacity-90">— {d.titulo ?? "novo dia"}</span>
@@ -603,14 +603,14 @@ function UpdateCard({ applied, onGoToRoteiro }) {
         {Array.from(byDay.entries()).map(([dia, list]) =>
           list.length > 0 ? (
             <div key={`day-${dia}`} className="text-[12px] space-y-0.5">
-              <div className="font-display font-bold text-emerald-200">Dia {dia}</div>
+              <div className="font-display font-bold" style={{ color: "#D1FAE5" }}>Dia {dia}</div>
               {list.map((a, i) => {
                 const t = ACTIVITY_TYPES[a.tipo] ?? ACTIVITY_TYPES.livre;
                 return (
                   <div key={`a-${dia}-${i}`} className="flex items-baseline gap-2 pl-3 text-[12px]">
-                    <span className="tabular text-emerald-300/90 w-10 shrink-0">{a.horario || "—"}</span>
+                    <span className="tabular w-10 shrink-0" style={{ color: "#D1FAE5" }}>{a.horario || "—"}</span>
                     <span className="shrink-0">{t.icon}</span>
-                    <span className="text-[#E8F0FE]/95">{a.titulo}</span>
+                    <span className="text-white">{a.titulo}</span>
                   </div>
                 );
               })}
@@ -619,12 +619,12 @@ function UpdateCard({ applied, onGoToRoteiro }) {
         )}
 
         {summary.updated.length > 0 && (
-          <div className="text-[12px] text-emerald-200/85">
+          <div className="text-[12px]" style={{ color: "#D1FAE5" }}>
             ✏️ {summary.updated.length} {summary.updated.length === 1 ? "atualização" : "atualizações"}
           </div>
         )}
         {summary.removed.length > 0 && (
-          <div className="text-[12px] text-emerald-200/85">
+          <div className="text-[12px]" style={{ color: "#D1FAE5" }}>
             🗑️ {summary.removed.length} {summary.removed.length === 1 ? "remoção" : "remoções"}
           </div>
         )}
@@ -638,7 +638,7 @@ function UpdateCard({ applied, onGoToRoteiro }) {
           type="button"
           onClick={onGoToRoteiro}
           className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-display font-bold"
-          style={{ background: "rgba(39, 174, 96, 0.25)", color: "#A7F3D0", border: "1px solid rgba(39, 174, 96, 0.55)" }}
+          style={{ background: "#FFFFFF", color: "#065F46", border: "1px solid #FFFFFF" }}
         >
           Ver no roteiro →
         </button>
