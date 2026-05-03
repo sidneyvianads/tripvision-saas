@@ -30,6 +30,22 @@ const LOADING_PHASES = [
 const ROTEIRO_OPEN = "<roteiro_update>";
 const ROTEIRO_CLOSE = "</roteiro_update>";
 
+// HARD GATE: contador local simples por user. Para FREE = lifetime, limite 5.
+// Chave dedicada — não depende do sistema rateLimit antigo.
+const FREE_LIMIT = 5;
+const HARD_KEY = (uid) => `tripvision:ia_msgs:${uid}`;
+function getFreeUsed(uid) {
+  if (!uid) return 0;
+  try { return parseInt(localStorage.getItem(HARD_KEY(uid)) || "0", 10) || 0; }
+  catch { return 0; }
+}
+function bumpFreeUsed(uid) {
+  if (!uid) return 0;
+  const next = getFreeUsed(uid) + 1;
+  try { localStorage.setItem(HARD_KEY(uid), String(next)); } catch {}
+  return next;
+}
+
 function stripPartialRoteiroTag(text) {
   if (!text) return "";
   const open = text.indexOf(ROTEIRO_OPEN);
@@ -113,11 +129,18 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(0);
+  // freeUsed = único source of truth pra Free. Pro usa contador diário antigo só pra display.
+  const [freeUsed, setFreeUsed] = useState(() => getFreeUsed(user?.id));
   const [usage, setUsage] = useState(() => getPlanUsage(user?.id, user?.plano));
 
+  const isFree = !isPaid(user?.plano);
+  const freeBlocked = isFree && freeUsed >= FREE_LIMIT;
+  const proBlocked = !isFree && usage.remaining <= 0;
+  const blocked = freeBlocked || proBlocked;
+
   useEffect(() => {
-    console.log("[PlanChat] usage:", usage, "user.plano:", user?.plano, "isPaid:", isPaid(user?.plano));
-  }, [usage, user?.plano]);
+    console.log("[PlanChat] freeUsed:", freeUsed, "freeBlocked:", freeBlocked, "user.plano:", user?.plano, "blocked:", blocked);
+  }, [freeUsed, freeBlocked, user?.plano, blocked]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -157,15 +180,27 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     const trimmed = (text ?? "").trim();
     if (!trimmed) return;
 
-    const u = getPlanUsage(user.id, user.plano);
-    console.log("[PlanChat GATE CHECK]", { remaining: u.remaining, used: u.used, limit: u.limit, plano: user.plano, isPaid: isPaid(user.plano) });
-    if (u.remaining <= 0) {
-      if (!isPaid(user.plano)) {
+    // ====== HARD GATE FREE — primeira coisa, antes de QUALQUER outra lógica ======
+    if (user?.plano === "free" || !user?.plano) {
+      const used = getFreeUsed(user?.id);
+      console.log("[PlanChat HARD GATE FREE]", { used, limit: FREE_LIMIT, blocked: used >= FREE_LIMIT });
+      if (used >= FREE_LIMIT) {
         setShowUpgrade(true);
-      } else {
-        setErr(`Você usou ${u.used}/${u.limit} mensagens hoje. Volte amanhã.`);
+        return; // NÃO ENVIA
       }
-      return;
+      // Incrementa ANTES de enviar (decisão deliberada do produto: msg falhada conta)
+      const next = bumpFreeUsed(user.id);
+      setFreeUsed(next);
+    }
+    // ====== /HARD GATE ======
+
+    // Pro: contador diário (rateLimit antigo)
+    if (isPaid(user.plano)) {
+      const u = getPlanUsage(user.id, user.plano);
+      if (u.remaining <= 0) {
+        setErr(`Você usou ${u.used}/${u.limit} mensagens hoje. Volte amanhã.`);
+        return;
+      }
     }
 
     setErr(null);
@@ -242,7 +277,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       persist(after);
       setStreamingText("");
       setLastUserText(null);
-      setUsage(bumpPlanUsage(user.id, user.plano));
+      // Pro: bump contador diário antigo. Free já foi bumpado ANTES do envio (hard gate).
+      if (isPaid(user.plano)) {
+        setUsage(bumpPlanUsage(user.id, user.plano));
+      }
     } catch (e) {
       clearTimeout(safetyTimer);
       console.error("[PlanChat] stream failed:", e);
@@ -316,7 +354,11 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           >
             📋 Resumir
           </button>
-          <span>{usage.used}/{usage.limit} {usage.tipo === "lifetime" ? "usadas" : "hoje"}</span>
+          <span>
+            {isFree
+              ? `${freeUsed}/${FREE_LIMIT} usadas`
+              : `${usage.used}/${usage.limit} hoje`}
+          </span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">
               <Trash2 className="w-3 h-3" />
@@ -388,7 +430,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       )}
 
       {/* Banner de limite atingido (Free) */}
-      {usage.remaining <= 0 && !isPaid(user.plano) && (
+      {freeBlocked && (
         <div
           className="relative z-10 mx-1 mb-2 rounded-xl px-4 py-3 flex flex-col gap-2"
           style={{ background: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "1px solid #F59E0B" }}
@@ -396,7 +438,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           <div className="flex items-start gap-2">
             <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#92400E]" />
             <div className="text-[#92400E] text-sm">
-              <strong>Você usou suas {usage.limit} mensagens gratuitas.</strong>
+              <strong>Você usou suas {FREE_LIMIT} mensagens gratuitas.</strong>
               <div className="text-[12px] mt-0.5">Assine o Pro pra IA ilimitada com pesquisa online em tempo real.</div>
             </div>
           </div>
@@ -411,7 +453,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       )}
 
       {/* Chips: ocultos se atingiu o limite */}
-      {!busy && usage.remaining > 0 && (
+      {!busy && !blocked && (
         <div className="scroll-x-snap scrollbar-hide relative z-10 -mx-1 px-1 pb-1">
           {SUGESTOES.map((s) => (
             <button
@@ -431,22 +473,22 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <input
           className="input flex-1"
           placeholder={
-            usage.remaining <= 0
-              ? (isPaid(user.plano) ? "Você atingiu o limite de hoje." : "Você usou suas mensagens gratuitas.")
-              : "Conta como vocês querem viajar…"
+            freeBlocked ? "Você usou suas mensagens gratuitas."
+            : proBlocked ? "Você atingiu o limite de hoje."
+            : "Conta como vocês querem viajar…"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={busy || usage.remaining <= 0}
-          onFocus={() => { if (usage.remaining <= 0 && !isPaid(user.plano)) setShowUpgrade(true); }}
+          disabled={busy || blocked}
+          onFocus={() => { if (freeBlocked) setShowUpgrade(true); }}
         />
         <button
           type="submit"
           className="btn-primary !p-3 rounded-full inline-flex items-center justify-center"
-          disabled={!input.trim() || busy || usage.remaining <= 0}
+          disabled={!input.trim() || busy || blocked}
           aria-label="Enviar"
           onClick={(e) => {
-            if (usage.remaining <= 0 && !isPaid(user.plano)) {
+            if (freeBlocked) {
               e.preventDefault();
               setShowUpgrade(true);
             }
