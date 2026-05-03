@@ -10,6 +10,7 @@ import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid } from "../data/plans";
+import { supabase } from "../lib/supabase";
 
 const SUGESTOES = [
   "Sugere hotel",
@@ -67,6 +68,13 @@ async function streamPlan(req, signal, onDelta) {
   if (!res.ok) {
     let err = null;
     try { err = await res.json(); } catch {}
+    if (res.status === 403 && err?.upgrade) {
+      const e = new Error(err?.error || "Limite Free atingido");
+      e.code = "FREE_LIMIT";
+      e.serverUsed = err?.used;
+      e.serverLimit = err?.limit;
+      throw e;
+    }
     throw new Error(err?.error || `HTTP ${res.status}`);
   }
   if (!res.body) throw new Error("A IA não retornou stream.");
@@ -141,6 +149,35 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   useEffect(() => {
     console.log("[PlanChat] freeUsed:", freeUsed, "freeBlocked:", freeBlocked, "user.plano:", user?.plano, "blocked:", blocked);
   }, [freeUsed, freeBlocked, user?.plano, blocked]);
+
+  // Sincroniza contador local com o BANCO (fonte da verdade) ao montar.
+  // localStorage é cache pra UX rápida; servidor é a barreira real.
+  useEffect(() => {
+    if (!user?.id || !isFree) return;
+    let active = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("count_ia_user_messages", { uid: user.id });
+        if (!active) return;
+        if (error) {
+          console.warn("[PlanChat] count rpc error:", error);
+          return;
+        }
+        const serverCount = typeof data === "number" ? data : 0;
+        const localCount = getFreeUsed(user.id);
+        // Sempre confia no maior valor — protege contra reset de cache/aba anônima.
+        const truth = Math.max(serverCount, localCount);
+        if (truth !== localCount) {
+          try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
+        }
+        setFreeUsed(truth);
+        console.log("[PlanChat] sync from DB:", { server: serverCount, local: localCount, truth });
+      } catch (e) {
+        console.warn("[PlanChat] sync failed:", e);
+      }
+    })();
+    return () => { active = false; };
+  }, [user?.id, isFree]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -230,6 +267,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           message: trimmed,
           history: historyForApi,
           user_plano: user.plano ?? "free",
+          user_id: user.id,
           viagem: {
             nome: trip.nome,
             data_inicio: trip.data_inicio,
@@ -284,6 +322,21 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     } catch (e) {
       clearTimeout(safetyTimer);
       console.error("[PlanChat] stream failed:", e);
+
+      // Servidor rejeitou: limite Free atingido (fonte da verdade no banco).
+      if (e?.code === "FREE_LIMIT") {
+        const truth = e.serverUsed ?? FREE_LIMIT;
+        try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
+        setFreeUsed(truth);
+        // Remove a msg do user que acabou de ser adicionada — ela não foi processada.
+        const rolledBack = next.slice(0, -1);
+        setMessages(rolledBack);
+        persist(rolledBack);
+        setStreamingText("");
+        setShowUpgrade(true);
+        return;
+      }
+
       const isAbort = e?.name === "AbortError" || /aborted/i.test(e?.message ?? "");
       const isHttp5xx = /HTTP\s+5\d{2}/.test(e?.message ?? "");
       const isTimeout = isAbort || isHttp5xx;

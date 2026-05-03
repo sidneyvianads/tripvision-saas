@@ -140,11 +140,43 @@ REGRAS TÉCNICAS:
 - Após o update, sempre confirme em texto curto: "Adicionei: [resumo]"
 `;
 
+const FREE_IA_LIMIT = 5;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+
 function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+// Conta mensagens role=user (excluindo welcome) do usuário em todas as ia_conversas via RPC.
+async function countFreeUserMessages(uid) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn("[plan] SUPABASE_URL/KEY ausente — gate server-side desativado.");
+    return null;
+  }
+  try {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/count_ia_user_messages`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ uid }),
+    });
+    if (!res.ok) {
+      console.error("[plan] count rpc failed:", res.status, await res.text());
+      return null;
+    }
+    const n = await res.json();
+    return typeof n === "number" ? n : null;
+  } catch (e) {
+    console.error("[plan] count rpc error:", e);
+    return null;
+  }
 }
 
 export default async (req) => {
@@ -159,10 +191,25 @@ export default async (req) => {
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
 
-  const { message, history = [], viagem = {}, user_plano = "free" } = body ?? {};
+  const { message, history = [], viagem = {}, user_plano = "free", user_id = null } = body ?? {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
   }
+
+  // ===== GATE SERVER-SIDE FREE =====
+  // Fonte da verdade: ia_conversas no banco. localStorage é só UX.
+  if (user_plano !== "pro" && user_id) {
+    const used = await countFreeUserMessages(user_id);
+    if (used != null && used >= FREE_IA_LIMIT) {
+      console.log("[plan] FREE GATE blocked", { user_id, used, limit: FREE_IA_LIMIT });
+      return jsonResponse(
+        { error: "Limite Free atingido", upgrade: true, used, limit: FREE_IA_LIMIT },
+        403
+      );
+    }
+  }
+  // ===== /GATE =====
+
   const allowSearch = user_plano === "pro";
 
   const sanitizedHistory = (Array.isArray(history) ? history : [])
