@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 
 export default function ConfirmModal({
   open,
@@ -9,6 +9,7 @@ export default function ConfirmModal({
   confirmVariant = "primary",
   onConfirm,
   onClose,
+  busy = false,
 }) {
   if (!open) return null;
 
@@ -19,7 +20,7 @@ export default function ConfirmModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 animate-fade-up"
-      onClick={onClose}
+      onClick={busy ? undefined : onClose}
     >
       <div
         className="w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl bg-white max-h-[80vh] overflow-hidden flex flex-col animate-pop"
@@ -30,18 +31,20 @@ export default function ConfirmModal({
             <h3 className="font-display font-extrabold text-[#1F2937] text-lg">{title}</h3>
             <p className="text-[#4B5563] text-sm mt-2">{body}</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-[#F3F4F6]" aria-label="Fechar">
+          <button onClick={onClose} disabled={busy} className="p-1 rounded-full hover:bg-[#F3F4F6] disabled:opacity-40" aria-label="Fechar">
             <X className="w-4 h-4 text-[#6B7280]" />
           </button>
         </div>
         <div className="px-5 pb-5 pt-4 flex gap-2 justify-end">
-          <button onClick={onClose} className="btn-ghost">
+          <button onClick={onClose} className="btn-ghost" disabled={busy}>
             {cancelLabel}
           </button>
           <button
-            onClick={() => { onConfirm(); }}
-            className={`px-4 py-2.5 rounded-xl font-display font-extrabold text-sm ${confirmClass}`}
+            onClick={() => { if (!busy) onConfirm(); }}
+            disabled={busy}
+            className={`px-4 py-2.5 rounded-xl font-display font-extrabold text-sm inline-flex items-center gap-1.5 disabled:opacity-60 ${confirmClass}`}
           >
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
             {confirmLabel}
           </button>
         </div>

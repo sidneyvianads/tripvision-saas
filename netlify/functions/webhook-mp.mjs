@@ -102,11 +102,10 @@ async function handlePreapproval(id) {
     });
     console.log(`[webhook-mp] ✅ ${user_id} ativou ${plano}/${ciclo}`);
   } else if (isCanceled) {
-    await sb(`users?id=eq.${user_id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ plano: "free", plano_expires_at: null }),
-    });
-    console.log(`[webhook-mp] 🚫 ${user_id} cancelou — voltou pro free`);
+    // Não rebaixa imediatamente — mantém plano até plano_expires_at expirar.
+    // O downgrade efetivo é feito pelo gate do /api/plan que checa expires_at.
+    // Aqui só registra que NÃO haverá renovação.
+    console.log(`[webhook-mp] 🚫 ${user_id} cancelou ${plano}/${ciclo} — acesso mantido até plano_expires_at`);
   } else {
     console.log(`[webhook-mp] ⏳ ${user_id} status=${status}`);
   }

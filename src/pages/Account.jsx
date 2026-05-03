@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell } from "lucide-react";
+import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase, sha256Hex, normalizePassword } from "../lib/supabase";
 import { PLANS, planName, planIcon, isPaid, isOwner } from "../data/plans";
@@ -33,6 +33,11 @@ export default function Account() {
   // Deletar conta
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
+
+  // Cancelar assinatura
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState(null);
 
   // Notificações
   const [notifOn, setNotifOn] = useState(user?.notifications_on ?? true);
@@ -77,6 +82,28 @@ export default function Account() {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    setCancelBusy(true);
+    setCancelMsg(null);
+    try {
+      const res = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+      setConfirmCancel(false);
+      // Atualiza state local imediatamente — webhook MP confirma depois
+      setAssinatura((prev) => prev ? { ...prev, status: "canceled" } : prev);
+      setCancelMsg({ type: "ok", text: data?.message ?? "Assinatura cancelada." });
+    } catch (e) {
+      setCancelMsg({ type: "err", text: `Falhou ao cancelar: ${e.message}` });
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
   const handleToggleNotif = async () => {
     const next = !notifOn;
     setNotifOn(next);
@@ -108,6 +135,8 @@ export default function Account() {
   const planoData = PLANS[plano];
   const isFree = !isPaid(plano);
   const isOwnerUser = isOwner(plano);
+  const isCanceled = assinatura?.status === "canceled";
+  const canCancel = !isFree && !isOwnerUser && !isCanceled && !!assinatura?.mp_preapproval_id;
 
   return (
     <div className="min-h-screen flex flex-col bg-app">
@@ -153,25 +182,66 @@ export default function Account() {
             </div>
           )}
 
-          {!isFree && !isOwnerUser && (
+          {/* Banner de assinatura cancelada */}
+          {isCanceled && (
+            <div className="mt-3 rounded-xl px-3 py-2.5 text-[13px]" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #F59E0B" }}>
+              <div className="font-display font-bold flex items-center gap-1.5">
+                <XCircle className="w-4 h-4" /> Assinatura cancelada
+              </div>
+              {assinatura?.current_period_end && (
+                <div className="text-[12px] mt-0.5">
+                  Você mantém acesso até <strong>{formatBR(assinatura.current_period_end)}</strong>. Depois disso volta pra Free automaticamente.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mensagem de feedback do cancel */}
+          {cancelMsg && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-[13px] ${cancelMsg.type === "ok" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+              {cancelMsg.text}
+            </div>
+          )}
+
+          {/* Botões pra Pro/Grupo ATIVO (não cancelado) */}
+          {!isFree && !isOwnerUser && !isCanceled && (
             <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold"
+                style={{ background: "rgba(99, 102, 241, 0.10)", color: "#4F46E5", border: "1px solid rgba(99, 102, 241, 0.30)" }}
+              >
+                <RefreshCcw className="w-3.5 h-3.5" /> Trocar plano
+              </button>
               <a
                 href="https://www.mercadopago.com.br/subscriptions"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border-2"
-                style={{ borderColor: "#7CB9E8", color: "#1A3A4A" }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border"
+                style={{ borderColor: "#E5E7EB", color: "#6B7280" }}
               >
-                Gerenciar no Mercado Pago <ExternalLink className="w-3.5 h-3.5" />
+                <ExternalLink className="w-3.5 h-3.5" /> Mercado Pago
               </a>
-              <button
-                onClick={() => setShowUpgrade(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold"
-                style={{ background: "rgba(124, 185, 232, 0.15)", color: "#1A3A4A" }}
-              >
-                Trocar plano
-              </button>
+              {canCancel && (
+                <button
+                  onClick={() => setConfirmCancel(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border"
+                  style={{ borderColor: "#FECACA", color: "#B91C1C", background: "white" }}
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Cancelar assinatura
+                </button>
+              )}
             </div>
+          )}
+
+          {/* Botão Reassinar pra quem cancelou */}
+          {!isFree && !isOwnerUser && isCanceled && (
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="btn-primary mt-3 inline-flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" /> Reativar assinatura
+            </button>
           )}
 
           {isOwnerUser && (
@@ -185,7 +255,7 @@ export default function Account() {
               onClick={() => setShowUpgrade(true)}
               className="btn-primary mt-4 inline-flex items-center gap-2"
             >
-              <Sparkles className="w-4 h-4" /> Assinar Pro
+              <Sparkles className="w-4 h-4" /> Trocar plano
             </button>
           )}
         </section>
@@ -297,12 +367,25 @@ export default function Account() {
           confirmVariant="danger"
           onConfirm={handleDeleteAccount}
           onClose={() => setConfirmDelete(false)}
+          busy={delBusy}
         />
 
-        <section className="card p-5 mt-3 text-[12px] text-[#1A3A4A]/70 space-y-1">
+        <ConfirmModal
+          open={confirmCancel}
+          title="Cancelar assinatura?"
+          body={`Tem certeza? A renovação automática será cancelada. Você mantém acesso a todas as features ${planName(plano)} até ${formatBR(assinatura?.current_period_end) ?? "o fim do período pago"}, depois volta pra Free.`}
+          confirmLabel="Sim, cancelar"
+          confirmVariant="danger"
+          cancelLabel="Manter assinatura"
+          onConfirm={handleCancelSubscription}
+          onClose={() => setConfirmCancel(false)}
+          busy={cancelBusy}
+        />
+
+        <section className="card p-5 mt-3 text-[12px] text-[#6B7280] space-y-1">
           <div className="flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5" />
-            Dúvidas ou cancelamento? Escreva pra <a href="mailto:sidney@grupomultvision.com" className="text-[#2E86C1] underline">sidney@grupomultvision.com</a>
+            Dúvidas ou problemas? <a href="mailto:sidney@grupomultvision.com" className="text-[#6366F1] underline">sidney@grupomultvision.com</a>
           </div>
         </section>
       </main>

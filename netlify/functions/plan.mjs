@@ -152,6 +152,28 @@ function jsonResponse(obj, status = 200) {
   });
 }
 
+// Busca {plano, plano_expires_at} do user — pra validar se assinatura cancelada já expirou.
+async function fetchUserPlan(uid) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/users?id=eq.${uid}&select=plano,plano_expires_at`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const arr = await res.json();
+    return arr?.[0] ?? null;
+  } catch (e) {
+    console.error("[plan] fetchUserPlan error:", e);
+    return null;
+  }
+}
+
 // Conta mensagens role=user (excluindo welcome) do usuário em todas as ia_conversas via RPC.
 async function countFreeUserMessages(uid) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -197,10 +219,23 @@ export default async (req) => {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
   }
 
+  // ===== EFFECTIVE PLAN =====
+  // Owner nunca expira. Pro/Grupo: se plano_expires_at já passou, trata como Free
+  // (assinatura foi cancelada e o período acabou).
+  let effectivePlan = user_plano;
+  if (user_id && PAID_PLANS.has(user_plano) && user_plano !== "owner") {
+    const dbUser = await fetchUserPlan(user_id);
+    if (dbUser?.plano_expires_at) {
+      const expired = new Date(dbUser.plano_expires_at).getTime() < Date.now();
+      if (expired) {
+        console.log("[plan] plano expirado", { user_id, plano_expires_at: dbUser.plano_expires_at });
+        effectivePlan = "free";
+      }
+    }
+  }
+  const isPaidPlan = PAID_PLANS.has(effectivePlan);
+
   // ===== GATE SERVER-SIDE FREE =====
-  // Fonte da verdade: ia_conversas no banco. localStorage é só UX.
-  // Owner/Pro/Grupo passam direto.
-  const isPaidPlan = PAID_PLANS.has(user_plano);
   if (!isPaidPlan && user_id) {
     const used = await countFreeUserMessages(user_id);
     if (used != null && used >= FREE_IA_LIMIT) {
@@ -213,7 +248,7 @@ export default async (req) => {
   }
   // ===== /GATE =====
 
-  // Web search liberado pra qualquer plano pago.
+  // Web search liberado pra plano pago efetivo.
   const allowSearch = isPaidPlan;
 
   const sanitizedHistory = (Array.isArray(history) ? history : [])
