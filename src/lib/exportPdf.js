@@ -68,7 +68,7 @@ function buildHtml(trip, days, contatos, tema) {
   return `
     <div style="font-family: 'DM Sans', system-ui, sans-serif; color: #1F2937; padding: 24px; width: 720px; background: #FFFFFF;">
       <header style="background:${tema.gradient};color:white;border-radius:16px;padding:20px;">
-        <div style="font-size:13px;opacity:0.85;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;">TripVision</div>
+        <div style="font-size:13px;opacity:0.85;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;">Voyajei</div>
         <div style="font-size:26px;font-weight:800;margin-top:4px;display:flex;align-items:center;gap:8px;">
           <span>${trip.cover_emoji ?? "🧳"}</span><span>${escapeHtml(trip.nome ?? "")}</span>
         </div>
@@ -80,7 +80,7 @@ function buildHtml(trip, days, contatos, tema) {
       ${contatosHtml}
 
       <footer style="margin-top:18px;text-align:center;color:#9CA3AF;font-size:11px;">
-        Gerado por TripVision — tripvision-saas.netlify.app
+        Gerado por Voyajei — tripvision-saas.netlify.app
       </footer>
     </div>
   `;

@@ -73,7 +73,7 @@ export default function MyTrips() {
           <div className="text-2xl">🧳</div>
           <div className="flex-1 min-w-0">
             <div className="font-display font-extrabold text-lg leading-tight flex items-center gap-2 text-[#1F2937]">
-              TripVision <PlanBadge plano={user?.plano} />
+              Voyajei <PlanBadge plano={user?.plano} />
             </div>
             <div className="text-[#6B7280] text-xs truncate font-display font-bold tracking-wide">
               Olá, {(user?.nome ?? "").split(/\s+/)[0]}!

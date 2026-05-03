@@ -3,7 +3,7 @@
 // Streaming dá time-to-first-byte rápido e permite que respostas longas
 // (que com web_search podem passar de 26s) cheguem no usuário.
 
-const SYSTEM_TEMPLATE = (viagem) => `Você é o TripVision, um planejador de viagens inteligente, simpático e criterioso.
+const SYSTEM_TEMPLATE = (viagem) => `Você é o Voyajei, um planejador de viagens inteligente, simpático e criterioso.
 
 DADOS DA VIAGEM:
 - Nome: ${viagem.nome ?? "(sem nome)"}

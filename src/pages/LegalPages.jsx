@@ -12,7 +12,7 @@ function LegalLayout({ title, children }) {
           <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg">🧳 TripVision</Link>
+          <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg">🧳 Voyajei</Link>
         </div>
       </header>
 
@@ -33,11 +33,11 @@ export function TermosPage() {
   return (
     <LegalLayout title="Termos de Uso">
       <p>
-        O <strong>TripVision</strong> é uma plataforma de planejamento de viagens
+        O <strong>Voyajei</strong> é uma plataforma de planejamento de viagens
         operada pelo <strong>Grupo Multvision LTDA</strong> (CNPJ 49.628.444/0001-65).
       </p>
       <Section title="1. Aceitação">
-        Ao criar uma conta no TripVision você concorda com estes termos.
+        Ao criar uma conta no Voyajei você concorda com estes termos.
         Se discordar de qualquer ponto, não use o serviço.
       </Section>
       <Section title="2. Conta e responsabilidades">
@@ -47,10 +47,10 @@ export function TermosPage() {
         link pode entrar na viagem.
       </Section>
       <Section title="3. Inteligência Artificial">
-        O TripVision usa IA pra sugerir hotéis, restaurantes, passeios e preços.
+        O Voyajei usa IA pra sugerir hotéis, restaurantes, passeios e preços.
         <strong> A IA pode errar.</strong> Sempre confirme preços, horários,
         disponibilidade e exigências (autorizações, reservas) diretamente com
-        os estabelecimentos antes de comprar ou viajar. O TripVision não é
+        os estabelecimentos antes de comprar ou viajar. O Voyajei não é
         responsável por divergências entre as sugestões e a realidade.
       </Section>
       <Section title="4. Planos e pagamento">
@@ -60,7 +60,7 @@ export function TermosPage() {
         política do Mercado Pago e legislação aplicável.
       </Section>
       <Section title="5. Conduta">
-        Não use o TripVision pra atividades ilegais, spam, assédio, conteúdo
+        Não use o Voyajei pra atividades ilegais, spam, assédio, conteúdo
         ofensivo no chat ou tentativas de comprometer a segurança da plataforma.
         Podemos suspender contas que violem essas regras.
       </Section>
@@ -87,7 +87,7 @@ export function PrivacidadePage() {
   return (
     <LegalLayout title="Política de Privacidade">
       <p>
-        Esta política descreve como o <strong>TripVision</strong> trata os seus
+        Esta política descreve como o <strong>Voyajei</strong> trata os seus
         dados pessoais, em conformidade com a <strong>LGPD (Lei 13.709/2018)</strong>.
       </p>
       <Section title="Dados coletados">
@@ -99,7 +99,7 @@ export function PrivacidadePage() {
         </ul>
       </Section>
       <Section title="Finalidade">
-        Os dados são usados exclusivamente pra operação do TripVision: autenticação,
+        Os dados são usados exclusivamente pra operação do Voyajei: autenticação,
         montagem do roteiro pela IA, compartilhamento com membros da viagem,
         suporte e cobrança nos planos pagos.
       </Section>

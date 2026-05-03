@@ -16,7 +16,7 @@ export default function Landing() {
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
           <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg flex items-center gap-1.5">
-            <span>🧳</span> TripVision
+            <span>🧳</span> Voyajei
           </Link>
           <div className="flex-1" />
           <Link to="/precos" className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold hidden sm:inline">
@@ -162,7 +162,7 @@ export default function Landing() {
 
       <footer className="px-4 py-8 bg-white" style={{ borderTop: "1px solid #E5E7EB" }}>
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#6B7280]">
-          <div className="font-display font-bold">TripVision · Grupo Multvision · © 2026</div>
+          <div className="font-display font-bold">Voyajei · Grupo Multvision · © 2026</div>
           <div className="flex gap-4">
             <Link to="/precos" className="hover:text-[#1F2937]">Preços</Link>
             <Link to="/termos" className="hover:text-[#1F2937]">Termos de Uso</Link>

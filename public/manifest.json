@@ -1,6 +1,6 @@
 {
-  "name": "TripVision",
-  "short_name": "TripVision",
+  "name": "Voyajei",
+  "short_name": "Voyajei",
   "description": "Planeje sua viagem conversando. A IA faz o resto.",
   "start_url": "/",
   "display": "standalone",

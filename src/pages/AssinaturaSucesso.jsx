@@ -51,7 +51,7 @@ export default function AssinaturaSucesso() {
           <>
             <div className="text-6xl mb-3 animate-pop">🎉</div>
             <h1 className="text-3xl font-display font-extrabold text-[#1F2937]">
-              Bem-vindo ao TripVision <span className="text-[#6366F1]">{planName(planoAtual)}</span> ✨
+              Bem-vindo ao Voyajei <span className="text-[#6366F1]">{planName(planoAtual)}</span> ✨
             </h1>
             <p className="text-[#4B5563] mt-2 text-sm">
               Sua assinatura está ativa. Agora a IA pesquisa, sugere e monta o roteiro sem limites.
