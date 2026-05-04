@@ -146,9 +146,9 @@ function Header({ onSignup, onLogin }) {
 // ===== HERO ========================================================
 
 const HERO_PHOTOS = {
-  noronha:  "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=800&h=600&fit=crop",
-  rio:      "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400&h=300&fit=crop",
-  lencois:  "https://images.unsplash.com/photo-1609693029653-10ed2fc02e43?w=400&h=300&fit=crop",
+  noronha:  "/fotos/noronha.jpg",
+  rio:      "/fotos/rio.jpg",
+  salvador: "/fotos/salvador.jpg",
 };
 
 function Hero({ onSignup }) {
@@ -222,12 +222,12 @@ function PhotoCollage() {
       >
         <img src={HERO_PHOTOS.rio} alt="Rio de Janeiro" loading="eager" className="w-full h-full object-cover" />
       </div>
-      {/* Foto sobreposta — Lençóis Maranhenses, canto inferior direito */}
+      {/* Foto sobreposta — Salvador, canto inferior direito */}
       <div
         className="absolute -bottom-6 -right-4 w-[48%] aspect-[4/3] rounded-2xl overflow-hidden hidden sm:block"
         style={{ boxShadow: "0 12px 32px rgba(15, 23, 42, 0.22)", border: "4px solid white" }}
       >
-        <img src={HERO_PHOTOS.lencois} alt="Lençóis Maranhenses" loading="eager" className="w-full h-full object-cover" />
+        <img src={HERO_PHOTOS.salvador} alt="Salvador" loading="eager" className="w-full h-full object-cover" />
       </div>
       {/* Pin emoji decorativo */}
       <div
@@ -445,14 +445,14 @@ function Features() {
 // ===== POPULAR DESTINATIONS ========================================
 
 const DESTINOS = [
-  { nome: "Gramado",              emoji: "🌲", url: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=400&h=300&fit=crop" },
-  { nome: "Fernando de Noronha",  emoji: "🏝️", url: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=400&h=300&fit=crop" },
-  { nome: "Rio de Janeiro",       emoji: "🏖️", url: "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=400&h=300&fit=crop" },
-  { nome: "Foz do Iguaçu",        emoji: "🌊", url: "https://images.unsplash.com/photo-1432405972618-c6b0351b4198?w=400&h=300&fit=crop" },
-  { nome: "Lençóis Maranhenses",  emoji: "🏜️", url: "https://images.unsplash.com/photo-1609693029653-10ed2fc02e43?w=400&h=300&fit=crop" },
-  { nome: "Chapada Diamantina",   emoji: "🌿", url: "https://images.unsplash.com/photo-1591302418462-eb55463b49d6?w=400&h=300&fit=crop" },
-  { nome: "Jericoacoara",         emoji: "☀️", url: "https://images.unsplash.com/photo-1598974357801-cbca100e65d3?w=400&h=300&fit=crop" },
-  { nome: "Salvador",             emoji: "🎭", url: "https://images.unsplash.com/photo-1516306580123-e6e52b1b7b5f?w=400&h=300&fit=crop" },
+  { nome: "Fernando de Noronha", emoji: "🏝️", url: "/fotos/noronha.jpg"  },
+  { nome: "Rio de Janeiro",      emoji: "🏖️", url: "/fotos/rio.jpg"      },
+  { nome: "Salvador",            emoji: "🎭", url: "/fotos/salvador.jpg" },
+  { nome: "Paris",               emoji: "🗼", url: "/fotos/paris.jpg"    },
+  { nome: "Londres",             emoji: "🇬🇧", url: "/fotos/londres.jpg"  },
+  { nome: "Dubai",               emoji: "🏙️", url: "/fotos/dubai.webp"   },
+  { nome: "Roma",                emoji: "🏛️", url: "/fotos/roma.jpeg"    },
+  { nome: "Polinésia",           emoji: "🌴", url: "/fotos/polinesia.jpeg" },
 ];
 
 function PopularDestinations() {
