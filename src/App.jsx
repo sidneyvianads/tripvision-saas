@@ -1,7 +1,8 @@
 import { Loader2 } from "lucide-react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
+import { captureCupomFromUrl } from "./lib/cupom";
 import Landing from "./pages/Landing";
 import Welcome from "./pages/Welcome";
 import MyTrips from "./pages/MyTrips";
@@ -16,12 +17,20 @@ const PrecosPage = lazy(() => import("./pages/PrecosPage"));
 const LegalPages = lazy(() => import("./pages/LegalPages"));
 const AssinaturaSucesso = lazy(() => import("./pages/AssinaturaSucesso"));
 const Account = lazy(() => import("./pages/Account"));
+const AdminAfiliados = lazy(() => import("./pages/AdminAfiliados"));
+const AfiliadoPainel = lazy(() => import("./pages/AfiliadoPainel"));
 
 const TermosPage = lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.TermosPage })));
 const PrivacidadePage = lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacidadePage })));
 
 export default function App() {
   const { user } = useAuth();
+
+  // Captura ?cupom=X da URL e guarda em localStorage até o checkout
+  useEffect(() => {
+    const c = captureCupomFromUrl();
+    if (c) console.log("[Viajjei] cupom de afiliado capturado:", c);
+  }, []);
 
   return (
     <>
@@ -41,6 +50,12 @@ export default function App() {
         <Route path="/v/:slug/admin" element={user ? <AdminTrip /> : <Navigate to="/welcome" replace />} />
         <Route path="/conta" element={user ? <Account /> : <Navigate to="/welcome" replace />} />
         <Route path="/assinatura/sucesso" element={user ? <AssinaturaSucesso /> : <Navigate to="/welcome" replace />} />
+
+        {/* Admin (owner-only — guard interno) */}
+        <Route path="/admin/afiliados" element={user ? <AdminAfiliados /> : <Navigate to="/welcome" replace />} />
+
+        {/* Painel público de afiliado */}
+        <Route path="/afiliado/:cupom" element={<AfiliadoPainel />} />
 
         {/* Páginas públicas */}
         <Route path="/precos" element={<PrecosPage />} />

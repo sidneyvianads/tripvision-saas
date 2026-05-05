@@ -5,6 +5,9 @@ import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
 import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
+import Logo from "../components/Logo";
+import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
+import CupomField from "../components/CupomField";
 
 const REDIRECT_DELAY_MS = 1800;
 
@@ -96,6 +99,7 @@ export default function Welcome() {
 
       // Paid: chama create-subscription e redireciona pro Mercado Pago
       try {
+        const cupom = getStoredCupom() || null;
         const res = await fetch("/api/create-subscription", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -104,6 +108,7 @@ export default function Welcome() {
             ciclo,
             userId: created.id,
             userEmail: created.email,
+            cupom,
           }),
         });
         const data = await res.json();
@@ -114,6 +119,7 @@ export default function Welcome() {
         }
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
         if (data?.init_point) {
+          clearStoredCupom();
           window.location.href = data.init_point;
           return;
         }
@@ -148,15 +154,11 @@ export default function Welcome() {
 
       <div className="card w-full max-w-md p-8 animate-fade-up relative z-10">
         <div className="text-center">
-          <Link to="/" className="inline-block">
-            <div className="text-5xl mb-2">🧳</div>
+          <Link to="/" className="inline-block" aria-label="Viajjei">
+            <Logo size={42} />
           </Link>
-          <h1 className="text-3xl text-[#1F2937]">Viajjei</h1>
-          <p className="text-[#6B7280] mt-1 font-display font-bold text-sm">
-            Planeje sua viagem conversando.
-          </p>
-          <p className="text-primary text-xs font-display font-bold uppercase tracking-widest mt-0.5">
-            Sempre Juntos
+          <p className="text-[#64748B] mt-3 font-display font-bold text-sm">
+            Planeje sua viagem conversando com o Jei.
           </p>
         </div>
 
@@ -378,6 +380,10 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       {err && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-red-700 text-sm">{err}</div>
       )}
+
+      <div className="pt-1">
+        <CupomField />
+      </div>
 
       <button
         type="button"

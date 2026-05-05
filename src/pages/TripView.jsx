@@ -21,7 +21,7 @@ const Diario    = lazy(() => import("../components/Diario"));
 
 const TAB_TITLES = {
   roteiro:  "📅 Roteiro",
-  planejar: "✨ Planejar com IA",
+  planejar: "✨ Planejar com o Jei",
   chat:     "💬 Chat do grupo",
   tarefas:  "✅ Tarefas",
   diario:   "📸 Diário",
@@ -157,7 +157,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
               onClick={onPlanejar}
               className="btn-primary inline-flex items-center justify-center gap-2"
             >
-              <Sparkles className="w-4 h-4" /> Planejar com IA
+              <Sparkles className="w-4 h-4" /> Planejar com o Jei
             </button>
             {isAdmin && (
               <button
@@ -198,7 +198,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
             <p className="text-sm text-[#4B5563]">Falta algum dia? Continue de onde parou.</p>
             <div className="mt-3 flex flex-col sm:flex-row gap-2 justify-center">
               <button onClick={onPlanejar} className="btn-primary inline-flex items-center justify-center gap-2">
-                <Sparkles className="w-4 h-4" /> Continuar com IA
+                <Sparkles className="w-4 h-4" /> Continuar com o Jei
               </button>
               {isAdmin && (
                 <button onClick={() => navigate(`/v/${trip.slug}/admin`)} className="btn-ghost inline-flex items-center justify-center gap-2">

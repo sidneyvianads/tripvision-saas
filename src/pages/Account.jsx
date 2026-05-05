@@ -245,9 +245,16 @@ export default function Account() {
           )}
 
           {isOwnerUser && (
-            <div className="mt-3 rounded-xl px-3 py-2 text-[13px] font-display font-bold" style={{ background: "rgba(234, 179, 8, 0.12)", color: "#854D0E", border: "1px solid #EAB308" }}>
-              👑 Acesso interno — sem cobrança, sem limites.
-            </div>
+            <>
+              <div className="mt-3 rounded-xl px-3 py-2 text-[13px] font-display font-bold" style={{ background: "rgba(234, 179, 8, 0.12)", color: "#854D0E", border: "1px solid #EAB308" }}>
+                👑 Acesso interno — sem cobrança, sem limites.
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link to="/admin/afiliados" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border" style={{ borderColor: "#E2E8F0", color: "#0F172A" }}>
+                  🤝 Afiliados
+                </Link>
+              </div>
+            </>
           )}
 
           {isFree && (
@@ -362,7 +369,7 @@ export default function Account() {
         <ConfirmModal
           open={confirmDelete}
           title="Excluir conta?"
-          body="Todos os seus dados serão apagados permanentemente. Inclui suas viagens (com roteiro, chat, checklist e contatos), foto de perfil e histórico de IA. Não dá pra desfazer."
+          body="Todos os seus dados serão apagados permanentemente. Inclui suas viagens (com roteiro, chat, checklist e contatos), foto de perfil e histórico de conversas com o Jei. Não dá pra desfazer."
           confirmLabel="Sim, excluir tudo"
           confirmVariant="danger"
           onConfirm={handleDeleteAccount}

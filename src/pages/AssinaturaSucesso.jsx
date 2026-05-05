@@ -54,7 +54,7 @@ export default function AssinaturaSucesso() {
               Bem-vindo ao Viajjei <span className="text-[#6366F1]">{planName(planoAtual)}</span>! ✨
             </h1>
             <p className="text-[#4B5563] mt-2 text-sm">
-              Sua assinatura está ativa. Agora a IA pesquisa, sugere e monta o roteiro sem limites.
+              Sua assinatura está ativa. Agora o Jei pesquisa, sugere e monta o roteiro sem limites.
             </p>
             <Link
               to="/"

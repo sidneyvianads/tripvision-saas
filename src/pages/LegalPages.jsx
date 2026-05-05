@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import Logo from "../components/Logo";
 
 function LegalLayout({ title, children }) {
   return (
@@ -12,7 +13,7 @@ function LegalLayout({ title, children }) {
           <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg">🧳 Viajjei</Link>
+          <Link to="/" aria-label="Viajjei"><Logo size={24} /></Link>
         </div>
       </header>
 
@@ -46,9 +47,10 @@ export function TermosPage() {
         viagem apenas com pessoas em quem você confia — qualquer pessoa com o
         link pode entrar na viagem.
       </Section>
-      <Section title="3. Inteligência Artificial">
-        O Viajjei usa IA pra sugerir hotéis, restaurantes, passeios e preços.
-        <strong> A IA pode errar.</strong> Sempre confirme preços, horários,
+      <Section title="3. O Jei (concierge automatizado)">
+        O Viajjei usa um concierge automatizado chamado <strong>Jei</strong> pra
+        sugerir hotéis, restaurantes, passeios e preços.
+        <strong> O Jei pode errar.</strong> Sempre confirme preços, horários,
         disponibilidade e exigências (autorizações, reservas) diretamente com
         os estabelecimentos antes de comprar ou viajar. O Viajjei não é
         responsável por divergências entre as sugestões e a realidade.
@@ -94,13 +96,13 @@ export function PrivacidadePage() {
         <ul className="list-disc pl-5 space-y-1">
           <li>Nome, e-mail e foto de perfil (quando você cadastra)</li>
           <li>Conteúdo das suas viagens (roteiro, mensagens, checklist)</li>
-          <li>Conversas com a IA pra contexto de planejamento</li>
+          <li>Conversas com o Jei pra contexto de planejamento</li>
           <li>Logs técnicos básicos pra estabilidade do serviço</li>
         </ul>
       </Section>
       <Section title="Finalidade">
         Os dados são usados exclusivamente pra operação do Viajjei: autenticação,
-        montagem do roteiro pela IA, compartilhamento com membros da viagem,
+        montagem do roteiro pelo Jei, compartilhamento com membros da viagem,
         suporte e cobrança nos planos pagos.
       </Section>
       <Section title="Compartilhamento">

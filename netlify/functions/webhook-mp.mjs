@@ -36,9 +36,13 @@ async function sb(path, init = {}) {
 }
 
 function planoFromExternalRef(ref) {
-  // formato: "userId:plano:ciclo"
-  const [user_id, plano, ciclo] = (ref ?? "").split(":");
-  return { user_id, plano, ciclo };
+  // formato: "userId:plano:ciclo[:afiliadoId]"
+  const [user_id, plano, ciclo, afiliado_id] = (ref ?? "").split(":");
+  return { user_id, plano, ciclo, afiliado_id: afiliado_id || null };
+}
+
+function mesReferencia(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 async function fetchPreapproval(id) {
@@ -61,7 +65,7 @@ function periodEndFromCiclo(ciclo) {
 
 async function handlePreapproval(id) {
   const pa = await fetchPreapproval(id);
-  const { user_id, plano, ciclo } = planoFromExternalRef(pa.external_reference);
+  const { user_id, plano, ciclo, afiliado_id } = planoFromExternalRef(pa.external_reference);
   if (!user_id) {
     console.warn("[webhook-mp] external_reference inválido:", pa.external_reference);
     return;
@@ -70,6 +74,7 @@ async function handlePreapproval(id) {
   const status = pa.status; // pending, authorized, paused, cancelled
   const isActive = status === "authorized";
   const isCanceled = status === "cancelled" || status === "paused";
+  const amount = pa.auto_recurring?.transaction_amount ?? null;
 
   // 1) UPSERT em assinaturas
   const subPayload = {
@@ -79,18 +84,63 @@ async function handlePreapproval(id) {
     status: isActive ? "active" : (isCanceled ? "canceled" : "pending"),
     provider: "mercadopago",
     mp_preapproval_id: id,
-    amount: pa.auto_recurring?.transaction_amount ?? null,
+    amount,
     current_period_start: new Date().toISOString(),
     current_period_end: isActive ? periodEndFromCiclo(ciclo) : null,
     updated_at: new Date().toISOString(),
+    afiliado_id: afiliado_id || null,
+    cupom_usado: null, // o cupom em si fica em afiliados; assinatura tem o ID
   };
-  await sb(`assinaturas?on_conflict=mp_preapproval_id`, {
+  const subRows = await sb(`assinaturas?on_conflict=mp_preapproval_id`, {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify(subPayload),
   });
+  const assinaturaId = Array.isArray(subRows) ? subRows[0]?.id : subRows?.id;
 
-  // 2) UPDATE users.plano
+  // 2) Comissão de afiliado (apenas quando ativa pela primeira vez)
+  if (isActive && afiliado_id && amount && assinaturaId) {
+    try {
+      // Lê % de comissão do afiliado
+      const afiliados = await sb(`afiliados?id=eq.${afiliado_id}&select=id,nome,comissao_percent,total_indicados,total_receita`, { method: "GET", headers: { Prefer: "" } });
+      const af = Array.isArray(afiliados) ? afiliados[0] : null;
+      if (af) {
+        const pct = Number(af.comissao_percent ?? 5);
+        const valorComissao = Math.round(amount * pct) / 100; // valor * %
+        // Evita duplicar comissão da mesma assinatura no mesmo mês
+        const mes = mesReferencia();
+        const existentes = await sb(`comissoes?afiliado_id=eq.${afiliado_id}&assinatura_id=eq.${assinaturaId}&mes_referencia=eq.${mes}&select=id`, { method: "GET", headers: { Prefer: "" } });
+        if (Array.isArray(existentes) && existentes.length === 0) {
+          await sb(`comissoes`, {
+            method: "POST",
+            body: JSON.stringify({
+              afiliado_id,
+              assinatura_id: assinaturaId,
+              valor_assinatura: amount,
+              percentual: pct,
+              valor_comissao: valorComissao,
+              mes_referencia: mes,
+              status: "pendente",
+            }),
+          });
+          // Incrementa contadores agregados do afiliado
+          await sb(`afiliados?id=eq.${afiliado_id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              total_indicados: (af.total_indicados ?? 0) + 1,
+              total_receita: Number(af.total_receita ?? 0) + Number(amount),
+              updated_at: new Date().toISOString(),
+            }),
+          });
+          console.log(`[webhook-mp] 💸 comissão R$${valorComissao} (${pct}%) → ${af.nome}`);
+        }
+      }
+    } catch (err) {
+      console.error("[webhook-mp] erro ao registrar comissão:", err);
+    }
+  }
+
+  // 3) UPDATE users.plano
   if (isActive) {
     await sb(`users?id=eq.${user_id}`, {
       method: "PATCH",

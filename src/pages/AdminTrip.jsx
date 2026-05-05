@@ -32,7 +32,7 @@ export default function AdminTrip() {
           <Lock className="w-10 h-10 text-[#6366F1] mx-auto" />
           <h3 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Painel admin é Pro</h3>
           <p className="text-[#374151]/75 text-sm mt-2">
-            Edição manual fina do roteiro está disponível a partir do Pro. Use a aba <strong>✨ Planejar com IA</strong> pra montar conversando.
+            Edição manual fina do roteiro está disponível a partir do Pro. Use a aba <strong>✨ Planejar com o Jei</strong> pra montar conversando.
           </p>
           <button
             onClick={() => setShowUpgrade(true)}

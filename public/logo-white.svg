@@ -1,0 +1,9 @@
+<svg viewBox="0 0 300 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Viajjei">
+  <path d="M112 4 Q138 -10 164 4" fill="none" stroke="#FB923C" stroke-width="2.5" stroke-linecap="round"/>
+  <text y="52" font-family="'Nunito', system-ui, sans-serif" letter-spacing="-1">
+    <tspan x="0" font-size="44" font-weight="400" fill="#FFFFFF">via</tspan>
+    <tspan font-size="44" font-weight="800" fill="#FB923C">jj</tspan>
+    <tspan font-size="44" font-weight="400" fill="#FFFFFF">ei</tspan>
+  </text>
+  <text x="150" y="72" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="10" fill="#CBD5E1" letter-spacing="5">SEMPRE JUNTOS</text>
+</svg>

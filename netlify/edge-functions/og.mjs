@@ -66,7 +66,7 @@ export default async (request, context) => {
   descParts.push("Planejado com Viajjei");
   const descricao = descParts.join(" · ");
 
-  const ogImage = `${url.origin}/og-default.png`;
+  const ogImage = `${url.origin}/og-default.svg`;
   const pageUrl = `${url.origin}/v/${slug}`;
 
   const meta = `

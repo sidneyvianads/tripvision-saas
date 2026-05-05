@@ -5,6 +5,7 @@ import {
   CheckSquare, Camera, Share2, ArrowRight, Menu, X,
 } from "lucide-react";
 import PricingSection from "../components/PricingSection";
+import Logo from "../components/Logo";
 
 // ===== HELPERS =====================================================
 
@@ -90,8 +91,8 @@ function Header({ onSignup, onLogin }) {
       }}
     >
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-        <Link to="/" className="font-display font-extrabold text-lg flex items-center gap-1.5 text-[#0F172A]">
-          <span>🧳</span> Viajjei
+        <Link to="/" className="flex items-center" aria-label="Viajjei">
+          <Logo size={26} />
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 ml-8">
@@ -160,7 +161,7 @@ function Hero({ onSignup }) {
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-display font-extrabold tracking-widest uppercase"
             style={{ background: "#FFF7ED", color: "#EA580C", border: "1px solid #FED7AA" }}
           >
-            <Sparkles className="w-3 h-3" /> Planejamento com IA
+            <Sparkles className="w-3 h-3" /> Seu concierge de viagem
           </span>
 
           <h1 className="mt-5 font-display font-extrabold text-[#0F172A] leading-tight tracking-tight"
@@ -169,7 +170,7 @@ function Hero({ onSignup }) {
           </h1>
 
           <p className="mt-5 text-[#64748B] max-w-lg" style={{ fontSize: "clamp(16px, 1.5vw, 18px)", lineHeight: 1.6 }}>
-            O assistente pesquisa hotéis, restaurantes e passeios com{" "}
+            O <strong className="text-[#0F172A]">Jei</strong>, seu concierge de viagem, pesquisa hotéis, restaurantes e passeios com{" "}
             <strong className="text-[#0F172A]">preços reais</strong> e monta o roteiro pra você.
           </p>
 
@@ -274,7 +275,7 @@ function HowItWorks() {
   const steps = [
     { n: 1, Icon: MessageSquare, title: "Conte sobre sua viagem",
       desc: "Fale o destino, as datas e com quem vai. Como conversar com um amigo." },
-    { n: 2, Icon: Search, title: "O assistente pesquisa tudo",
+    { n: 2, Icon: Search, title: "O Jei pesquisa tudo",
       desc: "Hotéis, restaurantes e passeios com preços reais. Sugere as melhores opções." },
     { n: 3, Icon: CalendarCheck, title: "Roteiro pronto",
       desc: "Dia a dia organizado. Compartilhe com o grupo e todo mundo acompanha." },
@@ -336,7 +337,7 @@ function DemoMockup() {
             <div className="p-5 md:p-6" style={{ background: "#FFF7ED" }}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm" style={{ background: "#F97316", color: "white" }}>✨</div>
-                <div className="font-display font-extrabold text-[#0F172A] text-sm">Planejar com IA</div>
+                <div className="font-display font-extrabold text-[#0F172A] text-sm">Planejar com o Jei</div>
               </div>
 
               {/* msg user */}
@@ -401,7 +402,7 @@ function DemoMockup() {
 
 function Features() {
   const items = [
-    { Icon: Sparkles,      title: "Planeje conversando",  desc: "Fale o que quer. O assistente sugere, pesquisa e monta." },
+    { Icon: Sparkles,      title: "Planeje com o Jei",    desc: "Fale o que quer. O Jei sugere, pesquisa e monta." },
     { Icon: CalendarCheck, title: "Roteiro automático",   desc: "Seu roteiro se monta sozinho, dia a dia." },
     { Icon: MessageCircle, title: "Chat do grupo",        desc: "Todo mundo conversa e se organiza no app." },
     { Icon: CheckSquare,   title: "Lista de pendências",  desc: "Quem compra ingresso? Quem reserva mesa? Tudo organizado." },
@@ -463,7 +464,7 @@ function PopularDestinations() {
           <h2 className="font-display font-extrabold text-[#0F172A]" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
             Pra onde você quer ir?
           </h2>
-          <p className="text-[#64748B] mt-3 text-base">Planeje qualquer destino com a ajuda da IA.</p>
+          <p className="text-[#64748B] mt-3 text-base">Planeje qualquer destino com a ajuda do Jei.</p>
         </Reveal>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -520,7 +521,7 @@ function Testimonial() {
         >
           <div className="text-5xl text-[#F97316] leading-none mb-2 font-display">"</div>
           <p className="text-[#0F172A] font-display font-bold leading-relaxed" style={{ fontSize: "clamp(18px, 2.2vw, 24px)" }}>
-            Planejei <strong>14 dias de viagem em 30 minutos</strong> conversando com a IA. Nunca foi tão fácil.
+            Planejei <strong>14 dias de viagem em 30 minutos</strong> conversando com o Jei. Nunca foi tão fácil.
           </p>
           <div className="mt-6 flex items-center justify-center gap-3">
             <div
@@ -583,10 +584,8 @@ function Footer() {
     <footer className="px-4 py-12 md:py-16" style={{ background: "#0F172A" }}>
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-white">
         <div>
-          <div className="font-display font-extrabold text-lg flex items-center gap-1.5">
-            <span>🧳</span> Viajjei
-          </div>
-          <div className="text-[#F97316] font-display font-extrabold text-sm mt-1">Sempre Juntos.</div>
+          <Logo size={28} white />
+          <div className="text-[#F97316] font-display font-extrabold text-sm mt-2">Sempre Juntos.</div>
           <div className="text-[#94A3B8] text-[13px] mt-3">© 2026 Grupo Multvision</div>
         </div>
 

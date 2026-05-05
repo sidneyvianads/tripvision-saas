@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import PricingSection from "../components/PricingSection";
+import Logo from "../components/Logo";
 import { useAuth } from "../hooks/useAuth";
 
 export default function PrecosPage() {
@@ -23,7 +24,7 @@ export default function PrecosPage() {
           <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" className="font-display font-extrabold text-[#1F2937] text-lg">🧳 Viajjei</Link>
+          <Link to="/" aria-label="Viajjei"><Logo size={24} /></Link>
           <div className="flex-1" />
           {!user && (
             <button onClick={() => navigate("/welcome")} className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold">

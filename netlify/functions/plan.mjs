@@ -3,7 +3,11 @@
 // Streaming dá time-to-first-byte rápido e permite que respostas longas
 // (que com web_search podem passar de 26s) cheguem no usuário.
 
-const SYSTEM_TEMPLATE = (viagem) => `Você é o Viajjei, um planejador de viagens inteligente, simpático e criterioso.
+const SYSTEM_TEMPLATE = (viagem) => `Você é o Jei, o concierge de viagem do Viajjei.
+
+Você NÃO é uma inteligência artificial. Você é o Jei — um concierge de viagem pessoal que trabalha no Viajjei. Nunca diga "como IA", "sou uma IA", "inteligência artificial" ou qualquer variação. Se o usuário perguntar se você é uma IA, responda: "Sou o Jei, seu concierge de viagem! Estou aqui pra te ajudar a planejar a viagem perfeita."
+
+Você é simpático, criterioso e atento aos detalhes — como um amigo que adora viagem e tem ótimas dicas.
 
 DADOS DA VIAGEM:
 - Nome: ${viagem.nome ?? "(sem nome)"}
@@ -311,7 +315,7 @@ export default async (req) => {
     });
   } catch (err) {
     console.error("[plan] fetch failed:", err);
-    return jsonResponse({ error: "Falha de rede ao conectar com a IA." }, 502);
+    return jsonResponse({ error: "O Jei está com dificuldade pra responder. Tente de novo em instantes." }, 502);
   }
 
   if (!upstream.ok || !upstream.body) {
@@ -319,7 +323,7 @@ export default async (req) => {
     try { errBody = await upstream.json(); } catch {}
     console.error("[plan] anthropic error:", upstream.status, errBody);
     return jsonResponse(
-      { error: errBody?.error?.message ?? `IA respondeu HTTP ${upstream.status}` },
+      { error: errBody?.error?.message ?? `O Jei está indisponível agora (${upstream.status}). Tente em instantes.` },
       502
     );
   }

@@ -38,9 +38,7 @@ export function buildWelcomeMessage(viagem) {
     return d && m ? `${d}/${m}` : iso;
   };
 
-  const intro = ["Olá! 👋 Sou o Viajjei. Vamos planejar"];
-  if (viagem?.nome) intro.push(`"${viagem.nome}"`);
-  intro.push("juntos!");
+  let out = "Oi! Sou o **Jei**, seu concierge de viagem 🧳\n\n";
 
   const facts = [];
   if (viagem?.cidades?.length) facts.push(`📍 ${viagem.cidades.join(", ")}`);
@@ -49,15 +47,15 @@ export function buildWelcomeMessage(viagem) {
   if (ini || fim) facts.push(`🗓️ ${ini ?? "?"} → ${fim ?? "?"}`);
   if (viagem?.num_pessoas) facts.push(`👥 ${viagem.num_pessoas} ${viagem.num_pessoas === 1 ? "pessoa" : "pessoas"}`);
 
-  const questions = [];
-  if (!viagem?.cidades?.length) {
-    questions.push("Pra começar: pra onde vocês querem ir?");
-  } else {
-    questions.push("Pra começar: vocês vão de avião, carro ou ônibus, e de onde saem?");
+  if (facts.length) {
+    out += "Vi que vocês vão pra:\n" + facts.join(" · ") + "\n\n";
   }
 
-  let out = intro.join(" ");
-  if (facts.length) out += "\n\n" + facts.join(" · ");
-  out += "\n\n" + questions.join("\n");
+  out += "Me conta como vocês querem viajar que eu cuido de tudo — ";
+  if (!viagem?.cidades?.length) {
+    out += "pesquiso o destino, hotéis, passeios e monto o roteiro pra vocês!";
+  } else {
+    out += "pesquiso hotéis, restaurantes, passeios e monto o roteiro pra vocês!";
+  }
   return out;
 }

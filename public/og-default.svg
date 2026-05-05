@@ -1,0 +1,25 @@
+<svg viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#FFFFFF"/>
+  <!-- Logo grande centralizado -->
+  <g transform="translate(450, 230)">
+    <path d="M112 4 Q138 -10 164 4" fill="none" stroke="#F97316" stroke-width="5" stroke-linecap="round" transform="scale(2)"/>
+    <text y="104" font-family="'Nunito', system-ui, sans-serif" letter-spacing="-2">
+      <tspan x="0" font-size="88" font-weight="400" fill="#0F172A">via</tspan>
+      <tspan font-size="88" font-weight="800" fill="#F97316">jj</tspan>
+      <tspan font-size="88" font-weight="400" fill="#0F172A">ei</tspan>
+    </text>
+  </g>
+  <!-- Tagline -->
+  <text x="600" y="430" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="22" fill="#94A3B8" letter-spacing="10">SEMPRE JUNTOS</text>
+  <!-- Subtítulo -->
+  <text x="600" y="490" text-anchor="middle" font-family="'DM Sans', system-ui, sans-serif" font-size="28" fill="#64748B">Planeje sua viagem conversando com o Jei</text>
+  <!-- Borda inferior gradiente -->
+  <defs>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFF7ED"/>
+      <stop offset="50%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#FFF7ED"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="612" width="1200" height="18" fill="url(#orange)"/>
+</svg>

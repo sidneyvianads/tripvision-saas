@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { X, Sparkles, Loader2, Star, Check } from "lucide-react";
 import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
+import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
+import CupomField from "./CupomField";
 
 export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [busy, setBusy] = useState(null);
@@ -12,35 +14,36 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
 
   const heading = (
     {
-      ia:           "✨ Libere o poder da IA",
+      ia:           "✨ Libere o Jei sem limites",
       viagens:      "📁 Mais viagens, menos limite",
       chat:         "💬 Chat do grupo é Pro",
       admin:        "🛡️ Painel admin é Pro",
       checklist:    "✅ Checklist ilimitado",
       membros:      "👥 Mais pessoas no grupo",
       compartilhar: "🔗 Compartilhar viagem é Pro",
-      pesquisa:     "🔍 Pesquisa online é Pro",
+      pesquisa:     "🔍 Pesquisa de preços é Pro",
     }[reason]
-  ) ?? "✨ Assine o Viajjei Pro";
+  ) ?? "✨ Libere o Jei sem limites";
 
   const desc = (
     {
-      ia:           "Você usou suas mensagens de hoje. Volte amanhã ou assine pra ter mensagens ilimitadas e pesquisa de preços reais.",
+      ia:           "Você usou suas conversas de hoje com o Jei. Volte amanhã ou libere o Jei sem limites no plano Pro.",
       viagens:      "O Free permite 1 viagem ativa. Pro: até 3. Grupo: até 5.",
       chat:         "O chat do grupo está disponível a partir do Pro.",
       admin:        "Edição manual fina do roteiro está no Pro.",
       checklist:    "O Free permite 5 itens. Pro/Grupo: ilimitado.",
       membros:      "Pro: até 5 pessoas. Grupo: até 20.",
       compartilhar: "Compartilhar a viagem com o grupo é exclusivo do Pro.",
-      pesquisa:     "A pesquisa de preços reais (hotéis, restaurantes, passeios) é exclusiva do Pro.",
+      pesquisa:     "O Jei pesquisar preços reais (hotéis, restaurantes, passeios) é exclusivo do Pro.",
     }[reason]
-  ) ?? "Veja os planos pagos e libere todos os recursos.";
+  ) ?? "Veja os planos pagos e libere o Jei sem limites.";
 
   const handleAssinar = async (plano) => {
     setErr(null);
     setInfo(null);
     setBusy(plano);
     try {
+      const cupom = getStoredCupom() || null;
       const res = await fetch("/api/create-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -49,6 +52,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
           ciclo,
           userId: user?.id,
           userEmail: user?.email,
+          cupom,
         }),
       });
       const data = await res.json();
@@ -58,6 +62,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
       }
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       if (data?.init_point) {
+        clearStoredCupom();
         window.location.href = data.init_point;
         return;
       }
@@ -111,6 +116,10 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
               busy={busy === "grupo"}
               accent="#F59E0B"
             />
+          </div>
+
+          <div className="mt-4">
+            <CupomField />
           </div>
 
           {info && (

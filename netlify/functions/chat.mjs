@@ -91,7 +91,7 @@ export default async (req) => {
     if (!response.ok) {
       console.error("[chat] anthropic error", data);
       return new Response(
-        JSON.stringify({ reply: data?.error?.message ?? "Erro ao chamar a IA." }),
+        JSON.stringify({ reply: data?.error?.message ?? "O Jei está com dificuldade. Tente de novo." }),
         { status: 502, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -102,7 +102,7 @@ export default async (req) => {
   } catch (err) {
     console.error("[chat] fetch failed", err);
     return new Response(
-      JSON.stringify({ reply: "Erro ao conectar com IA. Tente novamente." }),
+      JSON.stringify({ reply: "O Jei está fora do ar agora. Tente de novo." }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

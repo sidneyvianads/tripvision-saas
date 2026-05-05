@@ -9,7 +9,7 @@
   "theme_color": "#F97316",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%A7%B3</text></svg>",
+      "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

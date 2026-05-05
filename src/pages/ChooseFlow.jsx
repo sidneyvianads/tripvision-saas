@@ -71,9 +71,9 @@ export default function ChooseFlow() {
             <Sparkles className="w-6 h-6" />
           </div>
           <div className="flex-1">
-            <div className="font-display font-extrabold text-[#1F2937] text-lg">✨ Planejar com IA</div>
+            <div className="font-display font-extrabold text-[#1F2937] text-lg">✨ Planejar com o Jei</div>
             <p className="text-[#6B7280] text-sm mt-0.5">
-              Converse e o roteiro se monta sozinho com preços reais, hotéis e passeios pesquisados online.
+              Converse com o Jei e o roteiro se monta sozinho com preços reais, hotéis e passeios.
             </p>
             <div className="inline-flex items-center gap-1 text-primary text-sm font-display font-bold mt-2">
               Começar conversa <ArrowRight className="w-3.5 h-3.5" />

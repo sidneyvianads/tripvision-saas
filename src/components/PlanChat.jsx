@@ -15,10 +15,10 @@ import { supabase } from "../lib/supabase";
 const SUGESTOES = [
   "Sugere hotel",
   "O que fazer amanhã?",
-  "Restaurante perto",
+  "Onde almoçar?",
   "Quanto vai custar?",
   "Passeio pra crianças",
-  "Onde almoçar?",
+  "Jei, monta o roteiro!",
 ];
 
 const LOADING_PHASES = [
@@ -81,7 +81,7 @@ async function streamPlan(req, signal, onDelta) {
     }
     throw new Error(err?.error || `HTTP ${res.status}`);
   }
-  if (!res.body) throw new Error("A IA não retornou stream.");
+  if (!res.body) throw new Error("O Jei não respondeu. Tente de novo.");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -246,7 +246,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     if (isPaid(user.plano)) {
       const u = getPlanUsage(user.id, user.plano);
       if (u.remaining <= 0) {
-        setErr(`Você usou ${u.used}/${u.limit} mensagens este mês. Renova no dia 1.`);
+        setErr(`Você usou ${u.used}/${u.limit} conversas com o Jei este mês. Renova no dia 1.`);
         return;
       }
     }
@@ -354,8 +354,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       const errMsg = {
         role: "assistant",
         content: isTimeout
-          ? "A pesquisa está demorando mais que o normal. Tenta perguntar uma coisa por vez pra facilitar! ⏱️"
-          : `Tive um problema pra processar agora: ${e.message}. Tenta de novo. ❄️`,
+          ? "O Jei está pesquisando muita coisa. Tenta perguntar uma coisa por vez! ⏱️"
+          : `O Jei está com dificuldade pra processar agora: ${e.message}. Tenta de novo. 🧳`,
         ts: Date.now(),
         _error: true,
       };
@@ -406,7 +406,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         style={{ color: "var(--tv-accent-dark)" }}
       >
         <span className="inline-flex items-center gap-1">
-          <Sparkles className="w-3 h-3" /> Planejar com IA
+          <Sparkles className="w-3 h-3" /> Planejar com o Jei
         </span>
         <span className="tabular flex items-center gap-2">
           <button
@@ -422,8 +422,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             {isOwner(user?.plano)
               ? "👑 sem limite"
               : isFree
-                ? `${freeUsed}/${FREE_LIMIT} usadas hoje`
-                : `${usage.used}/${usage.limit} este mês`}
+                ? `${freeUsed}/${FREE_LIMIT} conversas hoje`
+                : `${usage.used}/${usage.limit} conversas este mês`}
           </span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">
@@ -508,10 +508,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         >
           <div className="text-[#92400E]">
             <div className="font-display font-extrabold text-sm flex items-center gap-1.5">
-              ☀️ Você usou suas {FREE_LIMIT} mensagens de hoje!
+              ☀️ Suas {FREE_LIMIT} conversas com o Jei de hoje acabaram!
             </div>
             <div className="text-[13px] mt-1 leading-snug">
-              Volte amanhã pra continuar planejando, ou assine o Pro pra mensagens ilimitadas.
+              Volte amanhã ou libere o Jei sem limites no plano Pro.
             </div>
           </div>
           <button
@@ -519,7 +519,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             onClick={() => setShowUpgrade(true)}
             className="btn-primary mt-2.5 inline-flex items-center justify-center gap-1.5 !py-2 text-sm w-full"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Assinar Pro — R$ 9,99/mês →
+            <Sparkles className="w-3.5 h-3.5" /> Liberar o Jei — R$ 9,99/mês →
           </button>
           <button
             type="button"
@@ -552,9 +552,9 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <input
           className="input flex-1"
           placeholder={
-            freeBlocked ? "Você usou suas mensagens de hoje. Volte amanhã!"
-            : proBlocked ? "Você atingiu o limite deste mês."
-            : "Conta como vocês querem viajar…"
+            freeBlocked ? "Suas conversas de hoje acabaram. Volte amanhã!"
+            : proBlocked ? "Você usou suas conversas deste mês."
+            : "Conta pro Jei como vocês querem viajar…"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -585,10 +585,12 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 function BotAvatar() {
   return (
     <div
-      className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-base"
-      style={{ background: "var(--tv-gradient)", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}
+      className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-display font-extrabold text-white text-sm"
+      style={{ background: "#F97316", boxShadow: "0 2px 8px rgba(249, 115, 22, 0.30)" }}
+      aria-label="Jei"
+      title="Jei"
     >
-      <span>✨</span>
+      J
     </div>
   );
 }
