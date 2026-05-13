@@ -39,7 +39,7 @@ export async function validateCupom(cupom) {
   if (!code) return { ok: false, motivo: "vazio" };
   const { data, error } = await supabase
     .from("afiliados")
-    .select("id, nome, cupom, ativo, comissao_percent")
+    .select("id, nome, cupom, ativo, comissao_percent, desconto_percent")
     .ilike("cupom", code)
     .maybeSingle();
   if (error) {

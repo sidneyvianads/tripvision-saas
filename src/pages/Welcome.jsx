@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift, Tag, X as XIcon } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
 import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import Logo from "../components/Logo";
-import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
+import { getStoredCupom, setStoredCupom, clearStoredCupom, validateCupom } from "../lib/cupom";
 import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
-import CupomField from "../components/CupomField";
 
 const REDIRECT_DELAY_MS = 1800;
+const TOTAL_STEPS = 3;
 
 export default function Welcome() {
   const { signIn, signUp, loading } = useAuth();
@@ -28,8 +28,11 @@ export default function Welcome() {
   const [success, setSuccess] = useState(null);
   const [justSignedUpEmail, setJustSignedUpEmail] = useState(null);
 
-  // Sub-etapa do cadastro: 'dados' → 'plano'
+  // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
+
+  // Cupom aplicado nessa sessão (objeto afiliado completo, vindo do CupomStep)
+  const [afiliado, setAfiliado] = useState(null);
 
   useEffect(() => {
     if (!success) return;
@@ -61,12 +64,11 @@ export default function Welcome() {
     }
   };
 
-  // Validação rigorosa: 6+ chars, pelo menos 1 letra, pelo menos 1 número
   const senhaForca = passwordStrength(senha);
   const senhaValida = senhaForca?.valid === true;
   const senhasIguais = senha && senha === senha2;
 
-  // Etapa 1: validar dados → ir pro picker
+  // Etapa 1 → 2
   const handleSignupNext = (e) => {
     e.preventDefault();
     setErr(null);
@@ -76,15 +78,13 @@ export default function Welcome() {
     if (!senhaValida) return setErr("Senha muito fraca — use no mínimo 6 caracteres com letras e números.");
     if (senha !== senha2) return setErr("As senhas não conferem.");
     if (!email.trim()) return setErr("Informe seu e-mail.");
-    setSignupStep("plano");
+    setSignupStep("cupom");
   };
 
-  // Etapa 2: cria a conta (plano='pending') e redireciona pro Mercado Pago.
-  // Não existe mais "começar Free" — todo cadastro entra no trial de 7 dias.
+  // Etapa 3: cria a conta e redireciona pro Mercado Pago
   const handleConfirmPlan = async (plano, ciclo = "mensal") => {
     setErr(null);
     try {
-      // Resolve origem (organico / afiliado / instagram / google) ANTES do insert
       const { origem, afiliado_id } = await resolveOrigemPayload();
 
       const created = await signUp({
@@ -97,7 +97,6 @@ export default function Welcome() {
         afiliado_id,
       });
 
-      // Chama create-subscription e redireciona pro Mercado Pago
       try {
         const cupom = getStoredCupom() || null;
         const res = await fetch("/api/create-subscription", {
@@ -194,19 +193,22 @@ export default function Welcome() {
           </form>
         ) : signupStep === "plano" ? (
           <PlanPicker
+            afiliado={afiliado}
             onChoose={handleConfirmPlan}
-            onBack={() => { setSignupStep("dados"); setErr(null); }}
-            loading={loading || !!success}
-            success={success}
+            onBack={() => { setSignupStep("cupom"); setErr(null); }}
+            loading={isBusy}
             err={err}
+          />
+        ) : signupStep === "cupom" ? (
+          <CupomStep
+            initialAfiliado={afiliado}
+            onApplied={(af) => setAfiliado(af)}
+            onContinue={() => { setSignupStep("plano"); setErr(null); }}
+            onBack={() => { setSignupStep("dados"); setErr(null); }}
           />
         ) : (
           <form onSubmit={handleSignupNext} className="mt-6 space-y-3">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
-              <span className="w-6 h-1 rounded-full bg-[#6366F1]" />
-              <span className="w-6 h-1 rounded-full bg-[#E5E7EB]" />
-              <span className="ml-1.5">Etapa 1 de 2</span>
-            </div>
+            <StepIndicator step={1} />
 
             <div className="flex justify-center pt-1 pb-2">
               <PhotoPicker
@@ -272,7 +274,7 @@ export default function Welcome() {
             >
               {!senhaValida && senha
                 ? <>Senha muito fraca</>
-                : <>Próximo: escolher plano <ArrowRight className="w-4 h-4" /></>}
+                : <>Próximo <ArrowRight className="w-4 h-4" /></>}
             </button>
 
             {err && <ErrorBox msg={err} />}
@@ -303,18 +305,179 @@ export default function Welcome() {
   );
 }
 
-function PlanPicker({ onChoose, onBack, loading, success, err }) {
+// =============== INDICADOR DE PASSOS ===============
+
+function StepIndicator({ step }) {
+  return (
+    <div className="flex items-center justify-center gap-2 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
+      {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
+        const idx = i + 1;
+        const active = idx === step;
+        const done = idx < step;
+        return (
+          <span
+            key={idx}
+            className="w-2.5 h-2.5 rounded-full transition-all"
+            style={{
+              background: active ? "#6366F1" : done ? "#A5B4FC" : "#E5E7EB",
+              transform: active ? "scale(1.25)" : "scale(1)",
+            }}
+          />
+        );
+      })}
+      <span className="ml-2">Etapa {step} de {TOTAL_STEPS}</span>
+    </div>
+  );
+}
+
+// =============== ETAPA 2: CUPOM (tela própria) ===============
+
+function CupomStep({ initialAfiliado, onApplied, onContinue, onBack }) {
+  const [cupom, setCupom] = useState(() => (initialAfiliado?.cupom ?? getStoredCupom() ?? "").toUpperCase());
+  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState(initialAfiliado ? "ok" : "idle"); // idle | pending | ok | invalid
+  const [afiliado, setAfiliadoLocal] = useState(initialAfiliado ?? null);
+
+  // Valida em tempo real (debounced)
+  useEffect(() => {
+    const code = cupom.trim();
+    if (!code) {
+      setState("idle"); setAfiliadoLocal(null); onApplied(null); clearStoredCupom();
+      return;
+    }
+    setBusy(true); setState("pending");
+    const t = setTimeout(async () => {
+      const res = await validateCupom(code);
+      if (res.ok) {
+        setState("ok"); setAfiliadoLocal(res.afiliado);
+        setStoredCupom(code);
+        onApplied(res.afiliado);
+      } else {
+        setState("invalid"); setAfiliadoLocal(null);
+        onApplied(null);
+        clearStoredCupom();
+      }
+      setBusy(false);
+    }, 380);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cupom]);
+
+  const desconto = Number(afiliado?.desconto_percent ?? 0);
+
+  return (
+    <div className="mt-6 space-y-4 animate-pop">
+      <StepIndicator step={2} />
+
+      <div className="text-center">
+        <div className="text-4xl mb-1">🎟️</div>
+        <h2 className="font-display font-extrabold text-[#1F2937] text-xl">
+          Você foi indicado por alguém?
+        </h2>
+        <p className="text-[#6B7280] text-sm mt-1">
+          Digite o cupom do seu influenciador pra ganhar desconto.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-[11px] font-display font-extrabold uppercase tracking-wide text-[#64748B]">
+          Cupom de indicação
+        </label>
+        <div className="relative">
+          <Tag className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+          <input
+            type="text"
+            className="input pl-12 pr-12 uppercase tracking-wider text-lg !py-4 !font-display !font-extrabold"
+            placeholder="EX: JOAO10"
+            value={cupom}
+            onChange={(e) => setCupom(e.target.value.toUpperCase().slice(0, 30))}
+            maxLength={30}
+            autoFocus
+          />
+          {busy && <Loader2 className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-[#94A3B8]" />}
+          {!busy && state === "ok" && <Check className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-emerald-600" />}
+          {!busy && state === "invalid" && <XIcon className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-red-500" />}
+        </div>
+
+        {/* Feedback grande quando validado */}
+        {state === "ok" && afiliado && (
+          <div
+            className="rounded-2xl p-4 animate-pop"
+            style={{ background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)", border: "1.5px solid #6EE7B7" }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                <Check className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display font-extrabold text-emerald-900 text-sm">
+                  Cupom de {afiliado.nome} aplicado!
+                </div>
+                {desconto > 0 ? (
+                  <div className="text-emerald-800 text-[13px] mt-0.5">
+                    Você ganha <strong>{desconto.toFixed(0)}% off no primeiro mês</strong> 🎉
+                  </div>
+                ) : (
+                  <div className="text-emerald-800 text-[13px] mt-0.5">
+                    Você ajuda {afiliado.nome.split(/\s+/)[0]} e libera o trial completo.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {state === "invalid" && (
+          <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-sm flex items-center gap-2">
+            <XIcon className="w-4 h-4 shrink-0" />
+            <span>Cupom inválido ou inativo. Confira a grafia ou pule essa etapa.</span>
+          </div>
+        )}
+      </div>
+
+      {/* CTAs */}
+      {state === "ok" ? (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="btn-primary w-full inline-flex items-center justify-center gap-2"
+          style={{ background: "#10B981" }}
+        >
+          Aplicar cupom e continuar <ArrowRight className="w-4 h-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={onContinue}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F8FAFC]"
+          style={{ borderColor: "#E2E8F0", color: "#0F172A", background: "white" }}
+        >
+          Não tenho cupom — Pular <ArrowRight className="w-4 h-4" />
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-sm text-[#64748B] hover:text-[#0F172A] font-display font-bold w-full text-center pt-1"
+      >
+        ← Voltar
+      </button>
+    </div>
+  );
+}
+
+// =============== ETAPA 3: PLAN PICKER ===============
+
+function PlanPicker({ afiliado, onChoose, onBack, loading, err }) {
   const [ciclo, setCiclo] = useState("anual");
-  const pro   = PLANS.pro;
+  const pro = PLANS.pro;
   const grupo = PLANS.grupo;
+  const desconto = Number(afiliado?.desconto_percent ?? 0);
 
   return (
     <div className="mt-6 space-y-3 animate-pop">
-      <div className="flex items-center justify-center gap-1.5 text-[10px] font-display font-extrabold tracking-widest uppercase text-[#6366F1]">
-        <span className="w-6 h-1 rounded-full bg-[#E5E7EB]" />
-        <span className="w-6 h-1 rounded-full bg-[#6366F1]" />
-        <span className="ml-1.5">Etapa 2 de 2</span>
-      </div>
+      <StepIndicator step={3} />
 
       <div className="text-center">
         <div
@@ -324,15 +487,39 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
           <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis — cancele quando quiser
         </div>
         <h2 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Escolha seu plano</h2>
-        <p className="text-[#6B7280] text-xs mt-1">Não cobramos nada nos primeiros {TRIAL_DAYS} dias. Cancele a qualquer momento.</p>
+        <p className="text-[#6B7280] text-xs mt-1">
+          Não cobramos nada nos primeiros {TRIAL_DAYS} dias. Cancele a qualquer momento.
+        </p>
       </div>
+
+      {/* Badge cupom aplicado */}
+      {afiliado && desconto > 0 && (
+        <div
+          className="rounded-xl px-3 py-2 text-[12px] font-display font-bold flex items-center gap-2"
+          style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}
+        >
+          <span className="text-base">🎟️</span>
+          <span className="flex-1">
+            Cupom <strong>{afiliado.cupom}</strong> aplicado — <strong>{desconto.toFixed(0)}% off no 1º mês</strong>
+          </span>
+        </div>
+      )}
+      {afiliado && desconto === 0 && (
+        <div
+          className="rounded-xl px-3 py-2 text-[12px] font-display font-bold flex items-center gap-2"
+          style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}
+        >
+          <span className="text-base">🎟️</span>
+          <span className="flex-1">Indicado por <strong>{afiliado.nome}</strong></span>
+        </div>
+      )}
 
       <CycleToggle ciclo={ciclo} setCiclo={setCiclo} />
 
-      {/* Card Pro */}
       <PlanCard
         plan={pro}
         ciclo={ciclo}
+        desconto={desconto}
         badge="MAIS POPULAR"
         bullets={[
           "Até 3 viagens",
@@ -344,14 +531,14 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         ctaIcon={Sparkles}
         accent="#F97316"
         onClick={() => onChoose("pro", ciclo)}
-        disabled={loading || !!success}
+        disabled={loading}
         highlight
       />
 
-      {/* Card Grupo */}
       <PlanCard
         plan={grupo}
         ciclo={ciclo}
+        desconto={desconto}
         bullets={[
           "Até 5 viagens",
           "2.000 mensagens por mês",
@@ -362,24 +549,20 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
         ctaIcon={Star}
         accent="#F59E0B"
         onClick={() => onChoose("grupo", ciclo)}
-        disabled={loading || !!success}
+        disabled={loading}
       />
 
       {err && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-red-700 text-sm">{err}</div>
       )}
 
-      <div className="pt-1">
-        <CupomField />
-      </div>
-
       <button
         type="button"
         onClick={onBack}
-        disabled={loading || !!success}
+        disabled={loading}
         className="text-sm text-[#64748B] hover:text-[#0F172A] font-display font-bold w-full text-center disabled:opacity-50 pt-1"
       >
-        ← Voltar e ajustar dados
+        ← Voltar
       </button>
 
       <p className="text-center text-[11px] text-[#94A3B8] pt-1">
@@ -425,12 +608,14 @@ function CycleToggle({ ciclo, setCiclo }) {
 }
 
 function PlanCard({
-  plan, ciclo, badge, bullets,
+  plan, ciclo, desconto, badge, bullets,
   ctaIcon: CtaIcon, accent, onClick, disabled, highlight,
 }) {
   const isAnual = ciclo === "anual";
   const price = PRICES[plan.id]?.[ciclo];
   const monthlyEq = monthlyEquivalent(plan.id, ciclo);
+  const hasDesconto = desconto > 0;
+  const discounted = hasDesconto ? round2(monthlyEq * (1 - desconto / 100)) : null;
 
   return (
     <div
@@ -454,21 +639,43 @@ function PlanCard({
       </div>
 
       <div className="mt-2">
-        <div className="flex items-baseline gap-1">
-          <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
-            R$ {formatPrice(monthlyEq)}
-          </span>
-          <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
-        </div>
-        <div className="text-[12px] text-[#64748B] mt-1">
-          {isAnual
-            ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong> após o trial</>
-            : "cobrado mensalmente após o trial"}
-        </div>
-        {isAnual && (
-          <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
-            economize 33% vs mensal
-          </span>
+        {hasDesconto ? (
+          <>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="font-display font-bold text-base text-[#94A3B8] line-through tabular">
+                R$ {formatPrice(monthlyEq)}
+              </span>
+              <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
+                R$ {formatPrice(discounted)}
+              </span>
+              <span className="text-[13px] font-bold text-[#64748B]">/1º mês</span>
+            </div>
+            <div className="text-[12px] text-[#9A3412] font-display font-bold mt-1">
+              {desconto.toFixed(0)}% off com o cupom 🎉
+            </div>
+            <div className="text-[11px] text-[#64748B] mt-1">
+              Depois: R$ {formatPrice(monthlyEq)}/mês{isAnual ? ` (R$ ${formatPrice(price.amount)}/ano)` : ""}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
+                R$ {formatPrice(monthlyEq)}
+              </span>
+              <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
+            </div>
+            <div className="text-[12px] text-[#64748B] mt-1">
+              {isAnual
+                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong> após o trial</>
+                : "cobrado mensalmente após o trial"}
+            </div>
+            {isAnual && (
+              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+                economize 33% vs mensal
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -495,8 +702,12 @@ function PlanCard({
   );
 }
 
+function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
 function formatPrice(n) {
-  return n.toFixed(2).replace(".", ",");
+  return Number(n).toFixed(2).replace(".", ",");
 }
 
 function Field({ icon: Icon, type, placeholder, value, onChange, autoFocus, maxLength, autoComplete, disabled }) {
@@ -534,7 +745,6 @@ function passwordStrength(s) {
   const hasNumber = /\d/.test(s);
   const hasMixCase = /[a-z]/.test(s) && /[A-Z]/.test(s);
   const hasSymbol = /[^A-Za-z0-9]/.test(s);
-  const valid = hasLength && hasLetter && hasNumber;
 
   if (!hasLength) return { valid: false, label: "muito curta", color: "#EF4444", pct: 15, hint: "mínimo 6 caracteres" };
   if (!hasLetter) return { valid: false, label: "muito fraca", color: "#EF4444", pct: 25, hint: "precisa de pelo menos 1 letra" };
