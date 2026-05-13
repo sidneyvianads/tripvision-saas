@@ -13,7 +13,7 @@ function LegalLayout({ title, children }) {
           <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" aria-label="Viajjei"><Logo size={24} /></Link>
+          <Link to="/" aria-label="Viajjei"><Logo size={32} /></Link>
         </div>
       </header>
 

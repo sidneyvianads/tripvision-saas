@@ -8,6 +8,7 @@ import UpgradeModal from "../components/UpgradeModal";
 import PlanBadge from "../components/PlanBadge";
 import ConfirmModal from "../components/ConfirmModal";
 import ScrollToTop from "../components/ScrollToTop";
+import Logo from "../components/Logo";
 import { getLimits, isPaid, hasActiveAccess, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
 import { getTema, emojiForCidade } from "../data/themes";
 
@@ -73,12 +74,10 @@ export default function MyTrips() {
     <div className="min-h-screen flex flex-col bg-soft">
       <header className="bg-white safe-top" style={{ borderBottom: "1px solid #E5E7EB" }}>
         <div className="px-4 pt-4 pb-3 flex items-center gap-3">
-          <div className="text-2xl">🧳</div>
+          <Link to="/" aria-label="Viajjei"><Logo size={36} /></Link>
+          <PlanBadge plano={user?.plano} />
           <div className="flex-1 min-w-0">
-            <div className="font-display font-extrabold text-lg leading-tight flex items-center gap-2 text-[#1F2937]">
-              Viajjei <PlanBadge plano={user?.plano} />
-            </div>
-            <div className="text-[#6B7280] text-xs truncate font-display font-bold tracking-wide">
+            <div className="text-[#6B7280] text-xs truncate font-display font-bold tracking-wide text-right sm:text-left">
               Olá, {(user?.nome ?? "").split(/\s+/)[0]}!
             </div>
           </div>

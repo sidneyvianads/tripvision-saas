@@ -156,7 +156,7 @@ export default function Welcome() {
       <div className="card w-full max-w-md p-8 animate-fade-up relative z-10">
         <div className="text-center">
           <Link to="/" className="inline-block" aria-label="Viajjei">
-            <Logo size={42} />
+            <Logo size={56} />
           </Link>
           <p className="text-[#64748B] mt-3 font-display font-bold text-sm">
             Planeje sua viagem conversando com o Jei.

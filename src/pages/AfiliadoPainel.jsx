@@ -80,7 +80,7 @@ export default function AfiliadoPainel() {
     <div className="min-h-screen bg-[#F8FAFC]">
       <header className="bg-white border-b border-[#E2E8F0]">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/"><Logo size={24} /></Link>
+          <Link to="/"><Logo size={32} /></Link>
           <div className="flex-1" />
           <div className="text-[12px] text-[#64748B] font-display font-bold">Painel de afiliado</div>
         </div>

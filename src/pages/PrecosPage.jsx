@@ -23,7 +23,7 @@ export default function PrecosPage() {
           <Link to="/" className="rounded-full p-1.5 hover:bg-[#F3F4F6] text-[#1F2937]">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <Link to="/" aria-label="Viajjei"><Logo size={24} /></Link>
+          <Link to="/" aria-label="Viajjei"><Logo size={32} /></Link>
           <div className="flex-1" />
           {!user && (
             <button onClick={() => navigate("/welcome")} className="text-sm text-[#6B7280] hover:text-[#1F2937] font-display font-bold">

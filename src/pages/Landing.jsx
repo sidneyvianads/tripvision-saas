@@ -92,7 +92,7 @@ function Header({ onSignup, onLogin }) {
     >
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
         <Link to="/" className="flex items-center" aria-label="Viajjei">
-          <Logo size={26} />
+          <Logo size={36} />
         </Link>
 
         <nav className="hidden md:flex items-center gap-6 ml-8">
@@ -584,7 +584,7 @@ function Footer() {
     <footer className="px-4 py-12 md:py-16" style={{ background: "#0F172A" }}>
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-white">
         <div>
-          <Logo size={28} white />
+          <Logo size={32} white />
           <div className="text-[#F97316] font-display font-extrabold text-sm mt-2">Sempre Juntos.</div>
           <div className="text-[#94A3B8] text-[13px] mt-3">© 2026 Grupo Multvision</div>
         </div>
