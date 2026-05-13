@@ -10,7 +10,7 @@ const POLL_TIMEOUT = 90_000;
 
 export default function AssinaturaSucesso() {
   const { user } = useAuth();
-  const [planoAtual, setPlanoAtual] = useState(user?.plano ?? "free");
+  const [planoAtual, setPlanoAtual] = useState(user?.plano ?? "pending");
   const [tries, setTries] = useState(0);
   const [done, setDone] = useState(false);
 
@@ -54,7 +54,7 @@ export default function AssinaturaSucesso() {
               Bem-vindo ao Viajjei <span className="text-[#6366F1]">{planName(planoAtual)}</span>! ✨
             </h1>
             <p className="text-[#4B5563] mt-2 text-sm">
-              Sua assinatura está ativa. Agora o Jei pesquisa, sugere e monta o roteiro sem limites.
+              Seus 7 dias grátis começaram. Aproveite tudo sem limites — o Mercado Pago só cobra no dia 8.
             </p>
             <Link
               to="/"

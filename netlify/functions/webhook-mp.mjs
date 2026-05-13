@@ -2,6 +2,13 @@
 // Atualiza users.plano + assinaturas com base no status do preapproval.
 // Quando MERCADOPAGO_ACCESS_TOKEN não está configurado, apenas loga e
 // retorna 200 pra MP não ficar reentregando.
+//
+// Trial de 7 dias: quando o preapproval é autorizado, o usuário entra em
+// trial. trial_ends_at = NOW + 7d. plano_expires_at = trial_ends_at + ciclo
+// (dá acesso ao trial + o primeiro ciclo de uma vez, evita ficar dependente
+// do webhook de cada renovação).
+
+const TRIAL_DAYS = 7;
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
@@ -36,9 +43,15 @@ async function sb(path, init = {}) {
 }
 
 function planoFromExternalRef(ref) {
-  // formato: "userId:plano:ciclo[:afiliadoId]"
-  const [user_id, plano, ciclo, afiliado_id] = (ref ?? "").split(":");
-  return { user_id, plano, ciclo, afiliado_id: afiliado_id || null };
+  // formato: "userId:plano:ciclo[:afiliadoId[:descPct]]"
+  const parts = (ref ?? "").split(":");
+  return {
+    user_id: parts[0],
+    plano: parts[1],
+    ciclo: parts[2],
+    afiliado_id: parts[3] || null,
+    desconto_percent: parts[4] ? Number(parts[4]) : 0,
+  };
 }
 
 function mesReferencia(d = new Date()) {
@@ -56,11 +69,25 @@ async function fetchPreapproval(id) {
   return res.json();
 }
 
-function periodEndFromCiclo(ciclo) {
-  const d = new Date();
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function addCiclo(date, ciclo) {
+  const d = new Date(date);
   if (ciclo === "anual") d.setFullYear(d.getFullYear() + 1);
   else d.setMonth(d.getMonth() + 1);
-  return d.toISOString();
+  return d;
+}
+
+// Janela de acesso = trial (7d) + ciclo. Dá acesso completo desde a confirmação
+// até o fim do primeiro ciclo. Webhooks subsequentes vão estender daqui.
+function accessWindowEnd(ciclo) {
+  const now = new Date();
+  const afterTrial = addDays(now, TRIAL_DAYS);
+  return addCiclo(afterTrial, ciclo);
 }
 
 async function handlePreapproval(id) {
@@ -76,6 +103,10 @@ async function handlePreapproval(id) {
   const isCanceled = status === "cancelled" || status === "paused";
   const amount = pa.auto_recurring?.transaction_amount ?? null;
 
+  const now = new Date();
+  const trialEnd = addDays(now, TRIAL_DAYS);
+  const accessEnd = accessWindowEnd(ciclo);
+
   // 1) UPSERT em assinaturas
   const subPayload = {
     user_id,
@@ -85,11 +116,11 @@ async function handlePreapproval(id) {
     provider: "mercadopago",
     mp_preapproval_id: id,
     amount,
-    current_period_start: new Date().toISOString(),
-    current_period_end: isActive ? periodEndFromCiclo(ciclo) : null,
-    updated_at: new Date().toISOString(),
+    current_period_start: now.toISOString(),
+    current_period_end: isActive ? accessEnd.toISOString() : null,
+    updated_at: now.toISOString(),
     afiliado_id: afiliado_id || null,
-    cupom_usado: null, // o cupom em si fica em afiliados; assinatura tem o ID
+    cupom_usado: null,
   };
   const subRows = await sb(`assinaturas?on_conflict=mp_preapproval_id`, {
     method: "POST",
@@ -101,15 +132,19 @@ async function handlePreapproval(id) {
   // 2) Comissão de afiliado (apenas quando ativa pela primeira vez)
   if (isActive && afiliado_id && amount && assinaturaId) {
     try {
-      // Lê % de comissão do afiliado
-      const afiliados = await sb(`afiliados?id=eq.${afiliado_id}&select=id,nome,comissao_percent,total_indicados,total_receita`, { method: "GET", headers: { Prefer: "" } });
+      const afiliados = await sb(
+        `afiliados?id=eq.${afiliado_id}&select=id,nome,comissao_percent,total_indicados,total_receita`,
+        { method: "GET", headers: { Prefer: "" } }
+      );
       const af = Array.isArray(afiliados) ? afiliados[0] : null;
       if (af) {
         const pct = Number(af.comissao_percent ?? 5);
-        const valorComissao = Math.round(amount * pct) / 100; // valor * %
-        // Evita duplicar comissão da mesma assinatura no mesmo mês
+        const valorComissao = Math.round(amount * pct) / 100;
         const mes = mesReferencia();
-        const existentes = await sb(`comissoes?afiliado_id=eq.${afiliado_id}&assinatura_id=eq.${assinaturaId}&mes_referencia=eq.${mes}&select=id`, { method: "GET", headers: { Prefer: "" } });
+        const existentes = await sb(
+          `comissoes?afiliado_id=eq.${afiliado_id}&assinatura_id=eq.${assinaturaId}&mes_referencia=eq.${mes}&select=id`,
+          { method: "GET", headers: { Prefer: "" } }
+        );
         if (Array.isArray(existentes) && existentes.length === 0) {
           await sb(`comissoes`, {
             method: "POST",
@@ -123,13 +158,12 @@ async function handlePreapproval(id) {
               status: "pendente",
             }),
           });
-          // Incrementa contadores agregados do afiliado
           await sb(`afiliados?id=eq.${afiliado_id}`, {
             method: "PATCH",
             body: JSON.stringify({
               total_indicados: (af.total_indicados ?? 0) + 1,
               total_receita: Number(af.total_receita ?? 0) + Number(amount),
-              updated_at: new Date().toISOString(),
+              updated_at: now.toISOString(),
             }),
           });
           console.log(`[webhook-mp] 💸 comissão R$${valorComissao} (${pct}%) → ${af.nome}`);
@@ -140,21 +174,20 @@ async function handlePreapproval(id) {
     }
   }
 
-  // 3) UPDATE users.plano
+  // 3) UPDATE users — ativa plano + registra trial
   if (isActive) {
     await sb(`users?id=eq.${user_id}`, {
       method: "PATCH",
       body: JSON.stringify({
         plano,
-        plano_expires_at: periodEndFromCiclo(ciclo),
+        plano_expires_at: accessEnd.toISOString(),
+        trial_ends_at: trialEnd.toISOString(),
         mp_preapproval_id: id,
       }),
     });
-    console.log(`[webhook-mp] ✅ ${user_id} ativou ${plano}/${ciclo}`);
+    console.log(`[webhook-mp] ✅ ${user_id} ativou ${plano}/${ciclo} (trial até ${trialEnd.toISOString()})`);
   } else if (isCanceled) {
     // Não rebaixa imediatamente — mantém plano até plano_expires_at expirar.
-    // O downgrade efetivo é feito pelo gate do /api/plan que checa expires_at.
-    // Aqui só registra que NÃO haverá renovação.
     console.log(`[webhook-mp] 🚫 ${user_id} cancelou ${plano}/${ciclo} — acesso mantido até plano_expires_at`);
   } else {
     console.log(`[webhook-mp] ⏳ ${user_id} status=${status}`);
@@ -187,8 +220,6 @@ export default async (req) => {
     }
   } catch (err) {
     console.error("[webhook-mp] erro:", err);
-    // Mesmo em erro retornamos 200 pra MP não reentregar infinitamente.
-    // Erros ficam no log do Netlify Functions.
   }
 
   return new Response("OK", { status: 200 });

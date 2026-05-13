@@ -10,7 +10,6 @@ export default function PrecosPage() {
 
   const handleChoose = (plano, ciclo = "mensal") => {
     if (!user) { navigate("/welcome?mode=signup"); return; }
-    if (plano === "free") { navigate("/"); return; }
     navigate(`/conta?upgrade=${plano}&ciclo=${ciclo}`);
   };
 
@@ -37,7 +36,7 @@ export default function PrecosPage() {
       <main className="flex-1 pt-24">
         <div className="max-w-3xl mx-auto text-center px-4 mb-4">
           <h1 className="text-3xl sm:text-5xl font-display font-extrabold text-[#1F2937]">Preços</h1>
-          <p className="text-[#6B7280] mt-2">Comece grátis. Cresça quando quiser.</p>
+          <p className="text-[#6B7280] mt-2">Teste grátis por 7 dias. Cancele a qualquer momento.</p>
         </div>
         <PricingSection onChoose={handleChoose} currentPlan={user?.plano ?? null} />
       </main>

@@ -1,8 +1,8 @@
 import { PLANS } from "../data/plans";
 
-export default function PlanBadge({ plano, size = "sm", showFree = false }) {
+export default function PlanBadge({ plano, size = "sm" }) {
   if (!plano) return null;
-  if (plano === "free" && !showFree) return null;
+  // Sem assinatura ativa: não mostra badge (free legado / pending / expired).
   const data = PLANS[plano];
   if (!data) return null;
 

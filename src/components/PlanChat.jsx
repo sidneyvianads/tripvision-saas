@@ -9,7 +9,7 @@ import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroU
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
-import { isPaid, isOwner } from "../data/plans";
+import { isPaid, isOwner, hasActiveAccess } from "../data/plans";
 import { supabase } from "../lib/supabase";
 
 const SUGESTOES = [
@@ -31,25 +31,7 @@ const LOADING_PHASES = [
 const ROTEIRO_OPEN = "<roteiro_update>";
 const ROTEIRO_CLOSE = "</roteiro_update>";
 
-// HARD GATE: contador local simples por user, DIÁRIO (reseta meia-noite).
-// Chave: tripvision:ia_msgs:USER_ID:YYYY-MM-DD. Servidor é a verdade final.
-const FREE_LIMIT = 5;
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-const HARD_KEY = (uid) => `tripvision:ia_msgs:${uid}:${todayStr()}`;
-function getFreeUsed(uid) {
-  if (!uid) return 0;
-  try { return parseInt(localStorage.getItem(HARD_KEY(uid)) || "0", 10) || 0; }
-  catch { return 0; }
-}
-function bumpFreeUsed(uid) {
-  if (!uid) return 0;
-  const next = getFreeUsed(uid) + 1;
-  try { localStorage.setItem(HARD_KEY(uid), String(next)); } catch {}
-  return next;
-}
+// Sem mais cota Free. Quem não tem assinatura ativa cai direto no UpgradeModal.
 
 function stripPartialRoteiroTag(text) {
   if (!text) return "";
@@ -141,54 +123,37 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(0);
-  // freeUsed = único source of truth pra Free. Pro usa contador diário antigo só pra display.
-  const [freeUsed, setFreeUsed] = useState(() => getFreeUsed(user?.id));
   const [usage, setUsage] = useState(() => getPlanUsage(user?.id, user?.plano));
 
-  const isFree = !isPaid(user?.plano);
-  const freeBlocked = isFree && freeUsed >= FREE_LIMIT;
-  const proBlocked = !isFree && usage.remaining <= 0;
-  const blocked = freeBlocked || proBlocked;
+  const hasAccess = hasActiveAccess(user);
+  const proBlocked = hasAccess && usage.remaining <= 0;
+  const blocked = !hasAccess || proBlocked;
 
   useEffect(() => {
-    console.log("[PlanChat] freeUsed:", freeUsed, "freeBlocked:", freeBlocked, "user.plano:", user?.plano, "blocked:", blocked);
-  }, [freeUsed, freeBlocked, user?.plano, blocked]);
+    console.log("[PlanChat] hasAccess:", hasAccess, "user.plano:", user?.plano, "blocked:", blocked);
+  }, [hasAccess, user?.plano, blocked]);
 
-  // Sincroniza contador local com o BANCO (fonte da verdade) ao montar.
-  // Free: count today. Pro/Grupo: count this month. localStorage é cache pra UX.
+  // Sincroniza contador mensal com o BANCO (fonte da verdade) ao montar.
   useEffect(() => {
-    if (!user?.id || isOwner(user?.plano)) return;
+    if (!user?.id || isOwner(user?.plano) || !hasAccess) return;
     let active = true;
     (async () => {
       try {
-        const rpcName = isFree ? "count_ia_user_messages_today" : "count_ia_user_messages_in_month";
-        const { data, error } = await supabase.rpc(rpcName, { uid: user.id });
+        const { data, error } = await supabase.rpc("count_ia_user_messages_in_month", { uid: user.id });
         if (!active) return;
         if (error) {
           console.warn("[PlanChat] count rpc error:", error);
           return;
         }
         const serverCount = typeof data === "number" ? data : 0;
-        if (isFree) {
-          const localCount = getFreeUsed(user.id);
-          const truth = Math.max(serverCount, localCount);
-          if (truth !== localCount) {
-            try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
-          }
-          setFreeUsed(truth);
-          console.log("[PlanChat] free daily sync:", { server: serverCount, local: localCount, truth });
-        } else {
-          // Pro/Grupo: substitui contador local pelo do servidor (mensal autoritativo).
-          setPlanUsageFromServer(user.id, user.plano, serverCount);
-          setUsage(getPlanUsage(user.id, user.plano));
-          console.log("[PlanChat] monthly sync:", { server: serverCount, plano: user.plano });
-        }
+        setPlanUsageFromServer(user.id, user.plano, serverCount);
+        setUsage(getPlanUsage(user.id, user.plano));
       } catch (e) {
         console.warn("[PlanChat] sync failed:", e);
       }
     })();
     return () => { active = false; };
-  }, [user?.id, user?.plano, isFree]);
+  }, [user?.id, user?.plano, hasAccess]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -228,21 +193,13 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
     const trimmed = (text ?? "").trim();
     if (!trimmed) return;
 
-    // ====== HARD GATE FREE — primeira coisa, antes de QUALQUER outra lógica ======
-    if (user?.plano === "free" || !user?.plano) {
-      const used = getFreeUsed(user?.id);
-      console.log("[PlanChat HARD GATE FREE]", { used, limit: FREE_LIMIT, blocked: used >= FREE_LIMIT });
-      if (used >= FREE_LIMIT) {
-        setShowUpgrade(true);
-        return; // NÃO ENVIA
-      }
-      // Incrementa ANTES de enviar (decisão deliberada do produto: msg falhada conta)
-      const next = bumpFreeUsed(user.id);
-      setFreeUsed(next);
+    // Sem assinatura ativa: bloqueia e abre o UpgradeModal.
+    if (!hasActiveAccess(user)) {
+      setShowUpgrade(true);
+      return;
     }
-    // ====== /HARD GATE ======
 
-    // Pro: contador diário (rateLimit antigo)
+    // Pro/Grupo: contador mensal local (server-side gate é definitivo no /api/plan)
     if (isPaid(user.plano)) {
       const u = getPlanUsage(user.id, user.plano);
       if (u.remaining <= 0) {
@@ -277,7 +234,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         {
           message: trimmed,
           history: historyForApi,
-          user_plano: user.plano ?? "free",
+          user_plano: user.plano ?? "pending",
           user_id: user.id,
           viagem: {
             nome: trip.nome,
@@ -334,12 +291,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
       clearTimeout(safetyTimer);
       console.error("[PlanChat] stream failed:", e);
 
-      // Servidor rejeitou: limite Free atingido (fonte da verdade no banco).
+      // Servidor rejeitou (sem assinatura ou limite atingido): rollback + UpgradeModal.
       if (e?.code === "FREE_LIMIT") {
-        const truth = e.serverUsed ?? FREE_LIMIT;
-        try { localStorage.setItem(HARD_KEY(user.id), String(truth)); } catch {}
-        setFreeUsed(truth);
-        // Remove a msg do user que acabou de ser adicionada — ela não foi processada.
         const rolledBack = next.slice(0, -1);
         setMessages(rolledBack);
         persist(rolledBack);
@@ -421,8 +374,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           <span>
             {isOwner(user?.plano)
               ? "👑 sem limite"
-              : isFree
-                ? `${freeUsed}/${FREE_LIMIT} conversas hoje`
+              : !hasAccess
+                ? "Sem assinatura ativa"
                 : `${usage.used}/${usage.limit} conversas este mês`}
           </span>
           {messages.length > 0 && !busy && (
@@ -500,18 +453,18 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         </div>
       )}
 
-      {/* Banner de limite atingido (Free) */}
-      {freeBlocked && (
+      {/* Banner pra usuário sem assinatura ativa */}
+      {!hasAccess && (
         <div
           className="relative z-10 mx-1 mb-2 rounded-xl px-4 py-3"
           style={{ background: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "1px solid #F59E0B" }}
         >
           <div className="text-[#92400E]">
             <div className="font-display font-extrabold text-sm flex items-center gap-1.5">
-              ☀️ Suas {FREE_LIMIT} conversas com o Jei de hoje acabaram!
+              ✨ Comece o teste grátis pra liberar o Jei
             </div>
             <div className="text-[13px] mt-1 leading-snug">
-              Volte amanhã ou libere o Jei sem limites no plano Pro.
+              7 dias grátis. Cancele quando quiser.
             </div>
           </div>
           <button
@@ -519,14 +472,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
             onClick={() => setShowUpgrade(true)}
             className="btn-primary mt-2.5 inline-flex items-center justify-center gap-1.5 !py-2 text-sm w-full"
           >
-            <Sparkles className="w-3.5 h-3.5" /> Liberar o Jei — R$ 9,99/mês →
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowUpgrade(false)}
-            className="block w-full text-center mt-2 text-[12px] text-[#92400E]/80 hover:text-[#92400E] font-display font-bold"
-          >
-            Volto amanhã
+            <Sparkles className="w-3.5 h-3.5" /> Começar teste grátis →
           </button>
         </div>
       )}
@@ -552,14 +498,14 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
         <input
           className="input flex-1"
           placeholder={
-            freeBlocked ? "Suas conversas de hoje acabaram. Volte amanhã!"
+            !hasAccess ? "Comece o teste grátis pra falar com o Jei"
             : proBlocked ? "Você usou suas conversas deste mês."
             : "Conta pro Jei como vocês querem viajar…"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={busy || blocked}
-          onFocus={() => { if (freeBlocked) setShowUpgrade(true); }}
+          onFocus={() => { if (!hasAccess) setShowUpgrade(true); }}
         />
         <button
           type="submit"
@@ -567,7 +513,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
           disabled={!input.trim() || busy || blocked}
           aria-label="Enviar"
           onClick={(e) => {
-            if (freeBlocked) {
+            if (!hasAccess) {
               e.preventDefault();
               setShowUpgrade(true);
             }

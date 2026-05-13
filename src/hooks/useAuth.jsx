@@ -20,7 +20,7 @@ function clearSession() {
   try { localStorage.removeItem(SESSION_KEY); } catch {}
 }
 
-const PROFILE_COLS = "id, nome, email, avatar_cor, avatar_url, plano, plano_expires_at";
+const PROFILE_COLS = "id, nome, email, avatar_cor, avatar_url, plano, plano_expires_at, trial_ends_at, origem, afiliado_id";
 
 const AuthContext = createContext(null);
 
@@ -96,14 +96,15 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const signUp = useCallback(async ({ nome, email, senha, avatar_cor, avatar_url, plano }) => {
+  const signUp = useCallback(async ({ nome, email, senha, avatar_cor, avatar_url, origem, afiliado_id }) => {
     setLoading(true);
     try {
       const cleanNome  = (nome ?? "").trim();
       const cleanEmail = normalizeEmail(email);
       const cleanSenha = normalizePassword(senha);
-      // SEMPRE cria como Free. Upgrade só após webhook do Mercado Pago confirmar pagamento.
-      const cleanPlano = "free";
+      // SEMPRE cria como "pending" (sem assinatura ativa). Upgrade só após webhook
+      // do Mercado Pago confirmar pagamento (vira pro/grupo com trial de 7 dias).
+      const cleanPlano = "pending";
       if (!cleanNome)  throw new Error("Informe seu nome.");
       if (!cleanEmail) throw new Error("Informe seu e-mail.");
       if (cleanSenha.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");
@@ -118,7 +119,7 @@ export function AuthProvider({ children }) {
 
       const hash = await sha256Hex(cleanSenha);
       const avatarLen = (avatar_url ?? "").length;
-      console.log("[Viajjei] signUp inserindo:", { email: cleanEmail, hasAvatarUrl: !!avatar_url, avatarLen });
+      console.log("[Viajjei] signUp inserindo:", { email: cleanEmail, hasAvatarUrl: !!avatar_url, avatarLen, origem, afiliado_id });
       const { data, error } = await supabase
         .from("users")
         .insert({
@@ -128,6 +129,8 @@ export function AuthProvider({ children }) {
           avatar_cor,
           avatar_url: avatar_url ?? null,
           plano: cleanPlano,
+          origem: origem ?? "organico",
+          afiliado_id: afiliado_id ?? null,
         })
         .select(PROFILE_COLS)
         .single();

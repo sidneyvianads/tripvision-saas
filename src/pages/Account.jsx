@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase, sha256Hex, normalizePassword } from "../lib/supabase";
-import { PLANS, planName, planIcon, isPaid, isOwner } from "../data/plans";
+import { PLANS, planName, planIcon, isPaid, isOwner, hasActiveAccess, isInTrial, trialDaysLeft, needsSubscription } from "../data/plans";
 import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
@@ -131,12 +131,14 @@ export default function Account() {
   }, [user?.id]);
 
   if (!user) return null;
-  const plano = user.plano ?? "free";
+  const plano = user.plano ?? "pending";
   const planoData = PLANS[plano];
-  const isFree = !isPaid(plano);
   const isOwnerUser = isOwner(plano);
+  const noSub = needsSubscription(user);
+  const inTrial = isInTrial(user);
+  const trialLeft = trialDaysLeft(user);
   const isCanceled = assinatura?.status === "canceled";
-  const canCancel = !isFree && !isOwnerUser && !isCanceled && !!assinatura?.mp_preapproval_id;
+  const canCancel = !noSub && !isOwnerUser && !isCanceled && !!assinatura?.mp_preapproval_id;
 
   return (
     <div className="min-h-screen flex flex-col bg-app">
@@ -157,20 +159,32 @@ export default function Account() {
         {/* Card de plano */}
         <section className="card p-5">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{planoIcon(plano)}</span>
-            <span className="font-display font-extrabold text-xl text-[#0F1B2D]">Plano {planName(plano)}</span>
-            {!isFree && (
+            <span className="text-2xl">{noSub ? "🔒" : planoIcon(plano)}</span>
+            <span className="font-display font-extrabold text-xl text-[#0F1B2D]">
+              {noSub ? "Sem assinatura ativa" : `Plano ${planName(plano)}`}
+            </span>
+            {!noSub && !isOwnerUser && (
               <span
                 className="badge ml-auto"
-                style={{ background: planoData?.cor + "33", color: planoData?.cor }}
+                style={{ background: (planoData?.cor ?? "#10B981") + "33", color: planoData?.cor ?? "#10B981" }}
               >
-                ATIVO
+                {inTrial ? "TRIAL" : "ATIVO"}
               </span>
             )}
           </div>
-          <p className="text-[13px] text-[#1A3A4A]/75 mt-1">{planoData?.tagline ?? ""}</p>
+          {!noSub && <p className="text-[13px] text-[#1A3A4A]/75 mt-1">{planoData?.tagline ?? ""}</p>}
 
-          {!isFree && assinatura && (
+          {/* Trial em andamento */}
+          {!noSub && inTrial && trialLeft > 0 && (
+            <div className="mt-3 rounded-xl px-3 py-2.5 text-[13px]" style={{ background: "#ECFDF5", color: "#065F46", border: "1px solid #A7F3D0" }}>
+              <div className="font-display font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Trial — {trialLeft} {trialLeft === 1 ? "dia restante" : "dias restantes"}
+              </div>
+              <div className="text-[12px] mt-0.5">Após o trial, cobrança automática via Mercado Pago. Cancele a qualquer momento.</div>
+            </div>
+          )}
+
+          {!noSub && assinatura && (
             <div className="mt-3 text-[13px] text-[#1A3A4A]/85 space-y-1">
               <div>Ciclo: <strong>{assinatura.ciclo === "anual" ? "Anual" : "Mensal"}</strong></div>
               {assinatura.current_period_end && (
@@ -204,7 +218,7 @@ export default function Account() {
           )}
 
           {/* Botões pra Pro/Grupo ATIVO (não cancelado) */}
-          {!isFree && !isOwnerUser && !isCanceled && (
+          {!noSub && !isOwnerUser && !isCanceled && (
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 onClick={() => setShowUpgrade(true)}
@@ -235,7 +249,7 @@ export default function Account() {
           )}
 
           {/* Botão Reassinar pra quem cancelou */}
-          {!isFree && !isOwnerUser && isCanceled && (
+          {!noSub && !isOwnerUser && isCanceled && (
             <button
               onClick={() => setShowUpgrade(true)}
               className="btn-primary mt-3 inline-flex items-center gap-2"
@@ -257,13 +271,19 @@ export default function Account() {
             </>
           )}
 
-          {isFree && (
-            <button
-              onClick={() => setShowUpgrade(true)}
-              className="btn-primary mt-4 inline-flex items-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" /> Trocar plano
-            </button>
+          {noSub && (
+            <>
+              <p className="text-[13px] text-[#374151] mt-3">
+                Seu acesso ao Jei, criação de viagens e chat do grupo está pausado.
+                Comece o teste grátis pra liberar tudo.
+              </p>
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="btn-primary mt-4 inline-flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Começar teste grátis (7 dias)
+              </button>
+            </>
           )}
         </section>
 
@@ -380,7 +400,7 @@ export default function Account() {
         <ConfirmModal
           open={confirmCancel}
           title="Cancelar assinatura?"
-          body={`Tem certeza? A renovação automática será cancelada. Você mantém acesso a todas as features ${planName(plano)} até ${formatBR(assinatura?.current_period_end) ?? "o fim do período pago"}, depois volta pra Free.`}
+          body={`Tem certeza? A renovação automática será cancelada. Você mantém acesso a todas as features ${planName(plano)} até ${formatBR(assinatura?.current_period_end) ?? "o fim do período pago"}. Depois disso o app fica em modo leitura — suas viagens continuam disponíveis, mas pra criar novas e usar o Jei você precisa reativar.`}
           confirmLabel="Sim, cancelar"
           confirmVariant="danger"
           cancelLabel="Manter assinatura"

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { captureCupomFromUrl } from "./lib/cupom";
+import { captureOrigemFromUrl } from "./lib/origem";
 import Landing from "./pages/Landing";
 import Welcome from "./pages/Welcome";
 import MyTrips from "./pages/MyTrips";
@@ -26,10 +27,13 @@ const PrivacidadePage = lazy(() => import("./pages/LegalPages").then((m) => ({ d
 export default function App() {
   const { user } = useAuth();
 
-  // Captura ?cupom=X da URL e guarda em localStorage até o checkout
+  // Captura ?cupom=X e ?utm_source=X da URL e guarda em localStorage.
+  // Usado no signUp pra preencher users.origem + users.afiliado_id.
   useEffect(() => {
     const c = captureCupomFromUrl();
     if (c) console.log("[Viajjei] cupom de afiliado capturado:", c);
+    const o = captureOrigemFromUrl();
+    if (o) console.log("[Viajjei] origem capturada:", o);
   }, []);
 
   return (

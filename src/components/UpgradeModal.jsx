@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { X, Sparkles, Loader2, Star, Check } from "lucide-react";
-import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
+import { X, Sparkles, Loader2, Star, Check, Gift } from "lucide-react";
+import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
 import CupomField from "./CupomField";
 
@@ -27,16 +27,17 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
 
   const desc = (
     {
-      ia:           "Você usou suas conversas de hoje com o Jei. Volte amanhã ou libere o Jei sem limites no plano Pro.",
-      viagens:      "O Free permite 1 viagem ativa. Pro: até 3. Grupo: até 5.",
-      chat:         "O chat do grupo está disponível a partir do Pro.",
-      admin:        "Edição manual fina do roteiro está no Pro.",
-      checklist:    "O Free permite 5 itens. Pro/Grupo: ilimitado.",
-      membros:      "Pro: até 5 pessoas. Grupo: até 20.",
-      compartilhar: "Compartilhar a viagem com o grupo é exclusivo do Pro.",
-      pesquisa:     "O Jei pesquisar preços reais (hotéis, restaurantes, passeios) é exclusivo do Pro.",
+      ia:           "Comece o teste grátis de 7 dias pra liberar o Jei sem limites.",
+      viagens:      "Pro: até 3 viagens. Grupo: até 5. Teste grátis por 7 dias.",
+      chat:         "Chat do grupo está no Pro. Teste grátis por 7 dias.",
+      admin:        "Edição manual do roteiro está no Pro. Teste grátis por 7 dias.",
+      checklist:    "Checklist ilimitado no Pro e Grupo. Teste grátis por 7 dias.",
+      membros:      "Pro: até 5 pessoas. Grupo: até 20. Teste grátis por 7 dias.",
+      compartilhar: "Compartilhar a viagem está no Pro. Teste grátis por 7 dias.",
+      pesquisa:     "Pesquisa de preços reais está no Pro. Teste grátis por 7 dias.",
+      expirado:     "Seu acesso expirou. Reative pra continuar planejando — 7 dias grátis pra recomeçar.",
     }[reason]
-  ) ?? "Veja os planos pagos e libere o Jei sem limites.";
+  ) ?? "Comece o teste grátis de 7 dias.";
 
   const handleAssinar = async (plano) => {
     setErr(null);
@@ -95,6 +96,15 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
         <div className="flex-1 overflow-y-auto p-5">
           <p className="text-sm text-[#374151]">{desc}</p>
 
+          <div className="mt-3 flex justify-center">
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase"
+              style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}
+            >
+              <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis — cancele quando quiser
+            </span>
+          </div>
+
           <div className="mt-4">
             <CycleToggleModal ciclo={ciclo} setCiclo={setCiclo} />
           </div>
@@ -135,7 +145,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
           )}
 
           <p className="text-center text-[11px] text-[#9CA3AF] mt-5">
-            Pagamento via Mercado Pago. Cancele a qualquer momento.
+            Pagamento via Mercado Pago. Sem cobrança nos primeiros {TRIAL_DAYS} dias.
           </p>
 
           <div className="text-center mt-3">
@@ -144,7 +154,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
               onClick={onClose}
               className="text-sm text-[#6B7280] hover:underline font-display font-bold"
             >
-              Continuar no Free
+              Agora não
             </button>
           </div>
         </div>
@@ -252,7 +262,7 @@ function UpgradeCard({ plan, ciclo, onAssinar, busy, accent, highlight, badge })
         style={{ background: "#F97316" }}
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
-        Assinar por R$ {formatPrice(monthlyEq)}/mês →
+        Começar teste grátis →
       </button>
     </div>
   );

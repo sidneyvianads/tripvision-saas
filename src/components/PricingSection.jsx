@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Check, X, Sparkles, Star } from "lucide-react";
-import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
+import { Check, Sparkles, Star, Gift } from "lucide-react";
+import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 
 export default function PricingSection({ onChoose, currentPlan = null, compact = false }) {
   const [cycle, setCycle] = useState("anual");
@@ -8,18 +8,27 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
   return (
     <section className={`relative ${compact ? "py-4" : "py-14"} px-4`}>
       {!compact && (
-        <div className="max-w-3xl mx-auto text-center mb-10">
+        <div className="max-w-3xl mx-auto text-center mb-8">
           <div className="text-xs font-display font-extrabold tracking-widest text-[#6366F1] uppercase">
             Preços simples
           </div>
           <h2 className="text-3xl sm:text-4xl text-[#1F2937] font-display font-extrabold mt-2">
-            Comece grátis. Cresça quando quiser.
+            Teste grátis por {TRIAL_DAYS} dias.
           </h2>
           <p className="text-[#6B7280] mt-3 text-sm sm:text-base">
-            Sem letra miúda, sem surpresa. Cancele a qualquer momento.
+            Sem cobrança no trial. Cancele a qualquer momento.
           </p>
         </div>
       )}
+
+      <div className="flex justify-center mb-3">
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-display font-extrabold tracking-widest uppercase"
+          style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}
+        >
+          <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis em todos os planos
+        </span>
+      </div>
 
       <div className="flex justify-center mb-8">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white" style={{ border: "1px solid #E5E7EB" }}>
@@ -43,8 +52,7 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-        <PlanCard plan={PLANS.free}  cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} accent="#6366F1" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
         <PlanCard plan={PLANS.pro}   cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} accent="#8B5CF6" highlight />
         <PlanCard plan={PLANS.grupo} cycle={cycle} onChoose={onChoose} currentPlan={currentPlan} accent="#F59E0B" />
       </div>
@@ -53,13 +61,10 @@ export default function PricingSection({ onChoose, currentPlan = null, compact =
 }
 
 function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
-  const price = plan.id === "free" ? null : PRICES[plan.id]?.[cycle];
+  const price = PRICES[plan.id]?.[cycle];
   const isCurrent = currentPlan === plan.id;
   const isAnual = cycle === "anual";
-  const monthlyEq = plan.id !== "free" ? monthlyEquivalent(plan.id, cycle) : null;
-  const strikeYear = plan.id !== "free" && isAnual
-    ? PRICES[plan.id].mensal.amount * 12
-    : null;
+  const monthlyEq = monthlyEquivalent(plan.id, cycle);
   const Icon = plan.id === "grupo" ? Star : Sparkles;
 
   return (
@@ -89,30 +94,21 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
       <div className="text-[12px] text-[#6B7280] mt-0.5">{plan.tagline}</div>
 
       <div className="mt-4">
-        {plan.id === "free" ? (
-          <>
-            <div className="font-display font-extrabold text-5xl text-[#0F172A] tabular leading-none">R$ 0</div>
-            <div className="text-[13px] text-[#64748B] mt-1">pra sempre</div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-1">
-              <span className="font-display font-extrabold text-5xl text-[#0F172A] tabular leading-none">
-                R$ {formatPrice(isAnual ? monthlyEq : price.amount)}
-              </span>
-              <span className="text-[15px] font-bold text-[#64748B]">/mês</span>
-            </div>
-            <div className="text-[13px] text-[#64748B] mt-1">
-              {isAnual
-                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
-                : "cobrado mensalmente"}
-            </div>
-            {isAnual && (
-              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
-                economize 33% vs mensal
-              </span>
-            )}
-          </>
+        <div className="flex items-baseline gap-1">
+          <span className="font-display font-extrabold text-5xl text-[#0F172A] tabular leading-none">
+            R$ {formatPrice(isAnual ? monthlyEq : price.amount)}
+          </span>
+          <span className="text-[15px] font-bold text-[#64748B]">/mês</span>
+        </div>
+        <div className="text-[13px] text-[#64748B] mt-1">
+          {isAnual
+            ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong> após o trial</>
+            : "cobrado mensalmente após o trial"}
+        </div>
+        {isAnual && (
+          <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+            economize 33% vs mensal
+          </span>
         )}
       </div>
 
@@ -121,12 +117,6 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
           <li key={`y-${i}`} className="flex items-start gap-2 text-[13px] text-[#374151]">
             <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
             <span>{f}</span>
-          </li>
-        ))}
-        {(plan.excluidos ?? []).map((f, i) => (
-          <li key={`n-${i}`} className="flex items-start gap-2 text-[13px] text-[#9CA3AF]">
-            <X className="w-4 h-4 mt-0.5 shrink-0" />
-            <span className="line-through">{f}</span>
           </li>
         ))}
       </ul>
@@ -138,14 +128,6 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
             className="w-full px-4 py-2.5 rounded-xl font-display font-extrabold text-sm bg-emerald-100 text-emerald-700"
           >
             Plano atual
-          </button>
-        ) : plan.id === "free" ? (
-          <button
-            onClick={() => onChoose?.(plan.id, cycle)}
-            className="w-full px-4 py-2.5 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F9FAFB]"
-            style={{ borderColor: "#E5E7EB", color: "#1F2937", background: "white" }}
-          >
-            Começar grátis
           </button>
         ) : (
           <button
@@ -159,7 +141,7 @@ function PlanCard({ plan, cycle, onChoose, currentPlan, highlight, accent }) {
             }}
           >
             <Icon className="w-4 h-4" />
-            Assinar por R$ {formatPrice(isAnual ? monthlyEq : price.amount)}/mês →
+            Começar teste grátis →
           </button>
         )}
       </div>

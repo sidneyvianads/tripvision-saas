@@ -144,9 +144,11 @@ REGRAS TÉCNICAS:
 - Após o update, sempre confirme em texto curto: "Adicionei: [resumo]"
 `;
 
-const FREE_DAILY_LIMIT = 5;
 const MONTHLY_LIMITS = { pro: 500, grupo: 2000 };
 const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
+// Free/pending/expired: bloqueio total. Não existe mais cota diária pra plano gratuito —
+// todo cadastro novo entra em trial de 7 dias com plano pago efetivo (pro/grupo).
+const NO_ACCESS_PLANS = new Set(["free", "pending", "expired", null, undefined]);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 
@@ -206,10 +208,7 @@ async function callRpc(name, payload) {
   }
 }
 
-// Free: dia corrente em America/Sao_Paulo (reset à meia-noite BRT).
 // Pro/Grupo: mês corrente em UTC.
-// (RPC lifetime mantida pra futuras métricas.)
-async function countDailyUserMessages(uid)   { return callRpc("count_ia_user_messages_today",    { uid }); }
 async function countMonthlyUserMessages(uid) { return callRpc("count_ia_user_messages_in_month", { uid }); }
 
 export default async (req) => {
@@ -224,14 +223,14 @@ export default async (req) => {
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
 
-  const { message, history = [], viagem = {}, user_plano = "free", user_id = null } = body ?? {};
+  const { message, history = [], viagem = {}, user_plano = "pending", user_id = null } = body ?? {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
   }
 
   // ===== EFFECTIVE PLAN =====
-  // Owner nunca expira. Pro/Grupo: se plano_expires_at já passou, trata como Free
-  // (assinatura foi cancelada e o período acabou).
+  // Owner nunca expira. Pro/Grupo: se plano_expires_at já passou, trata como
+  // "expired" (read-only). Free legado / pending: sempre sem acesso.
   let effectivePlan = user_plano;
   if (user_id && PAID_PLANS.has(user_plano) && user_plano !== "owner") {
     const dbUser = await fetchUserPlan(user_id);
@@ -239,37 +238,38 @@ export default async (req) => {
       const expired = new Date(dbUser.plano_expires_at).getTime() < Date.now();
       if (expired) {
         console.log("[plan] plano expirado", { user_id, plano_expires_at: dbUser.plano_expires_at });
-        effectivePlan = "free";
+        effectivePlan = "expired";
       }
     }
   }
   const isPaidPlan = PAID_PLANS.has(effectivePlan);
+  const noAccess = NO_ACCESS_PLANS.has(effectivePlan) || effectivePlan === "expired";
 
   // ===== GATE SERVER-SIDE =====
-  // Free: contador DIÁRIO (5/dia, reseta meia-noite UTC).
+  // Sem assinatura ativa (free/pending/expired): bloqueio total.
   // Pro/Grupo: contador MENSAL.
   // Owner: bypass total.
+  if (noAccess) {
+    console.log("[plan] NO-ACCESS GATE blocked", { user_id, plan: effectivePlan });
+    return jsonResponse(
+      {
+        error: "Sua assinatura não está ativa. Comece o teste grátis de 7 dias!",
+        upgrade: true,
+        scope: "subscription",
+      },
+      403
+    );
+  }
   if (effectivePlan !== "owner" && user_id) {
-    if (!isPaidPlan) {
-      const used = await countDailyUserMessages(user_id);
-      if (used != null && used >= FREE_DAILY_LIMIT) {
-        console.log("[plan] FREE DAILY GATE blocked", { user_id, used, limit: FREE_DAILY_LIMIT });
+    const monthlyLimit = MONTHLY_LIMITS[effectivePlan];
+    if (monthlyLimit != null) {
+      const used = await countMonthlyUserMessages(user_id);
+      if (used != null && used >= monthlyLimit) {
+        console.log("[plan] MONTHLY GATE blocked", { user_id, plan: effectivePlan, used, limit: monthlyLimit });
         return jsonResponse(
-          { error: "Limite diário atingido", upgrade: true, used, limit: FREE_DAILY_LIMIT, scope: "daily" },
+          { error: `Limite mensal atingido (${used}/${monthlyLimit})`, upgrade: true, used, limit: monthlyLimit, scope: "monthly" },
           403
         );
-      }
-    } else {
-      const monthlyLimit = MONTHLY_LIMITS[effectivePlan];
-      if (monthlyLimit != null) {
-        const used = await countMonthlyUserMessages(user_id);
-        if (used != null && used >= monthlyLimit) {
-          console.log("[plan] MONTHLY GATE blocked", { user_id, plan: effectivePlan, used, limit: monthlyLimit });
-          return jsonResponse(
-            { error: `Limite mensal atingido (${used}/${monthlyLimit})`, upgrade: true, used, limit: monthlyLimit, scope: "monthly" },
-            403
-          );
-        }
       }
     }
   }
@@ -283,10 +283,8 @@ export default async (req) => {
     .slice(-20)
     .map((m) => ({ role: m.role, content: m.content }));
 
-  let SYSTEM = SYSTEM_TEMPLATE(viagem);
-  if (!allowSearch) {
-    SYSTEM += `\n\nIMPORTANTE — VOCÊ ESTÁ NO PLANO FREE:\nVocê NÃO TEM acesso a web_search neste momento. Não tente pesquisar online — não há ferramenta disponível. Quando o usuário pedir preços, hotéis ou restaurantes específicos, diga: "Pra te trazer preços e endereços atualizados em tempo real, preciso do Pro 🔍 ✨ — assim você desbloqueia a pesquisa online. Por enquanto posso te ajudar a estruturar o roteiro e dar dicas gerais!". Continue ajudando com sugestões baseadas no seu conhecimento, mas seja honesto sobre não ter dados em tempo real.`;
-  }
+  const SYSTEM = SYSTEM_TEMPLATE(viagem);
+  // Sem fallback "sem busca" — só usuários com assinatura ativa chegam aqui.
 
   let upstream;
   try {

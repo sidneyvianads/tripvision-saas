@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
-import { PLANS, PRICES, monthlyEquivalent } from "../data/plans";
+import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import Logo from "../components/Logo";
 import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
+import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
 import CupomField from "../components/CupomField";
 
 const REDIRECT_DELAY_MS = 1800;
@@ -78,26 +79,25 @@ export default function Welcome() {
     setSignupStep("plano");
   };
 
-  // Etapa 2: cria SEMPRE como Free. Se escolheu pago, redireciona pra checkout MP.
+  // Etapa 2: cria a conta (plano='pending') e redireciona pro Mercado Pago.
+  // Não existe mais "começar Free" — todo cadastro entra no trial de 7 dias.
   const handleConfirmPlan = async (plano, ciclo = "mensal") => {
     setErr(null);
     try {
+      // Resolve origem (organico / afiliado / instagram / google) ANTES do insert
+      const { origem, afiliado_id } = await resolveOrigemPayload();
+
       const created = await signUp({
         nome: nome.trim(),
         email,
         senha,
         avatar_cor: cor,
         avatar_url: photo,
-        plano: "free", // SEMPRE free no cadastro — paid só após pagamento confirmado
+        origem,
+        afiliado_id,
       });
 
-      // Free: vai direto pro fluxo de login
-      if (plano === "free") {
-        setSuccess({ email: created.email, nome: created.nome, plano: "free" });
-        return;
-      }
-
-      // Paid: chama create-subscription e redireciona pro Mercado Pago
+      // Chama create-subscription e redireciona pro Mercado Pago
       try {
         const cupom = getStoredCupom() || null;
         const res = await fetch("/api/create-subscription", {
@@ -113,21 +113,22 @@ export default function Welcome() {
         });
         const data = await res.json();
         if (res.status === 503 && data?.placeholder) {
-          setErr("Pagamento ainda em configuração. Conta criada como Free — pode usar o app normal e fazer upgrade depois.");
-          setSuccess({ email: created.email, nome: created.nome, plano: "free" });
+          setErr("Pagamento ainda em configuração. Sua conta foi criada — escreva pra sidney@grupomultvision.com pra liberar o acesso manualmente.");
+          setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
           return;
         }
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
         if (data?.init_point) {
           clearStoredCupom();
+          clearStoredOrigem();
           window.location.href = data.init_point;
           return;
         }
         throw new Error("Resposta sem URL de pagamento.");
       } catch (e) {
         console.error("[Welcome] checkout failed:", e);
-        setErr(`Conta criada como Free. Não consegui abrir o pagamento agora (${e.message}). Faça upgrade depois pelo painel.`);
-        setSuccess({ email: created.email, nome: created.nome, plano: "free" });
+        setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora (${e.message}). Faça login e tente o upgrade pelo painel.`);
+        setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
       }
     } catch (e) {
       setErr(e.message);
@@ -304,14 +305,8 @@ export default function Welcome() {
 
 function PlanPicker({ onChoose, onBack, loading, success, err }) {
   const [ciclo, setCiclo] = useState("anual");
-  const free  = PLANS.free;
   const pro   = PLANS.pro;
   const grupo = PLANS.grupo;
-  const proPrice   = PRICES.pro[ciclo];
-  const grupoPrice = PRICES.grupo[ciclo];
-  const proMonthly   = monthlyEquivalent("pro", ciclo);
-  const grupoMonthly = monthlyEquivalent("grupo", ciclo);
-  const isAnual = ciclo === "anual";
 
   return (
     <div className="mt-6 space-y-3 animate-pop">
@@ -322,24 +317,17 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       </div>
 
       <div className="text-center">
-        <div className="text-3xl mb-1">✨</div>
-        <h2 className="font-display font-extrabold text-[#1F2937] text-xl">Escolha seu plano</h2>
-        <p className="text-[#6B7280] text-xs mt-1">Você pode trocar depois nas configurações.</p>
+        <div
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase"
+          style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}
+        >
+          <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis — cancele quando quiser
+        </div>
+        <h2 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Escolha seu plano</h2>
+        <p className="text-[#6B7280] text-xs mt-1">Não cobramos nada nos primeiros {TRIAL_DAYS} dias. Cancele a qualquer momento.</p>
       </div>
 
       <CycleToggle ciclo={ciclo} setCiclo={setCiclo} />
-
-      {/* Card Free */}
-      <PlanCard
-        plan={free}
-        ciclo={ciclo}
-        bullets={["1 viagem", "5 mensagens por dia", "Só você (sem chat)"]}
-        ctaLabel="Começar grátis"
-        ctaIcon={ArrowRight}
-        accent="#6366F1"
-        onClick={() => onChoose("free")}
-        disabled={loading || !!success}
-      />
 
       {/* Card Pro */}
       <PlanCard
@@ -395,7 +383,7 @@ function PlanPicker({ onChoose, onBack, loading, success, err }) {
       </button>
 
       <p className="text-center text-[11px] text-[#94A3B8] pt-1">
-        Pagamento via Mercado Pago. Cancele quando quiser.
+        Pagamento via Mercado Pago. Sem cobrança nos primeiros {TRIAL_DAYS} dias.
       </p>
     </div>
   );
@@ -438,15 +426,11 @@ function CycleToggle({ ciclo, setCiclo }) {
 
 function PlanCard({
   plan, ciclo, badge, bullets,
-  ctaLabel, ctaIcon: CtaIcon, accent, onClick, disabled, highlight,
+  ctaIcon: CtaIcon, accent, onClick, disabled, highlight,
 }) {
-  const isFree = plan.id === "free";
   const isAnual = ciclo === "anual";
-  const price = isFree ? null : PRICES[plan.id]?.[ciclo];
-  const monthlyEq = isFree ? null : monthlyEquivalent(plan.id, ciclo);
-  const ctaText = ctaLabel ?? (isFree
-    ? "Começar grátis"
-    : `Assinar por R$ ${formatPrice(monthlyEq)}/mês →`);
+  const price = PRICES[plan.id]?.[ciclo];
+  const monthlyEq = monthlyEquivalent(plan.id, ciclo);
 
   return (
     <div
@@ -470,30 +454,21 @@ function PlanCard({
       </div>
 
       <div className="mt-2">
-        {isFree ? (
-          <>
-            <div className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">R$ 0</div>
-            <div className="text-[12px] text-[#64748B] mt-1">pra sempre</div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-1">
-              <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
-                R$ {formatPrice(monthlyEq)}
-              </span>
-              <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
-            </div>
-            <div className="text-[12px] text-[#64748B] mt-1">
-              {isAnual
-                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
-                : "cobrado mensalmente"}
-            </div>
-            {isAnual && (
-              <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
-                economize 33% vs mensal
-              </span>
-            )}
-          </>
+        <div className="flex items-baseline gap-1">
+          <span className="font-display font-extrabold text-4xl text-[#0F172A] tabular leading-none">
+            R$ {formatPrice(monthlyEq)}
+          </span>
+          <span className="text-[13px] font-bold text-[#64748B]">/mês</span>
+        </div>
+        <div className="text-[12px] text-[#64748B] mt-1">
+          {isAnual
+            ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong> após o trial</>
+            : "cobrado mensalmente após o trial"}
+        </div>
+        {isAnual && (
+          <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
+            economize 33% vs mensal
+          </span>
         )}
       </div>
 
@@ -511,10 +486,10 @@ function PlanCard({
         onClick={onClick}
         disabled={disabled}
         className="mt-3 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-display font-extrabold text-white w-full disabled:opacity-60"
-        style={{ background: isFree ? "#6366F1" : "#F97316" }}
+        style={{ background: "#F97316" }}
       >
         {disabled ? <Loader2 className="w-4 h-4 animate-spin" /> : <CtaIcon className="w-4 h-4" />}
-        {ctaText}
+        Começar teste grátis →
       </button>
     </div>
   );
@@ -565,7 +540,6 @@ function passwordStrength(s) {
   if (!hasLetter) return { valid: false, label: "muito fraca", color: "#EF4444", pct: 25, hint: "precisa de pelo menos 1 letra" };
   if (!hasNumber) return { valid: false, label: "muito fraca", color: "#EF4444", pct: 25, hint: "precisa de pelo menos 1 número" };
 
-  // valid daqui pra baixo
   let score = 1;
   if (s.length >= 10) score++;
   if (hasMixCase) score++;

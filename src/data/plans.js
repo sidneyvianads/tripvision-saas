@@ -1,25 +1,17 @@
 // Planos comerciais do Viajjei SaaS — fonte única da verdade
 // Mudanças aqui se propagam pra Pricing, paywall, limites e webhooks.
+//
+// Modelo atual:
+//   - pending : conta criada, sem assinatura ativa (cadastrou mas não pagou ainda, ou cancelou+expirou)
+//   - pro     : assinatura Pro ativa
+//   - grupo   : assinatura Grupo ativa
+//   - owner   : interno, bypass total
+//   - free    : legado (usuários antigos). Trate como pending — read-only.
+//
+// Não existe mais plano gratuito comercial. Todo cadastro novo escolhe Pro ou Grupo
+// e recebe 7 dias de trial gerenciado pelo Mercado Pago.
 
 export const PLANS = {
-  free: {
-    id: "free",
-    nome: "Free",
-    icon: "🧳",
-    cor: "#6366F1",
-    tagline: "Pra experimentar",
-    features: [
-      "1 viagem",
-      "5 conversas por dia com o Jei",
-      "Editar roteiro manualmente",
-      "Checklist básico (5 itens)",
-    ],
-    excluidos: [
-      "Compartilhar com o grupo",
-      "Chat do grupo",
-      "Jei pesquisa preços reais",
-    ],
-  },
   pro: {
     id: "pro",
     nome: "Pro",
@@ -66,7 +58,7 @@ export const PLANS = {
       "Sem cobrança",
       "Bypass em todos os gates",
     ],
-    hidden: true, // sinal pra UI pública pular esse plano
+    hidden: true,
   },
 };
 
@@ -81,16 +73,21 @@ export const PRICES = {
   },
 };
 
-// Limites técnicos aplicados em runtime
+// Trial padrão em dias — Mercado Pago não cobra durante esse período.
+export const TRIAL_DAYS = 7;
+
+// Limites técnicos aplicados em runtime.
+// "expired" cobre: free (legado), pending (não assinou ainda), e usuários cuja assinatura caducou.
+// Sem acesso a Jei, sem criar viagem, sem chat — apenas leitura do que já existe.
 export const LIMITS = {
-  free: {
-    viagens: 1,
-    iaMsgsDia: 5,
-    iaMsgsMes: null,
+  expired: {
+    viagens: 0,           // não pode criar; pode listar/abrir o que já existe
+    iaMsgsDia: 0,
+    iaMsgsMes: 0,
     membros: 1,
-    checklist: 5,
+    checklist: 0,
     chat: false,
-    admin: true,
+    admin: false,
     pesquisa: false,
     compartilhar: false,
   },
@@ -129,24 +126,60 @@ export const LIMITS = {
   },
 };
 
+// Estados que NÃO têm assinatura ativa.
+const EXPIRED_STATES = new Set(["free", "pending", "expired", null, undefined]);
+
 export function getLimits(plano) {
-  return LIMITS[plano] ?? LIMITS.free;
+  if (LIMITS[plano]) return LIMITS[plano];
+  return LIMITS.expired;
 }
 
 export function planName(plano) {
-  return PLANS[plano]?.nome ?? "Free";
+  return PLANS[plano]?.nome ?? "—";
 }
 
 export function planIcon(plano) {
   return PLANS[plano]?.icon ?? "🧳";
 }
 
+// "Plano pago" = pro/grupo/owner E (owner OU assinatura não expirada).
+// Aceita o user inteiro pra checar plano_expires_at.
 export function isPaid(plano) {
   return plano === "pro" || plano === "grupo" || plano === "owner";
 }
 
 export function isOwner(plano) {
   return plano === "owner";
+}
+
+// Verifica se o usuário tem acesso pago efetivo (considera plano_expires_at).
+// Owner nunca expira. Free/pending nunca tem acesso.
+export function hasActiveAccess(user) {
+  if (!user) return false;
+  if (user.plano === "owner") return true;
+  if (EXPIRED_STATES.has(user.plano)) return false;
+  if (!user.plano_expires_at) return true; // sem data = trate como ativo
+  return new Date(user.plano_expires_at).getTime() > Date.now();
+}
+
+// Conta sem assinatura: precisa do upgrade pra liberar a maior parte do app.
+export function needsSubscription(user) {
+  if (!user) return false;
+  return !hasActiveAccess(user);
+}
+
+// Está em período de trial gratuito (7 dias)?
+export function isInTrial(user) {
+  if (!user?.trial_ends_at) return false;
+  return new Date(user.trial_ends_at).getTime() > Date.now();
+}
+
+// Dias restantes do trial (0 se já acabou ou não tem trial).
+export function trialDaysLeft(user) {
+  if (!user?.trial_ends_at) return 0;
+  const ms = new Date(user.trial_ends_at).getTime() - Date.now();
+  if (ms <= 0) return 0;
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
 // Formatação curta de preço pra cards / botões.

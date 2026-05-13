@@ -5,11 +5,19 @@ import { useAuth } from "../hooks/useAuth";
 import { useTrips } from "../hooks/useTrips";
 import { TEMAS, TEMA_KEYS, suggestTemaByCidades, getTema, emojiForCidade } from "../data/themes";
 import { temaCssVars } from "../lib/applyTema";
+import { needsSubscription } from "../data/plans";
 
 export default function NewTrip() {
   const { user } = useAuth();
   const { createTrip } = useTrips(user?.id);
   const navigate = useNavigate();
+
+  // Guarda: sem assinatura ativa não cria viagem
+  useEffect(() => {
+    if (needsSubscription(user)) {
+      navigate("/", { replace: true });
+    }
+  }, [user, navigate]);
 
   const [nome, setNome] = useState("");
   const [dataInicio, setDataInicio] = useState("");

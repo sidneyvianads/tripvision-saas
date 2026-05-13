@@ -2,13 +2,24 @@
 // Quando MERCADOPAGO_ACCESS_TOKEN não está configurado, retorna 503
 // com placeholder: true pra frontend mostrar "em breve" gracefully.
 //
-// Cupom de afiliado: se vier no body, valida em afiliados e codifica o
-// ID no external_reference (userId:plano:ciclo:afiliadoId). Webhook lê
-// e calcula a comissão depois.
+// Trial de 7 dias em todos os planos (MP não cobra durante esse período;
+// cobra automaticamente no dia 8 do ciclo).
+//
+// Cupom de afiliado: se vier no body, valida em afiliados e codifica o ID
+// no external_reference (userId:plano:ciclo:afiliadoId:descPct). Webhook
+// lê e calcula a comissão depois.
+//
+// Desconto: cada afiliado tem desconto_percent (0-50%). Quando aplicado, o
+// transaction_amount do preapproval é reduzido. Como MP não suporta "preço
+// diferente só no primeiro ciclo" nativamente, a redução vale enquanto o
+// preapproval estiver com esse valor — caso queiram restaurar pro valor
+// cheio depois do primeiro mês, usar PUT /preapproval/{id} com novo amount.
 
 const SITE_BASE = "https://viajjei.com.br";
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+
+const TRIAL_DAYS = 7;
 
 const PRICES = {
   pro: {
@@ -28,10 +39,14 @@ function jsonResponse(obj, status = 200) {
   });
 }
 
+function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
 async function fetchAfiliadoByCupom(cupom) {
   if (!cupom || !SUPABASE_URL || !SUPABASE_KEY) return null;
   try {
-    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/afiliados?cupom=ilike.${encodeURIComponent(cupom)}&ativo=eq.true&select=id,nome,cupom,comissao_percent`;
+    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/afiliados?cupom=ilike.${encodeURIComponent(cupom)}&ativo=eq.true&select=id,nome,cupom,comissao_percent,desconto_percent`;
     const res = await fetch(url, {
       headers: {
         apikey: SUPABASE_KEY,
@@ -63,8 +78,14 @@ export default async (req) => {
 
   // Valida cupom (best-effort — não bloqueia se DB falhar)
   const afiliado = cupom ? await fetchAfiliadoByCupom(cupom) : null;
+  const descontoPct = afiliado ? Number(afiliado.desconto_percent ?? 0) : 0;
+  const finalAmount = descontoPct > 0
+    ? round2(cfg.amount * (1 - descontoPct / 100))
+    : cfg.amount;
   if (cupom) {
-    console.log("[create-sub] cupom:", cupom, afiliado ? `→ afiliado ${afiliado.nome} (${afiliado.id})` : "→ inválido/não-encontrado");
+    console.log("[create-sub] cupom:", cupom, afiliado
+      ? `→ afiliado ${afiliado.nome} (${afiliado.id}), desconto ${descontoPct}%, valor ${finalAmount}`
+      : "→ inválido/não-encontrado");
   }
 
   // Placeholder mode — keys de produção ainda não configuradas
@@ -74,36 +95,43 @@ export default async (req) => {
       message: "Pagamento será habilitado em breve. Por enquanto, escreva pra sidney@grupomultvision.com pra liberar manualmente.",
       plano,
       ciclo,
-      amount: cfg.amount,
+      amount: finalAmount,
+      trial_days: TRIAL_DAYS,
     }, 503);
   }
 
-  // external_reference: "userId:plano:ciclo[:afiliadoId]"
+  // external_reference: "userId:plano:ciclo[:afiliadoId[:descPct]]"
   const externalRef = afiliado
-    ? `${userId}:${plano}:${ciclo}:${afiliado.id}`
+    ? `${userId}:${plano}:${ciclo}:${afiliado.id}:${descontoPct}`
     : `${userId}:${plano}:${ciclo}`;
 
   try {
+    const preapprovalBody = {
+      reason: cfg.reason,
+      external_reference: externalRef,
+      payer_email: userEmail,
+      back_url: `${SITE_BASE}/assinatura/sucesso`,
+      notification_url: `${SITE_BASE}/api/webhook-mp`,
+      auto_recurring: {
+        frequency: cfg.frequency,
+        frequency_type: cfg.type,
+        transaction_amount: finalAmount,
+        currency_id: "BRL",
+        free_trial: {
+          frequency: TRIAL_DAYS,
+          frequency_type: "days",
+        },
+      },
+      status: "pending",
+    };
+
     const res = await fetch("https://api.mercadopago.com/preapproval", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
       },
-      body: JSON.stringify({
-        reason: cfg.reason,
-        external_reference: externalRef,
-        payer_email: userEmail,
-        back_url: `${SITE_BASE}/assinatura/sucesso`,
-        notification_url: `${SITE_BASE}/api/webhook-mp`,
-        auto_recurring: {
-          frequency: cfg.frequency,
-          frequency_type: cfg.type,
-          transaction_amount: cfg.amount,
-          currency_id: "BRL",
-        },
-        status: "pending",
-      }),
+      body: JSON.stringify(preapprovalBody),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -114,7 +142,14 @@ export default async (req) => {
       preapproval_id: data.id,
       init_point: data.init_point,
       status: data.status,
-      cupom_aplicado: afiliado ? { nome: afiliado.nome, cupom: afiliado.cupom } : null,
+      trial_days: TRIAL_DAYS,
+      cupom_aplicado: afiliado ? {
+        nome: afiliado.nome,
+        cupom: afiliado.cupom,
+        desconto_percent: descontoPct,
+        valor_original: cfg.amount,
+        valor_com_desconto: finalAmount,
+      } : null,
     });
   } catch (err) {
     console.error("[create-subscription] fetch failed:", err);

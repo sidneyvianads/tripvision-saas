@@ -111,7 +111,7 @@ function Header({ onSignup, onLogin }) {
             className="text-sm font-display font-extrabold text-white px-4 py-2 rounded-full transition"
             style={{ background: "#F97316", boxShadow: "0 2px 8px rgba(249, 115, 22, 0.30)" }}
           >
-            Criar conta grátis
+            Teste grátis 7 dias
           </button>
         </div>
 
@@ -136,7 +136,7 @@ function Header({ onSignup, onLogin }) {
             className="block w-full text-center py-2.5 rounded-full text-white font-display font-extrabold"
             style={{ background: "#F97316" }}
           >
-            Criar conta grátis
+            Teste grátis 7 dias
           </button>
         </div>
       )}
@@ -184,12 +184,12 @@ function Hero({ onSignup }) {
                 boxShadow: "0 8px 24px rgba(249, 115, 22, 0.32)",
               }}
             >
-              Começar grátis <ArrowRight className="w-5 h-5" />
+              Teste grátis por 7 dias <ArrowRight className="w-5 h-5" />
             </button>
           </div>
 
           <p className="mt-3 text-[13px] text-[#94A3B8] font-display font-bold">
-            Sem cartão. Crie em 30 segundos.
+            Sem cobrança nos primeiros 7 dias. Cancele quando quiser.
           </p>
         </Reveal>
 
@@ -500,7 +500,7 @@ function PricingBlock({ onChoose }) {
         <h2 className="font-display font-extrabold text-[#0F172A]" style={{ fontSize: "clamp(28px, 4vw, 40px)" }}>
           Escolha seu plano
         </h2>
-        <p className="text-[#64748B] mt-3 text-base">Comece grátis. Cresça quando quiser.</p>
+        <p className="text-[#64748B] mt-3 text-base">Teste grátis por 7 dias. Cancele quando quiser.</p>
       </Reveal>
       <div className="max-w-5xl mx-auto">
         <PricingSection onChoose={onChoose} compact />
@@ -566,10 +566,10 @@ function CtaFinal({ onSignup }) {
               boxShadow: "0 12px 32px rgba(249, 115, 22, 0.32)",
             }}
           >
-            Criar conta grátis <ArrowRight className="w-5 h-5" />
+            Teste grátis por 7 dias <ArrowRight className="w-5 h-5" />
           </button>
           <p className="mt-3 text-[13px] text-[#94A3B8] font-display font-bold">
-            Sem cartão. Crie em 30 segundos.
+            Sem cobrança nos primeiros 7 dias. Cancele quando quiser.
           </p>
         </div>
       </Reveal>

@@ -8,7 +8,7 @@ import UpgradeModal from "../components/UpgradeModal";
 import PlanBadge from "../components/PlanBadge";
 import ConfirmModal from "../components/ConfirmModal";
 import ScrollToTop from "../components/ScrollToTop";
-import { getLimits, isPaid } from "../data/plans";
+import { getLimits, isPaid, hasActiveAccess, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
 import { getTema, emojiForCidade } from "../data/themes";
 
 const formatBR = (iso) => {
@@ -30,6 +30,9 @@ export default function MyTrips() {
   const limits = getLimits(user?.plano);
   const ownedCount = trips.filter((t) => t.owner_id === user?.id).length;
   const atTripLimit = ownedCount >= limits.viagens;
+  const noSub = needsSubscription(user);
+  const inTrial = isInTrial(user);
+  const trialLeft = trialDaysLeft(user);
 
   const handleLogout = () => {
     if (!confirm("Sair? Sua sessão será encerrada nesse navegador.")) return;
@@ -98,6 +101,39 @@ export default function MyTrips() {
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 py-4 pb-24">
+        {/* Banner: conta sem assinatura ativa (pending/expired/free legado) */}
+        {noSub && (
+          <div
+            className="mb-3 rounded-2xl px-4 py-3 flex items-start gap-3"
+            style={{ background: "linear-gradient(135deg, #FEF3C7, #FDE68A)", border: "1px solid #F59E0B" }}
+          >
+            <Sparkles className="w-5 h-5 mt-0.5 shrink-0 text-[#92400E]" />
+            <div className="flex-1 min-w-0">
+              <div className="font-display font-extrabold text-[#92400E] text-sm">
+                Assine pra continuar planejando!
+              </div>
+              <div className="text-[12px] text-[#92400E]/85 mt-0.5">
+                7 dias grátis. Cancele quando quiser. Suas viagens ficam disponíveis em modo leitura.
+              </div>
+            </div>
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="btn-primary !py-2 !px-3 text-xs whitespace-nowrap"
+            >
+              Começar grátis →
+            </button>
+          </div>
+        )}
+
+        {/* Banner: trial em andamento */}
+        {!noSub && inTrial && trialLeft > 0 && (
+          <div className="mb-3 rounded-xl px-3 py-2 flex items-center gap-2 text-[12px] font-display font-bold"
+               style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}>
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Trial ativo — {trialLeft} {trialLeft === 1 ? "dia restante" : "dias restantes"}. Aproveite o Jei sem limites!</span>
+          </div>
+        )}
+
         {showSearch && (
           <div className="mb-3 relative">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF] pointer-events-none" />
@@ -218,22 +254,19 @@ export default function MyTrips() {
       </main>
 
       <button
-        onClick={() => atTripLimit ? setShowUpgrade(true) : navigate("/v/new")}
+        onClick={() => (noSub || atTripLimit) ? setShowUpgrade(true) : navigate("/v/new")}
         className="fixed bottom-6 right-6 z-30 btn-primary !px-5 !py-3 inline-flex items-center gap-2 rounded-full shadow-pop"
       >
-        {atTripLimit ? <Sparkles className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-        {atTripLimit ? "Liberar mais viagens" : "Nova viagem"}
+        {(noSub || atTripLimit) ? <Sparkles className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+        {noSub ? "Assinar" : atTripLimit ? "Liberar mais viagens" : "Nova viagem"}
       </button>
 
-      {!isPaid(user?.plano) && trips.length > 0 && (
-        <div className="fixed bottom-6 left-6 z-30 hidden sm:block">
-          <div className="rounded-2xl px-3 py-2 text-[11px] font-display font-bold bg-white border border-[#E5E7EB] text-[#6B7280] shadow-soft">
-            {ownedCount} / {limits.viagens} viagens · plano Free
-          </div>
-        </div>
-      )}
-
-      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="viagens" user={user} />
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        reason={noSub ? "expirado" : "viagens"}
+        user={user}
+      />
 
       <ScrollToTop />
 
