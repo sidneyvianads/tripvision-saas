@@ -46,6 +46,15 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
             <div className="font-display font-extrabold text-lg leading-tight truncate flex items-center gap-2">
               <span className="truncate">{trip.nome}</span>
               <PlanBadge plano={user?.plano} />
+              {trip.viaje_segura && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-display font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap"
+                  style={{ background: "rgba(255,255,255,0.18)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.35)" }}
+                  title="Viaje Segura ativado"
+                >
+                  🛡️ Viaje Segura
+                </span>
+              )}
             </div>
             <div className="text-[#7CB9E8] text-xs truncate font-display font-bold">
               {trip.cidades?.length ? trip.cidades.slice(0, 3).join(" · ") : "—"}

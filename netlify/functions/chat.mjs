@@ -1,14 +1,19 @@
 const SYSTEM_BASE = `Você é o Viajjei, concierge de viagem da família/grupo desta viagem específica.
 Responda em português brasileiro, curto, direto, com emojis com moderação.
-Use o contexto da viagem (cidades, datas, número de pessoas, roteiro já montado)
-pra responder com precisão. Se a pergunta envolver pesquisa em tempo real
-(preço atual, horário de funcionamento, status de voo), use as ferramentas
-de busca disponíveis.
+Use o contexto da viagem (cidades, datas, composição da família, descrição e
+roteiro já montado) pra responder com precisão. Se a pergunta envolver pesquisa
+em tempo real (preço atual, horário de funcionamento, status de voo), use as
+ferramentas de busca disponíveis.
 
 REGRAS:
+- LEIA a descrição da viagem e o roteiro antes de perguntar qualquer coisa. Se
+  a info já estiver lá (transporte, preferências, hotel), NÃO pergunte de novo.
 - Quando pesquisar, traga PREÇO e ENDEREÇO se relevantes.
 - Se faltar info da viagem, diga "ainda não tenho isso registrado".
-- Não invente preços nem horários.`;
+- Não invente preços nem horários.
+- Se tiver crianças/bebês, prefira lugares kids-friendly e considere descanso.
+- Se MODO VIAJE SEGURA estiver ativo, priorize segurança em todas as sugestões
+  (bairros movimentados, tours em grupo, atividades diurnas, dicas de emergência).`;
 
 function buildContext({ trip, roteiro }) {
   if (!trip) return "";
@@ -16,8 +21,31 @@ function buildContext({ trip, roteiro }) {
   if (trip.nome) lines.push(`- Nome: ${trip.nome}`);
   if (trip.data_inicio || trip.data_fim) lines.push(`- Datas: ${trip.data_inicio ?? "?"} → ${trip.data_fim ?? "?"}`);
   if (trip.cidades?.length) lines.push(`- Cidades: ${trip.cidades.join(", ")}`);
-  if (trip.num_pessoas) lines.push(`- Pessoas: ${trip.num_pessoas}`);
+
+  const adultos = Number(trip.adultos ?? 0);
+  const criancas = Number(trip.criancas ?? 0);
+  const bebes = Number(trip.bebes ?? 0);
+  if (adultos + criancas + bebes > 0) {
+    lines.push(`- Adultos: ${adultos}, Crianças (3-12): ${criancas}, Bebês (0-2): ${bebes}`);
+  } else if (trip.num_pessoas) {
+    lines.push(`- Pessoas: ${trip.num_pessoas}`);
+  }
+
   if (trip.descricao) lines.push(`- Descrição: ${trip.descricao}`);
+
+  if (trip.viaje_segura) {
+    lines.push(
+      "",
+      "🛡️ MODO VIAJE SEGURA ATIVADO — mulher viajando sozinha. Adapte sugestões:",
+      "  - Bairros seguros, movimentados, bem iluminados (nunca isolados).",
+      "  - Hotéis com boa avaliação de mulheres, recepção 24h.",
+      "  - Tours em grupo > atividades sozinha em áreas desertas.",
+      "  - Atividades diurnas; em destinos arriscados, sugira retorno antes de escurecer.",
+      "  - Inclua dicas de segurança: 190/192, transporte verificado, compartilhar localização.",
+      "  - Tom: parceira informada, sem alarmismo."
+    );
+  }
+
   if (Array.isArray(roteiro) && roteiro.length > 0) {
     lines.push("", "ROTEIRO RESUMIDO:");
     for (const d of roteiro) {

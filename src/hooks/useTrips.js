@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, randomSlug } from "../lib/supabase";
 
-const TRIP_COLS = "id, owner_id, nome, slug, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema, tema, created_at";
+const TRIP_COLS = "id, owner_id, nome, slug, data_inicio, data_fim, cidades, num_pessoas, adultos, criancas, bebes, viaje_segura, descricao, cover_emoji, cor_tema, tema, created_at";
 
 export function useTrips(userId) {
   const [trips, setTrips] = useState([]);
@@ -34,7 +34,12 @@ export function useTrips(userId) {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const createTrip = useCallback(async ({ nome, data_inicio, data_fim, cidades, num_pessoas, descricao, cover_emoji, cor_tema, tema }) => {
+  const createTrip = useCallback(async ({
+    nome, data_inicio, data_fim, cidades, descricao,
+    adultos, criancas, bebes, viaje_segura,
+    num_pessoas, // mantido pra retrocompat: se vier sem breakdown, usa esse total
+    cover_emoji, cor_tema, tema,
+  }) => {
     if (!userId) throw new Error("Não logado.");
     let slug;
     for (let i = 0; i < 5; i++) {
@@ -42,6 +47,12 @@ export function useTrips(userId) {
       const { data: existing } = await supabase.from("viagens").select("id").eq("slug", slug).maybeSingle();
       if (!existing) break;
     }
+    const ad = Math.max(0, Number(adultos ?? 0));
+    const cr = Math.max(0, Number(criancas ?? 0));
+    const be = Math.max(0, Number(bebes ?? 0));
+    // num_pessoas é total calculado pra retrocompat com PDF/cards antigos
+    const total = ad + cr + be > 0 ? ad + cr + be : (num_pessoas ? Number(num_pessoas) : null);
+
     const { data, error } = await supabase
       .from("viagens")
       .insert({
@@ -51,13 +62,17 @@ export function useTrips(userId) {
         data_inicio: data_inicio || null,
         data_fim: data_fim || null,
         cidades: Array.isArray(cidades) ? cidades.map((c) => c.trim()).filter(Boolean) : [],
-        num_pessoas: num_pessoas ? Number(num_pessoas) : null,
+        adultos: ad,
+        criancas: cr,
+        bebes: be,
+        viaje_segura: !!viaje_segura,
+        num_pessoas: total,
         descricao: descricao?.trim() || null,
         cover_emoji: cover_emoji ?? "🧳",
         cor_tema: cor_tema ?? "#6366F1",
         tema: tema ?? "cidade",
       })
-      .select(TRIP_COLS + ", tema")
+      .select(TRIP_COLS)
       .single();
     if (error) throw new Error(error.message);
     await reload();

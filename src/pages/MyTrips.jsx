@@ -10,6 +10,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import ScrollToTop from "../components/ScrollToTop";
 import Logo from "../components/Logo";
 import { getLimits, isPaid, hasActiveAccess, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
+import { describePessoas } from "../lib/roteiroResumo";
 import { getTema, emojiForCidade } from "../data/themes";
 
 const formatBR = (iso) => {
@@ -229,8 +230,15 @@ export default function MyTrips() {
                       {trip.cidades?.length > 0 && (
                         <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{trip.cidades.slice(0, 2).join(", ")}{trip.cidades.length > 2 ? "…" : ""}</span>
                       )}
-                      {trip.num_pessoas && (
-                        <span className="inline-flex items-center gap-1"><Users className="w-3 h-3" />{trip.num_pessoas}</span>
+                      <TripPeopleBadge trip={trip} />
+                      {trip.viaje_segura && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 rounded-full text-[10px] font-display font-extrabold"
+                          style={{ background: "#FDF4FF", color: "#9333EA", border: "1px solid #E9D5FF" }}
+                          title="Modo Viaje Segura"
+                        >
+                          🛡️ Viaje Segura
+                        </span>
                       )}
                     </div>
                   </div>
@@ -280,4 +288,10 @@ export default function MyTrips() {
       />
     </div>
   );
+}
+
+function TripPeopleBadge({ trip }) {
+  const txt = describePessoas(trip);
+  if (!txt) return null;
+  return <span className="inline-flex items-center gap-1">{txt}</span>;
 }

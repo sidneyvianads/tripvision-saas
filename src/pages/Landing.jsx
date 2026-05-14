@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Sparkles, MessageSquare, Search, CalendarCheck, MessageCircle,
-  CheckSquare, Camera, Share2, ArrowRight, Menu, X,
+  CheckSquare, Camera, Share2, ArrowRight, Menu, X, Shield,
 } from "lucide-react";
 import PricingSection from "../components/PricingSection";
 import Logo from "../components/Logo";
@@ -404,6 +404,7 @@ function Features() {
   const items = [
     { Icon: Sparkles,      title: "Planeje com o Jei",    desc: "Fale o que quer. O Jei sugere, pesquisa e monta." },
     { Icon: CalendarCheck, title: "Roteiro automático",   desc: "Seu roteiro se monta sozinho, dia a dia." },
+    { Icon: Shield,        title: "🛡️ Viaje Segura",       desc: "Modo especial pra mulheres viajando sozinhas. O Jei sugere bairros seguros, passeios em grupo e dicas de segurança.", highlight: true },
     { Icon: MessageCircle, title: "Chat do grupo",        desc: "Todo mundo conversa e se organiza no app." },
     { Icon: CheckSquare,   title: "Lista de pendências",  desc: "Quem compra ingresso? Quem reserva mesa? Tudo organizado." },
     { Icon: Camera,        title: "Diário da viagem",     desc: "Fotos e memórias de cada dia, compartilhadas com o grupo." },
@@ -423,14 +424,18 @@ function Features() {
           {items.map((f, i) => (
             <Reveal key={f.title} delay={(i % 3) * 80}>
               <div
-                className="bg-white rounded-2xl p-6 h-full transition-all hover:-translate-y-1"
-                style={{ border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)" }}
+                className="rounded-2xl p-6 h-full transition-all hover:-translate-y-1"
+                style={{
+                  background: f.highlight ? "linear-gradient(135deg, #FDF4FF 0%, #FAE8FF 100%)" : "white",
+                  border: f.highlight ? "1.5px solid #E9D5FF" : "1px solid #E2E8F0",
+                  boxShadow: f.highlight ? "0 8px 24px rgba(217, 70, 239, 0.12)" : "0 1px 3px rgba(15, 23, 42, 0.06)",
+                }}
               >
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center"
-                  style={{ background: "#FFF7ED" }}
+                  style={{ background: f.highlight ? "rgba(190, 24, 93, 0.12)" : "#FFF7ED" }}
                 >
-                  <f.Icon className="w-6 h-6" strokeWidth={1.8} style={{ color: "#EA580C" }} />
+                  <f.Icon className="w-6 h-6" strokeWidth={1.8} style={{ color: f.highlight ? "#BE185D" : "#EA580C" }} />
                 </div>
                 <div className="font-display font-extrabold text-[#0F172A] mt-4">{f.title}</div>
                 <p className="text-[#64748B] text-sm mt-1.5 leading-relaxed">{f.desc}</p>

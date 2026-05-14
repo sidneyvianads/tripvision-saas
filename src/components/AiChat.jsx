@@ -41,6 +41,10 @@ export default function AiChat({ trip, days, user }) {
             data_fim: trip?.data_fim,
             cidades: trip?.cidades,
             num_pessoas: trip?.num_pessoas,
+            adultos: trip?.adultos,
+            criancas: trip?.criancas,
+            bebes: trip?.bebes,
+            viaje_segura: trip?.viaje_segura,
             descricao: trip?.descricao,
           },
           roteiro: (days ?? []).map((d) => ({

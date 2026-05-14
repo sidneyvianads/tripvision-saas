@@ -5,6 +5,7 @@ import { useTrip } from "../hooks/useTrips";
 import { temaCssVars } from "../lib/applyTema";
 import { getTema } from "../data/themes";
 import { FullscreenLoader } from "../App";
+import { describePessoas } from "../lib/roteiroResumo";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -51,7 +52,8 @@ export default function ChooseFlow() {
             {(trip.data_inicio || trip.data_fim) && (
               <span>🗓️ {formatBR(trip.data_inicio)} → {formatBR(trip.data_fim)}</span>
             )}
-            {trip.num_pessoas && <span>👥 {trip.num_pessoas}</span>}
+            {describePessoas(trip) && <span>{describePessoas(trip)}</span>}
+            {trip.viaje_segura && <span>🛡️ Viaje Segura</span>}
           </div>
         </div>
 

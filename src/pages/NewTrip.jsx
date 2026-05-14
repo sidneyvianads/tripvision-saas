@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Loader2, Save, Plus, X, Minus } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Plus, X, Minus, Shield } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrips } from "../hooks/useTrips";
 import { TEMAS, TEMA_KEYS, suggestTemaByCidades, getTema, emojiForCidade } from "../data/themes";
@@ -24,12 +24,29 @@ export default function NewTrip() {
   const [dataFim, setDataFim] = useState("");
   const [cidadeInput, setCidadeInput] = useState("");
   const [cidades, setCidades] = useState([]);
-  const [numPessoas, setNumPessoas] = useState(2);
+  const [adultos, setAdultos] = useState(2);
+  const [criancas, setCriancas] = useState(0);
+  const [bebes, setBebes] = useState(0);
+  const [viajeSegura, setViajeSegura] = useState(false);
+  // soloAsked: usuário já respondeu o prompt "Viajando solo?" — evita re-perguntar
+  const [soloAsked, setSoloAsked] = useState(false);
   const [descricao, setDescricao] = useState("");
   const [temaId, setTemaId] = useState("cidade");
   const [temaTouched, setTemaTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  const totalPessoas = adultos + criancas + bebes;
+  // Mostra o prompt solo enquanto for 1 adulto sem crianças/bebês e o user ainda não respondeu
+  const showSoloPrompt = adultos === 1 && criancas === 0 && bebes === 0 && !soloAsked;
+
+  // Se a composição mudar pra mais de 1 pessoa, reseta a flag de Viaje Segura
+  // (ele é específico pra viagem solo)
+  useEffect(() => {
+    if (totalPessoas > 1 && viajeSegura) setViajeSegura(false);
+    if (totalPessoas > 1 && soloAsked) setSoloAsked(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPessoas]);
 
   const addCidade = () => {
     const c = cidadeInput.trim();
@@ -63,6 +80,7 @@ export default function NewTrip() {
     e.preventDefault();
     if (!nome.trim()) return setErr("Dê um nome pra sua viagem.");
     if (dataInicio && dataFim && dataFim < dataInicio) return setErr("Data fim antes da data início.");
+    if (adultos < 1) return setErr("Pelo menos 1 adulto na viagem.");
     setBusy(true);
     setErr(null);
     try {
@@ -71,7 +89,10 @@ export default function NewTrip() {
         data_inicio: dataInicio,
         data_fim: dataFim,
         cidades,
-        num_pessoas: numPessoas ? Number(numPessoas) : null,
+        adultos,
+        criancas,
+        bebes,
+        viaje_segura: viajeSegura,
         descricao,
         cover_emoji: emojiForCidade(cidades[0]) ?? tema.emoji,
         cor_tema: tema.accent,
@@ -161,9 +182,95 @@ export default function NewTrip() {
               )}
             </Field>
 
-            <Field label="Pessoas">
-              <Stepper value={numPessoas} onChange={setNumPessoas} min={1} max={50} />
-            </Field>
+            <div>
+              <div className="text-xs font-display font-bold text-[#6B7280] mb-2">Quem vai?</div>
+              <div className="space-y-2.5">
+                <PeopleRow
+                  emoji="👥"
+                  label="Adultos"
+                  hint="13 anos ou mais"
+                  value={adultos}
+                  onChange={setAdultos}
+                  min={1}
+                  max={30}
+                />
+                <PeopleRow
+                  emoji="👧"
+                  label="Crianças"
+                  hint="3 a 12 anos"
+                  value={criancas}
+                  onChange={setCriancas}
+                  min={0}
+                  max={20}
+                />
+                <PeopleRow
+                  emoji="👶"
+                  label="Bebês"
+                  hint="até 2 anos"
+                  value={bebes}
+                  onChange={setBebes}
+                  min={0}
+                  max={10}
+                />
+              </div>
+
+              {/* Prompt Viaje Segura: aparece quando é 1 adulto sem crianças/bebês */}
+              {showSoloPrompt && (
+                <div className="mt-3 rounded-2xl p-4 animate-pop"
+                     style={{ background: "linear-gradient(135deg, #FDF4FF 0%, #FAE8FF 100%)", border: "1.5px solid #E9D5FF" }}>
+                  <div className="font-display font-extrabold text-[#581C87] text-sm">
+                    Viajando solo? 🌟
+                  </div>
+                  <div className="text-[#7C3AED]/85 text-[12px] mt-1">
+                    Pra te dar dicas mais relevantes, conta pra mim:
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => { setViajeSegura(true); setSoloAsked(true); }}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-display font-extrabold text-sm text-white transition active:scale-[0.98]"
+                      style={{ background: "linear-gradient(135deg, #DB2777 0%, #BE185D 100%)", boxShadow: "0 4px 12px rgba(219, 39, 119, 0.35)" }}
+                    >
+                      <Shield className="w-4 h-4" /> Sim, sou mulher
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setViajeSegura(false); setSoloAsked(true); }}
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F8FAFC]"
+                      style={{ borderColor: "#E2E8F0", color: "#0F172A", background: "white" }}
+                    >
+                      Sim, sou homem
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setViajeSegura(false); setSoloAsked(true); }}
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2.5 rounded-xl font-display font-bold text-xs text-[#64748B] hover:text-[#0F172A] transition"
+                    >
+                      Prefiro não dizer
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirmação Viaje Segura ativo */}
+              {viajeSegura && !showSoloPrompt && (
+                <div className="mt-3 rounded-xl px-3 py-2.5 flex items-center gap-2"
+                     style={{ background: "linear-gradient(135deg, #FDF4FF 0%, #FAE8FF 100%)", border: "1px solid #E9D5FF" }}>
+                  <Shield className="w-4 h-4 text-[#BE185D] shrink-0" />
+                  <div className="flex-1 min-w-0 text-[12px] text-[#581C87] font-display font-bold">
+                    🛡️ Viaje Segura ativado — o Jei vai priorizar segurança em todas as sugestões
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViajeSegura(false)}
+                    className="text-[11px] text-[#7C3AED] hover:underline font-display font-bold"
+                    aria-label="Desativar"
+                  >
+                    desativar
+                  </button>
+                </div>
+              )}
+            </div>
 
             <Field label="Descrição (opcional)">
               <textarea
@@ -235,6 +342,19 @@ function Field({ label, required, children }) {
       </span>
       <div className="mt-1">{children}</div>
     </label>
+  );
+}
+
+function PeopleRow({ emoji, label, hint, value, onChange, min, max }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-[#F8FAFC] px-3 py-2">
+      <span className="text-2xl" aria-hidden="true">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="font-display font-extrabold text-[#0F172A] text-sm leading-tight">{label}</div>
+        <div className="text-[11px] text-[#64748B]">{hint}</div>
+      </div>
+      <Stepper value={value} onChange={onChange} min={min} max={max} />
+    </div>
   );
 }
 

@@ -31,6 +31,23 @@ export function buildRoteiroResumo(days) {
   }).join("\n\n");
 }
 
+// Compõe "👥 2 adultos · 👧 1 criança · 👶 1 bebê" a partir dos campos novos,
+// caindo pra "👥 N pessoas" se a viagem ainda não tiver breakdown.
+export function describePessoas(viagem) {
+  const ad = Number(viagem?.adultos ?? 0);
+  const cr = Number(viagem?.criancas ?? 0);
+  const be = Number(viagem?.bebes ?? 0);
+  const parts = [];
+  if (ad > 0) parts.push(`👥 ${ad} ${ad === 1 ? "adulto" : "adultos"}`);
+  if (cr > 0) parts.push(`👧 ${cr} ${cr === 1 ? "criança" : "crianças"}`);
+  if (be > 0) parts.push(`👶 ${be} ${be === 1 ? "bebê" : "bebês"}`);
+  if (parts.length) return parts.join(" · ");
+  if (viagem?.num_pessoas) {
+    return `👥 ${viagem.num_pessoas} ${viagem.num_pessoas === 1 ? "pessoa" : "pessoas"}`;
+  }
+  return null;
+}
+
 export function buildWelcomeMessage(viagem) {
   const fmt = (iso) => {
     if (!iso) return null;
@@ -45,10 +62,18 @@ export function buildWelcomeMessage(viagem) {
   const ini = fmt(viagem?.data_inicio);
   const fim = fmt(viagem?.data_fim);
   if (ini || fim) facts.push(`🗓️ ${ini ?? "?"} → ${fim ?? "?"}`);
-  if (viagem?.num_pessoas) facts.push(`👥 ${viagem.num_pessoas} ${viagem.num_pessoas === 1 ? "pessoa" : "pessoas"}`);
+  const pessoas = describePessoas(viagem);
+  if (pessoas) facts.push(pessoas);
+  if (viagem?.viaje_segura) facts.push("🛡️ Viaje Segura");
 
   if (facts.length) {
     out += "Vi que vocês vão pra:\n" + facts.join(" · ") + "\n\n";
+  }
+
+  // Eco da descrição (mostra que prestei atenção)
+  if (viagem?.descricao?.trim()) {
+    const desc = viagem.descricao.trim();
+    out += `Anotei o que você me contou: _"${desc.length > 220 ? desc.slice(0, 220) + "…" : desc}"_\n\n`;
   }
 
   out += "Me conta como vocês querem viajar que eu cuido de tudo — ";

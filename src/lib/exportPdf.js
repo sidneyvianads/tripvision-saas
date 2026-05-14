@@ -15,11 +15,24 @@ const fmtDate = (iso) => {
   catch { return iso; }
 };
 
+function describePessoasPdf(trip) {
+  const ad = Number(trip.adultos ?? 0);
+  const cr = Number(trip.criancas ?? 0);
+  const be = Number(trip.bebes ?? 0);
+  const parts = [];
+  if (ad > 0) parts.push(`${ad} ${ad === 1 ? "adulto" : "adultos"}`);
+  if (cr > 0) parts.push(`${cr} ${cr === 1 ? "criança" : "crianças"}`);
+  if (be > 0) parts.push(`${be} ${be === 1 ? "bebê" : "bebês"}`);
+  if (parts.length) return parts.join(", ");
+  return trip.num_pessoas ? `${trip.num_pessoas} pessoas` : null;
+}
+
 function buildHtml(trip, days, contatos, tema) {
   const cidades = (trip.cidades ?? []).join(" · ") || "—";
   const datas = trip.data_inicio
     ? `${fmtDate(trip.data_inicio)}${trip.data_fim ? " → " + fmtDate(trip.data_fim) : ""}`
     : "";
+  const pessoasTxt = describePessoasPdf(trip);
 
   const diasHtml = (days ?? []).map((d) => {
     const ats = (d.atividades ?? []).map((a) => {
@@ -73,7 +86,7 @@ function buildHtml(trip, days, contatos, tema) {
           <span>${trip.cover_emoji ?? "🧳"}</span><span>${escapeHtml(trip.nome ?? "")}</span>
         </div>
         <div style="font-size:13px;opacity:0.92;margin-top:6px;">${escapeHtml(cidades)}</div>
-        ${datas ? `<div style="font-size:13px;opacity:0.92;margin-top:2px;">${escapeHtml(datas)}${trip.num_pessoas ? " · " + trip.num_pessoas + " pessoas" : ""}</div>` : ""}
+        ${datas ? `<div style="font-size:13px;opacity:0.92;margin-top:2px;">${escapeHtml(datas)}${pessoasTxt ? " · " + escapeHtml(pessoasTxt) : ""}${trip.viaje_segura ? " · 🛡️ Viaje Segura" : ""}</div>` : ""}
       </header>
 
       <main>${diasHtml}</main>
