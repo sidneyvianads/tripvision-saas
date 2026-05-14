@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Share2, Users, LogOut, Shield, UserCircle, Lock, BookUser } from "lucide-react";
+import {
+  ArrowLeft, Share2, Users, LogOut, Shield, UserCircle, Lock,
+  BookUser, MoreHorizontal,
+} from "lucide-react";
 import Avatar from "./Avatar";
 import People from "./People";
 import Profile from "./Profile";
@@ -19,6 +22,8 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   const [shareOpen, setShareOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const limits = getLimits(user?.plano);
   const canShare = limits.compartilhar === true;
@@ -28,8 +33,34 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
     setShareOpen(true);
   };
 
+  // Fecha o menu mobile ao clicar fora ou apertar Esc
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+    document.addEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   const tema = getTema(trip.tema);
-  console.log("[TripLayout] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
+
+  // Ações disponíveis. Renderizadas inline no desktop e como itens de
+  // menu dropdown no mobile (≤ md / 768px). Inclui apenas os botões
+  // que valem como "ação" — voltar e avatar ficam fora.
+  const actions = [
+    isAdmin && { key: "admin", label: "Admin", icon: Shield, onClick: () => navigate(`/v/${trip.slug}/admin`), badge: null },
+    { key: "people", label: "Quem vai", icon: Users, onClick: () => setPeopleOpen(true) },
+    { key: "contatos", label: "Contatos", icon: BookUser, onClick: () => setContatosOpen(true) },
+    { key: "share", label: canShare ? "Compartilhar" : "Compartilhar (Pro)", icon: Share2, onClick: handleShare, lockedPro: !canShare },
+    { key: "conta", label: "Minha conta", icon: UserCircle, to: "/conta" },
+    onLogout && { key: "logout", label: "Sair", icon: LogOut, onClick: onLogout, danger: true },
+  ].filter(Boolean);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
@@ -37,94 +68,116 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
         className="text-white safe-top relative overflow-hidden"
         style={{ background: tema.gradient }}
       >
-        <div className="px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
-          <Link to="/" className="rounded-full bg-white/15 hover:bg-white/25 p-2" aria-label="Voltar">
+        <div className="px-3 sm:px-4 pt-4 pb-5 flex items-center gap-2 relative z-10">
+          <Link to="/" className="rounded-full bg-white/15 hover:bg-white/25 p-2 shrink-0" aria-label="Voltar">
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div className="text-2xl">{trip.cover_emoji ?? "🧳"}</div>
+          <div className="text-xl sm:text-2xl shrink-0">{trip.cover_emoji ?? "🧳"}</div>
           <div className="flex-1 min-w-0">
-            <div className="font-display font-extrabold text-lg leading-tight truncate flex items-center gap-2">
+            <div className="font-display font-extrabold text-base sm:text-lg leading-tight flex items-center gap-1.5 sm:gap-2">
               <span className="truncate">{trip.nome}</span>
-              <PlanBadge plano={user?.plano} />
+              {/* Badges escondidos no mobile pra liberar espaço — só desktop */}
+              <span className="hidden md:inline-flex">
+                <PlanBadge plano={user?.plano} />
+              </span>
               {trip.viaje_segura && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-display font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap"
-                  style={{ background: "rgba(255,255,255,0.18)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.35)" }}
-                  title="Viaje Segura ativado"
-                >
-                  🛡️ Viaje Segura
-                </span>
+                <>
+                  {/* Mobile: bolinha emoji compacta */}
+                  <span
+                    className="md:hidden inline-flex items-center justify-center w-5 h-5 rounded-full shrink-0"
+                    style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.35)" }}
+                    title="Viaje Segura ativado"
+                    aria-label="Viaje Segura"
+                  >
+                    <span className="text-[11px]">🛡️</span>
+                  </span>
+                  {/* Desktop: badge completa */}
+                  <span
+                    className="hidden md:inline-flex items-center gap-1 text-[10px] font-display font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap"
+                    style={{ background: "rgba(255,255,255,0.18)", color: "#FFFFFF", border: "1px solid rgba(255,255,255,0.35)" }}
+                    title="Viaje Segura ativado"
+                  >
+                    🛡️ Viaje Segura
+                  </span>
+                </>
               )}
             </div>
-            <div className="text-[#7CB9E8] text-xs truncate font-display font-bold">
+            <div className="text-white/75 text-[11px] sm:text-xs truncate font-display font-bold">
               {trip.cidades?.length ? trip.cidades.slice(0, 3).join(" · ") : "—"}
             </div>
           </div>
 
-          {isAdmin && (
+          {/* DESKTOP: botões inline */}
+          {actions.map((a) => {
+            const Icon = a.icon;
+            const className = "hidden md:inline-flex rounded-full bg-white/15 hover:bg-white/25 transition p-2 relative shrink-0";
+            return a.to ? (
+              <Link key={a.key} to={a.to} className={className} aria-label={a.label} title={a.label}>
+                <Icon className="w-4 h-4" />
+              </Link>
+            ) : (
+              <button key={a.key} onClick={a.onClick} className={className} aria-label={a.label} title={a.label}>
+                <Icon className="w-4 h-4" />
+                {a.lockedPro && (
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center"
+                    style={{ background: "#F59E0B", boxShadow: "0 0 0 1.5px rgba(0,0,0,0.20)" }}
+                  >
+                    <Lock className="w-2 h-2 text-white" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          {/* MOBILE: dropdown "⋯" no lugar dos botões */}
+          <div className="md:hidden relative shrink-0" ref={menuRef}>
             <button
-              onClick={() => navigate(`/v/${trip.slug}/admin`)}
+              onClick={() => setMenuOpen((v) => !v)}
               className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-              aria-label="Admin"
-              title="Admin"
+              aria-label="Mais opções"
+              aria-expanded={menuOpen}
             >
-              <Shield className="w-4 h-4" />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
-          )}
-          <button
-            onClick={() => setPeopleOpen(true)}
-            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-            aria-label="Quem vai"
-            title="Quem vai"
-          >
-            <Users className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setContatosOpen(true)}
-            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-            aria-label="Contatos da viagem"
-            title="Contatos"
-          >
-            <BookUser className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleShare}
-            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2 relative"
-            aria-label={canShare ? "Compartilhar" : "Compartilhar (Pro)"}
-            title={canShare ? "Compartilhar" : "Compartilhar é Pro"}
-          >
-            <Share2 className="w-4 h-4" />
-            {!canShare && (
-              <span
-                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center"
-                style={{ background: "#F59E0B", boxShadow: "0 0 0 1.5px rgba(0,0,0,0.20)" }}
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-12 min-w-[200px] rounded-xl overflow-hidden animate-pop z-30"
+                style={{ background: "white", boxShadow: "0 12px 32px rgba(15, 23, 42, 0.20)", border: "1px solid #E2E8F0" }}
               >
-                <Lock className="w-2 h-2 text-white" />
-              </span>
+                {actions.map((a, i) => {
+                  const Icon = a.icon;
+                  const isLast = i === actions.length - 1;
+                  const itemClass = `w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-display font-bold text-left transition ${a.danger ? "text-red-600 hover:bg-red-50" : "text-[#0F172A] hover:bg-[#F8FAFC]"} ${isLast ? "" : "border-b border-[#F1F5F9]"}`;
+                  const close = () => setMenuOpen(false);
+                  return a.to ? (
+                    <Link key={a.key} to={a.to} className={itemClass} onClick={close} role="menuitem">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 truncate">{a.label}</span>
+                      {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                    </Link>
+                  ) : (
+                    <button
+                      key={a.key}
+                      onClick={() => { close(); a.onClick(); }}
+                      className={itemClass}
+                      role="menuitem"
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="flex-1 truncate">{a.label}</span>
+                      {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </button>
-          <Link
-            to="/conta"
-            className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-            aria-label="Minha conta"
-            title="Minha conta"
-          >
-            <UserCircle className="w-4 h-4" />
-          </Link>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-              aria-label="Sair"
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
+          </div>
+
           {user && (
             <button
               onClick={() => setProfileOpen(true)}
-              className="rounded-full transition active:scale-95"
+              className="rounded-full transition active:scale-95 shrink-0"
               style={{ boxShadow: "0 0 0 2px rgba(255,255,255,0.45)" }}
               aria-label="Editar perfil"
             >
@@ -134,7 +187,7 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
         </div>
 
         {tabLabel && (
-          <div className="px-4 pb-3 -mt-1 text-white/85 text-sm font-display font-bold relative z-10">
+          <div className="px-3 sm:px-4 pb-3 -mt-1 text-white/85 text-sm font-display font-bold relative z-10">
             {tabLabel}
           </div>
         )}

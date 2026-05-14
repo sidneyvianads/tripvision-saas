@@ -45,7 +45,7 @@ export default function TabBar({ active, onChange, badges = {} }) {
                 )}
               </div>
               <span
-                className="text-[11px] font-display font-bold"
+                className="text-[10px] sm:text-[11px] font-display font-bold leading-none"
                 style={{ color: isActive ? "var(--tv-accent, #6366F1)" : "#9CA3AF" }}
               >
                 {label}
