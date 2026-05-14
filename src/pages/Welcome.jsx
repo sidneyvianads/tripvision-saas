@@ -480,15 +480,26 @@ function PlanPicker({ afiliado, onChoose, onBack, loading, err }) {
       <StepIndicator step={3} />
 
       <div className="text-center">
-        <div
-          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase"
-          style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}
-        >
-          <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis — cancele quando quiser
-        </div>
+        {ciclo === "mensal" ? (
+          <div
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase"
+            style={{ background: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }}
+          >
+            <Gift className="w-3 h-3" /> {TRIAL_DAYS} dias grátis — cancele quando quiser
+          </div>
+        ) : (
+          <div
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-display font-extrabold tracking-widest uppercase"
+            style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FDE68A" }}
+          >
+            <Sparkles className="w-3 h-3" /> Anual — economize 33% vs mensal
+          </div>
+        )}
         <h2 className="font-display font-extrabold text-[#1F2937] text-xl mt-3">Escolha seu plano</h2>
         <p className="text-[#6B7280] text-xs mt-1">
-          Não cobramos nada nos primeiros {TRIAL_DAYS} dias. Cancele a qualquer momento.
+          {ciclo === "mensal"
+            ? `Não cobramos nada nos primeiros ${TRIAL_DAYS} dias. Cancele a qualquer momento.`
+            : "Cobrança única, válida por 12 meses. Cancele a qualquer momento."}
         </p>
       </div>
 
@@ -566,7 +577,8 @@ function PlanPicker({ afiliado, onChoose, onBack, loading, err }) {
       </button>
 
       <p className="text-center text-[11px] text-[#94A3B8] pt-1">
-        Pagamento via Mercado Pago. Sem cobrança nos primeiros {TRIAL_DAYS} dias.
+        Pagamento via Mercado Pago.{" "}
+        {ciclo === "mensal" ? `Sem cobrança nos primeiros ${TRIAL_DAYS} dias.` : "Cancele a qualquer momento."}
       </p>
     </div>
   );
@@ -667,8 +679,8 @@ function PlanCard({
             </div>
             <div className="text-[12px] text-[#64748B] mt-1">
               {isAnual
-                ? <>cobrado <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong> após o trial</>
-                : "cobrado mensalmente após o trial"}
+                ? <>cobrança única: <strong className="text-[#0F172A]">R$ {formatPrice(price.amount)}/ano</strong></>
+                : "cobrado mensalmente após o trial de 7 dias"}
             </div>
             {isAnual && (
               <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-display font-extrabold text-white" style={{ background: "#10B981" }}>
@@ -696,7 +708,7 @@ function PlanCard({
         style={{ background: "#F97316" }}
       >
         {disabled ? <Loader2 className="w-4 h-4 animate-spin" /> : <CtaIcon className="w-4 h-4" />}
-        Começar teste grátis →
+        {isAnual ? "Assinar anual →" : "Começar teste grátis →"}
       </button>
     </div>
   );
