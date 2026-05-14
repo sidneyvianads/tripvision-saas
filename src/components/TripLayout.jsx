@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Share2, Users, LogOut, Shield, UserCircle, Lock,
@@ -23,7 +24,12 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   const [profileOpen, setProfileOpen] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
+
+  // Refs pra ancorar o dropdown no botão e pra detectar click-outside
+  // mesmo quando o painel é renderizado num portal (fora do header).
+  const menuBtnRef = useRef(null);
+  const menuPanelRef = useRef(null);
+  const [menuCoords, setMenuCoords] = useState({ top: 0, right: 0 });
 
   const limits = getLimits(user?.plano);
   const canShare = limits.compartilhar === true;
@@ -33,11 +39,37 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
     setShareOpen(true);
   };
 
-  // Fecha o menu mobile ao clicar fora ou apertar Esc
+  // Calcula posição do dropdown a partir do botão ⋯ no momento da abertura
+  // e em qualquer resize/scroll de viewport. Top fica logo abaixo do botão;
+  // right respeita o padding lateral (botão alinhado à direita do header).
+  const recalcMenuCoords = () => {
+    const el = menuBtnRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setMenuCoords({
+      top: Math.round(r.bottom + 8),
+      right: Math.round(window.innerWidth - r.right),
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    recalcMenuCoords();
+    window.addEventListener("resize", recalcMenuCoords);
+    window.addEventListener("scroll", recalcMenuCoords, true);
+    return () => {
+      window.removeEventListener("resize", recalcMenuCoords);
+      window.removeEventListener("scroll", recalcMenuCoords, true);
+    };
+  }, [menuOpen]);
+
+  // Click-outside / Esc — checa também o painel no portal
   useEffect(() => {
     if (!menuOpen) return;
     const onClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      const insideBtn = menuBtnRef.current && menuBtnRef.current.contains(e.target);
+      const insidePanel = menuPanelRef.current && menuPanelRef.current.contains(e.target);
+      if (!insideBtn && !insidePanel) setMenuOpen(false);
     };
     const onKey = (e) => { if (e.key === "Escape") setMenuOpen(false); };
     document.addEventListener("mousedown", onClickOutside);
@@ -54,7 +86,7 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   // menu dropdown no mobile (≤ md / 768px). Inclui apenas os botões
   // que valem como "ação" — voltar e avatar ficam fora.
   const actions = [
-    isAdmin && { key: "admin", label: "Admin", icon: Shield, onClick: () => navigate(`/v/${trip.slug}/admin`), badge: null },
+    isAdmin && { key: "admin", label: "Admin", icon: Shield, onClick: () => navigate(`/v/${trip.slug}/admin`) },
     { key: "people", label: "Quem vai", icon: Users, onClick: () => setPeopleOpen(true) },
     { key: "contatos", label: "Contatos", icon: BookUser, onClick: () => setContatosOpen(true) },
     { key: "share", label: canShare ? "Compartilhar" : "Compartilhar (Pro)", icon: Share2, onClick: handleShare, lockedPro: !canShare },
@@ -130,49 +162,17 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
             );
           })}
 
-          {/* MOBILE: dropdown "⋯" no lugar dos botões */}
-          <div className="md:hidden relative shrink-0" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="rounded-full bg-white/15 hover:bg-white/25 transition p-2"
-              aria-label="Mais opções"
-              aria-expanded={menuOpen}
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-12 min-w-[200px] rounded-xl overflow-hidden animate-pop z-30"
-                style={{ background: "white", boxShadow: "0 12px 32px rgba(15, 23, 42, 0.20)", border: "1px solid #E2E8F0" }}
-              >
-                {actions.map((a, i) => {
-                  const Icon = a.icon;
-                  const isLast = i === actions.length - 1;
-                  const itemClass = `w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-display font-bold text-left transition ${a.danger ? "text-red-600 hover:bg-red-50" : "text-[#0F172A] hover:bg-[#F8FAFC]"} ${isLast ? "" : "border-b border-[#F1F5F9]"}`;
-                  const close = () => setMenuOpen(false);
-                  return a.to ? (
-                    <Link key={a.key} to={a.to} className={itemClass} onClick={close} role="menuitem">
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="flex-1 truncate">{a.label}</span>
-                      {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
-                    </Link>
-                  ) : (
-                    <button
-                      key={a.key}
-                      onClick={() => { close(); a.onClick(); }}
-                      className={itemClass}
-                      role="menuitem"
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="flex-1 truncate">{a.label}</span>
-                      {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* MOBILE: botão "⋯" — painel renderizado via portal pra escapar
+              do overflow-hidden do header e ficar acima de qualquer coisa */}
+          <button
+            ref={menuBtnRef}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden rounded-full bg-white/15 hover:bg-white/25 transition p-2 shrink-0"
+            aria-label="Mais opções"
+            aria-expanded={menuOpen}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
 
           {user && (
             <button
@@ -194,6 +194,50 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
       </header>
 
       <main className="flex-1 overflow-y-auto pb-24">{children}</main>
+
+      {/* Dropdown mobile no portal — fixed, z-50, com scroll se passar da viewport */}
+      {menuOpen && createPortal(
+        <div
+          ref={menuPanelRef}
+          role="menu"
+          className="fixed min-w-[220px] max-w-[calc(100vw-16px)] rounded-xl overflow-hidden animate-pop md:hidden"
+          style={{
+            top: menuCoords.top,
+            right: menuCoords.right,
+            zIndex: 50,
+            background: "white",
+            boxShadow: "0 12px 32px rgba(15, 23, 42, 0.20), 0 0 0 1px rgba(15, 23, 42, 0.06)",
+            maxHeight: `calc(100vh - ${menuCoords.top + 16}px)`,
+            overflowY: "auto",
+          }}
+        >
+          {actions.map((a, i) => {
+            const Icon = a.icon;
+            const isLast = i === actions.length - 1;
+            const itemClass = `w-full flex items-center gap-2.5 px-3.5 py-3 text-sm font-display font-bold text-left transition ${a.danger ? "text-red-600 hover:bg-red-50" : "text-[#0F172A] hover:bg-[#F8FAFC]"} ${isLast ? "" : "border-b border-[#F1F5F9]"}`;
+            const close = () => setMenuOpen(false);
+            return a.to ? (
+              <Link key={a.key} to={a.to} className={itemClass} onClick={close} role="menuitem">
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="flex-1 truncate">{a.label}</span>
+                {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+              </Link>
+            ) : (
+              <button
+                key={a.key}
+                onClick={() => { close(); a.onClick(); }}
+                className={itemClass}
+                role="menuitem"
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="flex-1 truncate">{a.label}</span>
+                {a.lockedPro && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
 
       {peopleOpen   && <People   viagemId={trip.id} onClose={() => setPeopleOpen(false)} />}
       {contatosOpen && <Contatos viagemId={trip.id} isAdmin={isAdmin} onClose={() => setContatosOpen(false)} />}
