@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 
 const ROTEIRO_TAG_RE = /<roteiro_update>([\s\S]*?)<\/roteiro_update>/i;
+const VIAGEM_TAG_RE  = /<viagem_update>([\s\S]*?)<\/viagem_update>/i;
 
 export function parseRoteiroUpdate(text) {
   if (typeof text !== "string") return { cleanText: "", updates: null, raw: null };
@@ -20,6 +21,140 @@ export function parseRoteiroUpdate(text) {
   }
 
   return { cleanText, updates, raw };
+}
+
+// Extrai <viagem_update> da resposta do Jei e retorna { cleanText, viagemUpdate, raw }.
+// O JSON dentro tem formato { "action": "update_viagem", "fields": { ... } }.
+// Retornamos só `fields` em viagemUpdate.fields pra simplificar o consumo.
+export function parseViagemUpdate(text) {
+  if (typeof text !== "string") return { cleanText: "", viagemUpdate: null, raw: null };
+  const match = text.match(VIAGEM_TAG_RE);
+  if (!match) return { cleanText: text, viagemUpdate: null, raw: null };
+
+  const cleanText = text.replace(VIAGEM_TAG_RE, "").trim();
+  const raw = match[1].trim();
+
+  try {
+    const parsed = JSON.parse(raw);
+    const action = parsed?.action ?? "update_viagem";
+    const fields = (action === "update_viagem" && parsed?.fields && typeof parsed.fields === "object")
+      ? parsed.fields
+      : null;
+    if (!fields) {
+      console.warn("[roteiroParser] <viagem_update> sem fields válidos:", raw.slice(0, 200));
+      return { cleanText, viagemUpdate: null, raw };
+    }
+    return { cleanText, viagemUpdate: { action, fields }, raw };
+  } catch (e) {
+    console.error("[roteiroParser] JSON inválido em <viagem_update>:", e, raw.slice(0, 200));
+    return { cleanText, viagemUpdate: null, raw };
+  }
+}
+
+// Sanitiza e aplica UPDATE em viagens. Só aceita campos conhecidos.
+// Retorna { ok, patch, error } — patch é o objeto efetivamente aplicado (já
+// normalizado, pra mostrar na confirmação).
+const VIAGEM_ALLOWED = new Set([
+  "adultos", "criancas", "bebes", "num_pessoas",
+  "data_inicio", "data_fim",
+  "cidades", "descricao",
+]);
+
+function clampInt(v, min, max) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function isISODate(s) {
+  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function sanitizeViagemPatch(fields) {
+  const patch = {};
+  for (const [k, v] of Object.entries(fields ?? {})) {
+    if (!VIAGEM_ALLOWED.has(k)) continue;
+    if (v === null) { patch[k] = null; continue; }
+
+    if (k === "adultos") {
+      const n = clampInt(v, 0, 50);
+      if (n != null) patch[k] = n;
+    } else if (k === "criancas") {
+      const n = clampInt(v, 0, 30);
+      if (n != null) patch[k] = n;
+    } else if (k === "bebes") {
+      const n = clampInt(v, 0, 20);
+      if (n != null) patch[k] = n;
+    } else if (k === "num_pessoas") {
+      const n = clampInt(v, 1, 100);
+      if (n != null) patch[k] = n;
+    } else if (k === "data_inicio" || k === "data_fim") {
+      if (isISODate(v)) patch[k] = v;
+    } else if (k === "cidades") {
+      if (Array.isArray(v)) {
+        patch[k] = v.map((c) => String(c).trim()).filter(Boolean).slice(0, 20);
+      }
+    } else if (k === "descricao") {
+      if (typeof v === "string") patch[k] = v.trim().slice(0, 1000);
+    }
+  }
+  // Coerência: se mudou adultos/criancas/bebes mas não num_pessoas, recalcula
+  if (patch.adultos != null || patch.criancas != null || patch.bebes != null) {
+    if (patch.num_pessoas == null) {
+      // não temos os valores antigos aqui — caller pode resolver depois
+    }
+  }
+  return patch;
+}
+
+// Aplica o update de viagem. Recebe o objeto vindo de parseViagemUpdate
+// + a viagem atual (pra resolver num_pessoas como soma quando ausente).
+export async function applyViagemUpdate(viagemId, viagemUpdate, currentTrip = null) {
+  if (!viagemUpdate?.fields) return { ok: false, error: "Update sem fields." };
+  const patch = sanitizeViagemPatch(viagemUpdate.fields);
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nenhum campo válido pra atualizar." };
+
+  // Recalcula num_pessoas como soma quando o user mexeu no breakdown e não
+  // passou o total explicitamente.
+  const touchedBreakdown = ["adultos", "criancas", "bebes"].some((k) => k in patch);
+  if (touchedBreakdown && patch.num_pessoas == null && currentTrip) {
+    const ad = patch.adultos ?? currentTrip.adultos ?? 0;
+    const cr = patch.criancas ?? currentTrip.criancas ?? 0;
+    const be = patch.bebes ?? currentTrip.bebes ?? 0;
+    const total = ad + cr + be;
+    if (total > 0) patch.num_pessoas = total;
+  }
+
+  patch.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("viagens")
+    .update(patch)
+    .eq("id", viagemId)
+    .select()
+    .single();
+  if (error) {
+    console.error("[applyViagemUpdate] erro:", error);
+    return { ok: false, error: error.message, patch };
+  }
+  return { ok: true, patch, trip: data };
+}
+
+// Resume um patch em texto humano pra exibir no card de confirmação.
+export function summarizeViagemPatch(patch) {
+  if (!patch) return "";
+  const parts = [];
+  if (patch.adultos != null) parts.push(`${patch.adultos} ${patch.adultos === 1 ? "adulto" : "adultos"}`);
+  if (patch.criancas != null) parts.push(`${patch.criancas} ${patch.criancas === 1 ? "criança" : "crianças"}`);
+  if (patch.bebes != null) parts.push(`${patch.bebes} ${patch.bebes === 1 ? "bebê" : "bebês"}`);
+  if (patch.num_pessoas != null && !patch.adultos && !patch.criancas && !patch.bebes) {
+    parts.push(`${patch.num_pessoas} pessoas`);
+  }
+  if (patch.data_inicio) parts.push(`início ${patch.data_inicio}`);
+  if (patch.data_fim) parts.push(`fim ${patch.data_fim}`);
+  if (patch.cidades) parts.push(`cidades: ${patch.cidades.join(", ")}`);
+  if (patch.descricao) parts.push("descrição atualizada");
+  return parts.join(" · ");
 }
 
 const VALID_TIPOS = new Set(["transporte", "passeio", "alimentacao", "hospedagem", "livre"]);

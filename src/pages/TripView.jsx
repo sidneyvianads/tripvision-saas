@@ -30,7 +30,7 @@ const TAB_TITLES = {
 export default function TripView() {
   const { slug } = useParams();
   const { user, signOut } = useAuth();
-  const { trip, isAdmin, loading, error } = useTrip(slug, user?.id);
+  const { trip, isAdmin, loading, error, reload: reloadTrip } = useTrip(slug, user?.id);
   const [params, setParams] = useSearchParams();
   const initialTab = params.get("tab") || "roteiro";
   const [tab, setTab] = useState(initialTab);
@@ -78,7 +78,7 @@ export default function TripView() {
       >
         <Suspense fallback={<TabSkeleton />}>
           {tab === "roteiro"  && <RoteiroTab trip={trip} isAdmin={isAdmin} onPlanejar={() => setTab("planejar")} />}
-          {tab === "planejar" && <PlanChat   trip={trip} user={user} onGoToRoteiro={() => setTab("roteiro")} />}
+          {tab === "planejar" && <PlanChat   trip={trip} user={user} onGoToRoteiro={() => setTab("roteiro")} onTripChanged={reloadTrip} />}
           {tab === "chat"     && <GroupChat  viagemId={trip.id} user={user} />}
           {tab === "tarefas"  && <Checklist  viagemId={trip.id} user={user} isAdmin={isAdmin} />}
           {tab === "diario"   && <Diario     trip={trip} user={user} />}

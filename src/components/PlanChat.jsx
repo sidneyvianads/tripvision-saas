@@ -5,7 +5,10 @@ import Avatar from "./Avatar";
 import UpgradeModal from "./UpgradeModal";
 import { useIaConversa } from "../hooks/useIaConversa";
 import { useRoteiro } from "../hooks/useRoteiro";
-import { parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroUpdates } from "../lib/roteiroParser";
+import {
+  parseRoteiroUpdate, applyRoteiroUpdates, summarizeUpdates, undoRoteiroUpdates,
+  parseViagemUpdate, applyViagemUpdate, summarizeViagemPatch,
+} from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rateLimit";
 import { ACTIVITY_TYPES } from "../data/types";
@@ -28,19 +31,29 @@ const LOADING_PHASES = [
   { delay: 12000, text: "Montando sugestões pra você…", icon: "✍️" },
 ];
 
-const ROTEIRO_OPEN = "<roteiro_update>";
-const ROTEIRO_CLOSE = "</roteiro_update>";
+const STREAM_TAGS = [
+  { open: "<roteiro_update>", close: "</roteiro_update>" },
+  { open: "<viagem_update>",  close: "</viagem_update>"  },
+];
 
 // Sem mais cota Free. Quem não tem assinatura ativa cai direto no UpgradeModal.
 
+// Esconde do stream visível qualquer bloco <roteiro_update> ou <viagem_update>,
+// tanto completo quanto começando-e-ainda-não-terminado (durante stream parcial).
 function stripPartialRoteiroTag(text) {
   if (!text) return "";
-  const open = text.indexOf(ROTEIRO_OPEN);
-  if (open === -1) return text;
-  const close = text.indexOf(ROTEIRO_CLOSE, open);
-  if (close === -1) return text.slice(0, open).trimEnd();
-  const after = close + ROTEIRO_CLOSE.length;
-  return (text.slice(0, open) + text.slice(after)).trim();
+  let out = text;
+  for (const t of STREAM_TAGS) {
+    while (true) {
+      const open = out.indexOf(t.open);
+      if (open === -1) break;
+      const close = out.indexOf(t.close, open);
+      if (close === -1) { out = out.slice(0, open).trimEnd(); break; }
+      const after = close + t.close.length;
+      out = (out.slice(0, open) + out.slice(after)).trim();
+    }
+  }
+  return out;
 }
 
 async function streamPlan(req, signal, onDelta) {
@@ -116,7 +129,7 @@ const MD_COMPONENTS_LIGHT = {
   h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#1F2937] mt-1">{children}</h3>,
 };
 
-export default function PlanChat({ trip, user, onGoToRoteiro }) {
+export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
   const { days, reload: reloadRoteiro } = useRoteiro(trip.id);
   const { messages, setMessages, persist, reset, loading: convLoading } = useIaConversa(trip.id, user?.id);
 
@@ -260,27 +273,41 @@ export default function PlanChat({ trip, user, onGoToRoteiro }) {
 
       console.log("[Viajjei] fullText recebido (", fullText.length, "chars):\n", fullText);
 
-      const { cleanText, updates, raw } = parseRoteiroUpdate(fullText);
-      console.log("[Viajjei] parse result:", { hasTag: !!raw, updatesCount: updates?.length ?? 0, updates });
+      // Extrai <viagem_update> primeiro pra liberar o texto pro parser de roteiro
+      const viagemParsed = parseViagemUpdate(fullText);
+      const afterViagemStrip = viagemParsed.viagemUpdate ? viagemParsed.cleanText : fullText;
+
+      const { cleanText, updates, raw } = parseRoteiroUpdate(afterViagemStrip);
+      console.log("[Viajjei] parse result:", {
+        hasRoteiroTag: !!raw, updatesCount: updates?.length ?? 0,
+        hasViagemTag: !!viagemParsed.viagemUpdate,
+      });
 
       let appliedResults = null;
       if (updates && updates.length > 0) {
         appliedResults = await applyRoteiroUpdates(trip.id, updates);
-        console.log("[Viajjei] apply result:", appliedResults);
+        console.log("[Viajjei] roteiro apply result:", appliedResults);
         const errors = appliedResults.filter((r) => !r.success);
         if (errors.length) console.warn("[Viajjei] apply errors:", errors);
         await reloadRoteiro();
-      } else if (raw) {
-        console.warn("[Viajjei] tag <roteiro_update> apareceu mas JSON inválido — IA precisa corrigir formato.");
-      } else {
-        console.log("[Viajjei] sem <roteiro_update> nesta resposta (IA não confirmou ainda).");
+      }
+
+      // Aplica viagem_update se veio
+      let viagemResult = null;
+      if (viagemParsed.viagemUpdate) {
+        viagemResult = await applyViagemUpdate(trip.id, viagemParsed.viagemUpdate, trip);
+        console.log("[Viajjei] viagem apply result:", viagemResult);
+        if (viagemResult.ok && onTripChanged) {
+          try { await onTripChanged(); } catch (e) { console.warn("[Viajjei] reloadTrip falhou:", e); }
+        }
       }
 
       const assistantMsg = {
         role: "assistant",
-        content: cleanText || (appliedResults ? "✅ Atualizações aplicadas." : "(sem resposta)"),
+        content: cleanText || (appliedResults || viagemResult?.ok ? "✅ Atualizado." : "(sem resposta)"),
         ts: Date.now(),
         _applied: appliedResults,
+        _viagem: viagemResult,
       };
       const after = [...next, assistantMsg];
       setMessages(after);
@@ -580,8 +607,43 @@ function Message({ message, user, onGoToRoteiro, onRetry, onUndo }) {
         {!isUser && Array.isArray(message._applied) && message._applied.length > 0 && (
           <UpdateCard applied={message._applied} onGoToRoteiro={onGoToRoteiro} onUndo={onUndo} ts={message.ts} />
         )}
+        {!isUser && message._viagem?.ok && (
+          <ViagemUpdateCard patch={message._viagem.patch} />
+        )}
+        {!isUser && message._viagem && message._viagem.ok === false && (
+          <div className="mt-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-[12px]">
+            Não consegui salvar a atualização da viagem: {message._viagem.error}
+          </div>
+        )}
       </div>
       {isUser && user && <Avatar user={user} size={32} />}
+    </div>
+  );
+}
+
+// Card de confirmação quando o Jei atualiza dados da viagem (composição,
+// datas, cidades, descrição). Não tem undo — mudanças são merge de campos
+// específicos, não inserção de registros.
+function ViagemUpdateCard({ patch }) {
+  const summary = summarizeViagemPatch(patch);
+  return (
+    <div
+      className="mt-2 rounded-xl p-3"
+      style={{ background: "#ECFDF5", border: "1px solid #A7F3D0" }}
+    >
+      <div className="flex items-start gap-2">
+        <div className="text-base shrink-0 leading-none mt-0.5">✅</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-display font-extrabold text-emerald-900 text-[13px] leading-tight">
+            Viagem atualizada
+          </div>
+          {summary && (
+            <div className="text-emerald-800 text-[12px] mt-0.5 break-words">
+              {summary}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
