@@ -110,7 +110,7 @@ const MD_COMPONENTS_LIGHT = {
   strong: ({ children }) => <strong className="font-display font-extrabold text-[#1F2937]">{children}</strong>,
   em:     ({ children }) => <em className="italic">{children}</em>,
   code:   ({ children }) => <code className="px-1 py-0.5 rounded bg-[#F3F4F6] text-[#374151] text-[0.9em]">{children}</code>,
-  a:      ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="underline break-words" style={{ color: "var(--tv-accent-dark)" }}>{children}</a>,
+  a:      ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition" style={{ color: "#F97316" }}>{children}</a>,
   h1:     ({ children }) => <h1 className="text-base font-display font-extrabold text-[#1F2937] mt-1">{children}</h1>,
   h2:     ({ children }) => <h2 className="text-sm font-display font-extrabold text-[#1F2937] mt-1">{children}</h2>,
   h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#1F2937] mt-1">{children}</h3>,

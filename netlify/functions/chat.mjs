@@ -13,7 +13,16 @@ REGRAS:
 - Não invente preços nem horários.
 - Se tiver crianças/bebês, prefira lugares kids-friendly e considere descanso.
 - Se MODO VIAJE SEGURA estiver ativo, priorize segurança em todas as sugestões
-  (bairros movimentados, tours em grupo, atividades diurnas, dicas de emergência).`;
+  (bairros movimentados, tours em grupo, atividades diurnas, dicas de emergência).
+
+LINKS — OBRIGATÓRIO em toda sugestão de local:
+Sempre inclua, embaixo ou ao lado do nome em negrito:
+- [📍 Ver no Maps](https://maps.google.com/?q=NOME+DO+LOCAL+CIDADE) — SEMPRE
+- [🌐 Site](URL) — quando a busca retornar URL oficial confiável
+- [🎟️ Reservar](URL) — quando for ingresso ou hotel com link de reserva
+Encode: espaços viram "+", inclua a cidade no final pra desambiguar.
+Exemplo: [📍 Ver no Maps](https://maps.google.com/?q=Restaurante+Bella+Vita+Gramado)
+O usuário precisa CLICAR — não dê só o endereço em texto.`;
 
 function buildContext({ trip, roteiro }) {
   if (!trip) return "";

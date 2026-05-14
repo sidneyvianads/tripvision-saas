@@ -1,6 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import Avatar from "./Avatar";
+
+// Markdown leve pra bolha do assistente — links laranja em nova aba pra
+// abrir Google Maps / site oficial das sugestões sem sair do app.
+const MD_AI = {
+  p:      ({ children }) => <p className="m-0 leading-relaxed">{children}</p>,
+  ul:     ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
+  ol:     ({ children }) => <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>,
+  li:     ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-display font-extrabold">{children}</strong>,
+  em:     ({ children }) => <em className="italic">{children}</em>,
+  a:      ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition"
+      style={{ color: "#F97316" }}
+    >
+      {children}
+    </a>
+  ),
+};
 
 export default function AiChat({ trip, days, user }) {
   const initialGreeting = {
@@ -90,14 +113,14 @@ export default function AiChat({ trip, days, user }) {
                 </div>
               )}
               <div
-                className={`max-w-[76%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                  isUser ? "rounded-br-sm text-white" : "rounded-bl-sm"
+                className={`max-w-[76%] rounded-2xl px-3 py-2 text-sm break-words ${
+                  isUser ? "rounded-br-sm text-white whitespace-pre-wrap" : "rounded-bl-sm"
                 }`}
                 style={isUser
                   ? { background: "linear-gradient(135deg, #2E86C1 0%, #1B4F72 100%)", boxShadow: "0 2px 12px rgba(46, 134, 193, 0.30)" }
                   : { background: "rgba(232, 240, 254, 0.95)", color: "#0F1B2D", boxShadow: "0 2px 12px rgba(124, 185, 232, 0.18)" }}
               >
-                {m.content}
+                {isUser ? m.content : <ReactMarkdown components={MD_AI}>{m.content}</ReactMarkdown>}
               </div>
               {isUser && user && <Avatar user={user} size={32} />}
             </div>
