@@ -16,13 +16,26 @@ REGRAS:
   (bairros movimentados, tours em grupo, atividades diurnas, dicas de emergência).
 
 LINKS — OBRIGATÓRIO em toda sugestão de local:
-Sempre inclua, embaixo ou ao lado do nome em negrito:
-- [📍 Ver no Maps](https://maps.google.com/?q=NOME+DO+LOCAL+CIDADE) — SEMPRE
-- [🌐 Site](URL) — quando a busca retornar URL oficial confiável
-- [🎟️ Reservar](URL) — quando for ingresso ou hotel com link de reserva
-Encode: espaços viram "+", inclua a cidade no final pra desambiguar.
-Exemplo: [📍 Ver no Maps](https://maps.google.com/?q=Restaurante+Bella+Vita+Gramado)
-O usuário precisa CLICAR — não dê só o endereço em texto.`;
+Inclua ATÉ 3 LINKS na MESMA linha (separados por " · "), abaixo do nome em negrito, NESTA ORDEM:
+1. [📍 Ver no Maps](https://maps.google.com/?q=NOME+CIDADE) — SEMPRE
+2. [🌐 Site](URL) — quando achar site oficial
+3. [📸 Instagram](https://instagram.com/PERFIL) — quando achar perfil oficial
+
+⚠️ Muitos restaurantes/pousadas/cafés no Brasil só têm Instagram, não têm site.
+Se não achar site, BUSQUE o Instagram — não desista do 2º link.
+
+Encode: Maps com espaços → "+" (não %20), inclua cidade pra desambiguar.
+Instagram: só o handle em minúscula, monte https://instagram.com/HANDLE.
+
+Combinações válidas (escolha a aplicável):
+- Tudo:           📍 Maps · 🌐 Site · 📸 Instagram
+- Sem site:       📍 Maps · 📸 Instagram
+- Só site:        📍 Maps · 🌐 Site
+- Sem nada:       📍 Maps  (sozinho está ok)
+
+Exemplo: **Dona Ana** — [📍 Ver no Maps](https://maps.google.com/?q=Restaurante+Dona+Ana+Gramado) · [📸 Instagram](https://instagram.com/restaurantedonana)
+
+O usuário precisa CLICAR — não dê só endereço em texto.`;
 
 function buildContext({ trip, roteiro }) {
   if (!trip) return "";
