@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift, Tag, X as XIcon } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift, AtSign } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
 import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import Logo from "../components/Logo";
-import { getStoredCupom, setStoredCupom, clearStoredCupom, validateCupom } from "../lib/cupom";
+import { getStoredCupom, setStoredCupom, clearStoredCupom } from "../lib/cupom";
 import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
+import { supabase } from "../lib/supabase";
 
 const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
@@ -31,7 +32,7 @@ export default function Welcome() {
   // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
 
-  // Cupom aplicado nessa sessão (objeto afiliado completo, vindo do CupomStep)
+  // Influenciador selecionado nessa sessão (objeto afiliado completo)
   const [afiliado, setAfiliado] = useState(null);
 
   useEffect(() => {
@@ -200,9 +201,9 @@ export default function Welcome() {
             err={err}
           />
         ) : signupStep === "cupom" ? (
-          <CupomStep
-            initialAfiliado={afiliado}
-            onApplied={(af) => setAfiliado(af)}
+          <InfluencerStep
+            selected={afiliado}
+            onSelect={(af) => { setAfiliado(af); if (af) setStoredCupom(af.cupom); else clearStoredCupom(); }}
             onContinue={() => { setSignupStep("plano"); setErr(null); }}
             onBack={() => { setSignupStep("dados"); setErr(null); }}
           />
@@ -330,40 +331,67 @@ function StepIndicator({ step }) {
   );
 }
 
-// =============== ETAPA 2: CUPOM (tela própria) ===============
+// =============== ETAPA 2: ESCOLHER INFLUENCIADOR ===============
 
-function CupomStep({ initialAfiliado, onApplied, onContinue, onBack }) {
-  const [cupom, setCupom] = useState(() => (initialAfiliado?.cupom ?? getStoredCupom() ?? "").toUpperCase());
-  const [busy, setBusy] = useState(false);
-  const [state, setState] = useState(initialAfiliado ? "ok" : "idle"); // idle | pending | ok | invalid
-  const [afiliado, setAfiliadoLocal] = useState(initialAfiliado ?? null);
+// Paleta determinística pra fallback do avatar (quando o afiliado não tem foto_url).
+const AVATAR_COLORS_FALLBACK = ["#F97316", "#6366F1", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4", "#EF4444"];
+function colorFromName(name) {
+  const s = (name ?? "").trim();
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) | 0;
+  return AVATAR_COLORS_FALLBACK[Math.abs(hash) % AVATAR_COLORS_FALLBACK.length];
+}
+function initialsFromName(name) {
+  return (name ?? "?")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .filter(Boolean)
+    .join("") || "?";
+}
 
-  // Valida em tempo real (debounced)
+function InfluencerStep({ selected, onSelect, onContinue, onBack }) {
+  const [afiliados, setAfiliados] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Cupom da URL (?cupom=X) — usado pra pré-selecionar
+  const initialCupom = useMemo(() => (selected?.cupom ?? getStoredCupom() ?? "").toUpperCase(), [selected]);
+
   useEffect(() => {
-    const code = cupom.trim();
-    if (!code) {
-      setState("idle"); setAfiliadoLocal(null); onApplied(null); clearStoredCupom();
-      return;
-    }
-    setBusy(true); setState("pending");
-    const t = setTimeout(async () => {
-      const res = await validateCupom(code);
-      if (res.ok) {
-        setState("ok"); setAfiliadoLocal(res.afiliado);
-        setStoredCupom(code);
-        onApplied(res.afiliado);
-      } else {
-        setState("invalid"); setAfiliadoLocal(null);
-        onApplied(null);
-        clearStoredCupom();
+    let active = true;
+    (async () => {
+      const { data, error: err } = await supabase
+        .from("afiliados")
+        .select("id, nome, instagram, cupom, desconto_percent, foto_url")
+        .eq("ativo", true)
+        .order("nome");
+      if (!active) return;
+      if (err) {
+        setError(err.message);
+        setLoading(false);
+        return;
       }
-      setBusy(false);
-    }, 380);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cupom]);
+      const list = data ?? [];
+      setAfiliados(list);
+      setLoading(false);
 
-  const desconto = Number(afiliado?.desconto_percent ?? 0);
+      // Lista vazia → não tem o que mostrar nessa etapa, pula direto pro plano
+      if (list.length === 0) {
+        onContinue();
+        return;
+      }
+
+      // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater)
+      if (!selected && initialCupom) {
+        const match = list.find((a) => a.cupom?.toUpperCase() === initialCupom);
+        if (match) onSelect(match);
+      }
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="mt-6 space-y-4 animate-pop">
@@ -372,87 +400,110 @@ function CupomStep({ initialAfiliado, onApplied, onContinue, onBack }) {
       <div className="text-center">
         <div className="text-4xl mb-1">🎟️</div>
         <h2 className="font-display font-extrabold text-[#1F2937] text-xl">
-          Você foi indicado por alguém?
+          Quem te indicou?
         </h2>
         <p className="text-[#6B7280] text-sm mt-1">
-          Digite o cupom do seu influenciador pra ganhar desconto.
+          Escolha o influenciador que falou do Viajjei pra você.
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-[11px] font-display font-extrabold uppercase tracking-wide text-[#64748B]">
-          Cupom de indicação
-        </label>
-        <div className="relative">
-          <Tag className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
-          <input
-            type="text"
-            className="input pl-12 pr-12 uppercase tracking-wider text-lg !py-4 !font-display !font-extrabold"
-            placeholder="EX: JOAO10"
-            value={cupom}
-            onChange={(e) => setCupom(e.target.value.toUpperCase().slice(0, 30))}
-            maxLength={30}
-            autoFocus
-          />
-          {busy && <Loader2 className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-[#94A3B8]" />}
-          {!busy && state === "ok" && <Check className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-emerald-600" />}
-          {!busy && state === "invalid" && <XIcon className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-red-500" />}
+      {/* Banner: pré-selecionado por URL */}
+      {selected && initialCupom && (
+        <div
+          className="rounded-2xl p-3 animate-pop"
+          style={{ background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)", border: "1.5px solid #6EE7B7" }}
+        >
+          <div className="text-emerald-900 text-[13px] font-display font-bold">
+            ✅ Você foi indicado por <strong>{selected.nome}</strong>! Confirme abaixo ou troque a seleção.
+          </div>
         </div>
+      )}
 
-        {/* Feedback grande quando validado */}
-        {state === "ok" && afiliado && (
-          <div
-            className="rounded-2xl p-4 animate-pop"
-            style={{ background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)", border: "1.5px solid #6EE7B7" }}
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                <Check className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-display font-extrabold text-emerald-900 text-sm">
-                  Cupom de {afiliado.nome} aplicado!
-                </div>
-                {desconto > 0 ? (
-                  <div className="text-emerald-800 text-[13px] mt-0.5">
-                    Você ganha <strong>{desconto.toFixed(0)}% off no primeiro mês</strong> 🎉
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
+        </div>
+      ) : error ? (
+        <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-sm">
+          Não consegui carregar a lista de influenciadores: {error}
+        </div>
+      ) : (
+        <ul className="space-y-2 max-h-[420px] overflow-y-auto -mr-2 pr-2">
+          {afiliados.map((af) => {
+            const isSelected = selected?.id === af.id;
+            const desconto = Number(af.desconto_percent ?? 0);
+            return (
+              <li key={af.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(isSelected ? null : af)}
+                  className="w-full text-left rounded-2xl p-3 flex items-center gap-3 transition active:scale-[0.99]"
+                  style={{
+                    background: "white",
+                    border: isSelected ? "2px solid #F97316" : "1.5px solid #E2E8F0",
+                    boxShadow: isSelected ? "0 8px 24px rgba(249, 115, 22, 0.20)" : "0 1px 3px rgba(15, 23, 42, 0.05)",
+                  }}
+                >
+                  <InfluencerAvatar af={af} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-extrabold text-[#0F172A] truncate">{af.nome}</div>
+                    {af.instagram && (
+                      <div className="text-[12px] text-[#64748B] truncate inline-flex items-center gap-1">
+                        <AtSign className="w-3 h-3" /> {af.instagram.replace(/^@/, "")}
+                      </div>
+                    )}
+                    {desconto > 0 && (
+                      <div className="mt-1">
+                        <span
+                          className="inline-block text-[10px] px-2 py-0.5 rounded-full font-display font-extrabold uppercase tracking-widest"
+                          style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}
+                        >
+                          {desconto.toFixed(0)}% off no 1º mês
+                        </span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-emerald-800 text-[13px] mt-0.5">
-                    Você ajuda {afiliado.nome.split(/\s+/)[0]} e libera o trial completo.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+                  <span
+                    className="text-[11px] font-display font-extrabold px-3 py-1.5 rounded-full whitespace-nowrap"
+                    style={{
+                      background: isSelected ? "#F97316" : "#F1F5F9",
+                      color: isSelected ? "white" : "#475569",
+                    }}
+                  >
+                    {isSelected ? <span className="inline-flex items-center gap-1"><Check className="w-3 h-3" /> Escolhido</span> : "Escolher"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        {state === "invalid" && (
-          <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-sm flex items-center gap-2">
-            <XIcon className="w-4 h-4 shrink-0" />
-            <span>Cupom inválido ou inativo. Confira a grafia ou pule essa etapa.</span>
-          </div>
-        )}
-      </div>
+      {/* Confirmação pós-seleção */}
+      {selected && (
+        <div className="text-center text-[13px] font-display font-bold text-emerald-700">
+          ✅ Indicado por {selected.nome}!
+        </div>
+      )}
 
       {/* CTAs */}
-      {state === "ok" ? (
+      {selected ? (
         <button
           type="button"
           onClick={onContinue}
           className="btn-primary w-full inline-flex items-center justify-center gap-2"
-          style={{ background: "#10B981" }}
+          style={{ background: "#F97316" }}
         >
-          Aplicar cupom e continuar <ArrowRight className="w-4 h-4" />
+          Continuar <ArrowRight className="w-4 h-4" />
         </button>
       ) : (
         <button
           type="button"
-          onClick={onContinue}
+          onClick={() => { clearStoredCupom(); onContinue(); }}
           className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F8FAFC]"
           style={{ borderColor: "#E2E8F0", color: "#0F172A", background: "white" }}
         >
-          Não tenho cupom — Pular <ArrowRight className="w-4 h-4" />
+          Ninguém me indicou — Pular <ArrowRight className="w-4 h-4" />
         </button>
       )}
 
@@ -463,6 +514,33 @@ function CupomStep({ initialAfiliado, onApplied, onContinue, onBack }) {
       >
         ← Voltar
       </button>
+    </div>
+  );
+}
+
+function InfluencerAvatar({ af }) {
+  const size = 48;
+  if (af.foto_url) {
+    return (
+      <img
+        src={af.foto_url}
+        alt={af.nome}
+        width={size}
+        height={size}
+        loading="lazy"
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size, background: "#F1F5F9" }}
+        onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }}
+        draggable={false}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center shrink-0 text-white font-display font-extrabold"
+      style={{ width: size, height: size, background: colorFromName(af.nome), fontSize: 18 }}
+    >
+      {initialsFromName(af.nome)}
     </div>
   );
 }

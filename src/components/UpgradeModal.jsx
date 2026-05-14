@@ -1,14 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Sparkles, Loader2, Star, Check, Gift } from "lucide-react";
 import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
-import { getStoredCupom, clearStoredCupom } from "../lib/cupom";
-import CupomField from "./CupomField";
+import { supabase } from "../lib/supabase";
 
 export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
   const [ciclo, setCiclo] = useState("anual");
+  const [refAfiliado, setRefAfiliado] = useState(null);
+
+  // Pega o afiliado de quem indicou esse user (lookup transparente — sem digitação).
+  // O upgrade flow não pode atribuir afiliado novo; só preserva o original do cadastro.
+  useEffect(() => {
+    if (!open || !user?.afiliado_id) { setRefAfiliado(null); return; }
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("afiliados")
+        .select("id, nome, cupom, desconto_percent")
+        .eq("id", user.afiliado_id)
+        .eq("ativo", true)
+        .maybeSingle();
+      if (active) setRefAfiliado(data ?? null);
+    })();
+    return () => { active = false; };
+  }, [open, user?.afiliado_id]);
 
   if (!open) return null;
 
@@ -44,7 +61,8 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
     setInfo(null);
     setBusy(plano);
     try {
-      const cupom = getStoredCupom() || null;
+      // Reaplica o cupom do afiliado original do usuário (se existir + ainda ativo).
+      const cupom = refAfiliado?.cupom ?? null;
       const res = await fetch("/api/create-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,7 +81,6 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
       }
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       if (data?.init_point) {
-        clearStoredCupom();
         window.location.href = data.init_point;
         return;
       }
@@ -128,9 +145,20 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
             />
           </div>
 
-          <div className="mt-4">
-            <CupomField />
-          </div>
+          {refAfiliado && (
+            <div
+              className="mt-4 rounded-xl px-3 py-2 text-[12px] font-display font-bold flex items-center gap-2"
+              style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}
+            >
+              <span className="text-base">🎟️</span>
+              <span className="flex-1">
+                Indicado por <strong>{refAfiliado.nome}</strong>
+                {Number(refAfiliado.desconto_percent) > 0 && (
+                  <> — <strong>{Number(refAfiliado.desconto_percent).toFixed(0)}% off no 1º mês</strong></>
+                )}
+              </span>
+            </div>
+          )}
 
           {info && (
             <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-amber-900 text-sm">{info}</div>

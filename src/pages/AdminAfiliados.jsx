@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Edit2, Loader2, X, Check, Tag, Mail, AtSign, Percent,
-  ExternalLink, Users as UsersIcon, BarChart3, Receipt, Megaphone,
+  ExternalLink, Users as UsersIcon, BarChart3, Receipt, Megaphone, Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
@@ -91,6 +91,7 @@ function AfiliadosTab() {
       email: form.email.trim().toLowerCase(),
       instagram: form.instagram?.trim() || null,
       cupom: form.cupom.trim().toUpperCase(),
+      foto_url: form.foto_url?.trim() || null,
       comissao_percent: Number(form.comissao_percent ?? 5),
       desconto_percent: Number(form.desconto_percent ?? 0),
       ativo: !!form.ativo,
@@ -125,7 +126,8 @@ function AfiliadosTab() {
             <table className="w-full text-sm">
               <thead className="text-left text-[#64748B] text-[11px] uppercase tracking-wide">
                 <tr>
-                  <th className="py-2">Nome</th>
+                  <th className="py-2"></th>
+                  <th>Nome</th>
                   <th>Cupom</th>
                   <th className="hidden sm:table-cell">Instagram</th>
                   <th className="text-right">Comissão</th>
@@ -139,6 +141,9 @@ function AfiliadosTab() {
               <tbody className="divide-y divide-[#E2E8F0]">
                 {afiliados.map((a) => (
                   <tr key={a.id}>
+                    <td className="py-2.5 w-8">
+                      <FotoThumb foto_url={a.foto_url} nome={a.nome} />
+                    </td>
                     <td className="py-2.5 font-display font-bold text-[#0F172A]">{a.nome}</td>
                     <td><code className="text-[12px] bg-[#FFF7ED] text-[#EA580C] px-1.5 py-0.5 rounded">{a.cupom}</code></td>
                     <td className="hidden sm:table-cell text-[#64748B] text-[12px]">{a.instagram ?? "—"}</td>
@@ -180,7 +185,7 @@ function AfiliadosTab() {
 
 function AfiliadoForm({ initial, onCancel, onSave }) {
   const [form, setForm] = useState(() => initial ?? {
-    nome: "", email: "", instagram: "", cupom: "",
+    nome: "", email: "", instagram: "", cupom: "", foto_url: "",
     comissao_percent: 10, desconto_percent: 0, ativo: true,
   });
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
@@ -203,6 +208,22 @@ function AfiliadoForm({ initial, onCancel, onSave }) {
           <Field icon={AtSign}>
             <input className="input" placeholder="@instagram (opcional)" value={form.instagram} onChange={(e) => setF("instagram", e.target.value)} maxLength={60} />
           </Field>
+          <div className="flex items-center gap-3">
+            <FotoThumb foto_url={form.foto_url} nome={form.nome} size={48} />
+            <Field icon={ImageIcon} className="flex-1">
+              <input
+                className="input"
+                placeholder="URL da foto (opcional)"
+                value={form.foto_url}
+                onChange={(e) => setF("foto_url", e.target.value)}
+                maxLength={500}
+              />
+            </Field>
+          </div>
+          <div className="text-[11px] text-[#94A3B8] -mt-1">
+            Cole o link direto da foto do influenciador (ex: link da imagem do Instagram, Imgur, etc).
+            Se ficar em branco, mostramos as iniciais coloridas no card de seleção.
+          </div>
           <div className="flex gap-2">
             <Field icon={Tag} className="flex-1">
               <input className="input uppercase" placeholder="CUPOM*" value={form.cupom} onChange={(e) => setF("cupom", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={20} />
@@ -586,6 +607,41 @@ function Field({ icon: Icon, children, className = "" }) {
       <Icon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
       <div className="[&>input]:pl-10">{children}</div>
     </label>
+  );
+}
+
+const THUMB_PALETTE = ["#F97316", "#6366F1", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4", "#EF4444"];
+function colorFor(name) {
+  let h = 0; const s = name ?? "";
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return THUMB_PALETTE[Math.abs(h) % THUMB_PALETTE.length];
+}
+function initialsFor(name) {
+  return (name ?? "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).filter(Boolean).join("") || "?";
+}
+
+function FotoThumb({ foto_url, nome, size = 32 }) {
+  if (foto_url) {
+    return (
+      <img
+        src={foto_url}
+        alt={nome}
+        width={size}
+        height={size}
+        loading="lazy"
+        className="rounded-full object-cover"
+        style={{ width: size, height: size, background: "#F1F5F9" }}
+        draggable={false}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center text-white font-display font-extrabold"
+      style={{ width: size, height: size, background: colorFor(nome), fontSize: Math.round(size * 0.38) }}
+    >
+      {initialsFor(nome)}
+    </div>
   );
 }
 
