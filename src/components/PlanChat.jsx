@@ -175,7 +175,7 @@ const MD_COMPONENTS_LIGHT = {
 };
 
 export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
-  const { days, reload: reloadRoteiro } = useRoteiro(trip.id);
+  const { days, loading: roteiroLoading, reload: reloadRoteiro } = useRoteiro(trip.id);
   const { messages, setMessages, persist, reset, loading: convLoading } = useIaConversa(trip.id, user?.id);
 
   const [input, setInput] = useState("");
@@ -287,6 +287,22 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
 
     const historyForApi = next.slice(0, -1).map((m) => ({ role: m.role, content: m.content }));
 
+    // BUG FIX (bug #2 do diagnóstico): o `days` do useRoteiro pode estar
+    // stale quando a hidratação inicial ainda não terminou ou quando o
+    // cache localStorage tá velho. Antes a gente mandava "Vazio." pro Jei
+    // e ele começava a sugerir dia 1 mesmo em viagens com 14 dias montados.
+    // Solução: SE estamos em loading inicial, await reloadRoteiro() e usa
+    // o array retornado direto (sem depender de re-render do React).
+    let freshDays = days;
+    if (roteiroLoading) {
+      try {
+        const reloaded = await reloadRoteiro();
+        if (Array.isArray(reloaded)) freshDays = reloaded;
+      } catch (e) {
+        console.warn("[PlanChat] reloadRoteiro inicial falhou, segue com cache:", e?.message);
+      }
+    }
+
     try {
       const fullText = await streamPlan(
         {
@@ -305,7 +321,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
             bebes: trip.bebes,
             viaje_segura: trip.viaje_segura,
             descricao: trip.descricao,
-            roteiro_resumo: buildRoteiroResumo(days),
+            roteiro_resumo: buildRoteiroResumo(freshDays),
           },
         },
         controller.signal,

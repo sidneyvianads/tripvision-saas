@@ -21,8 +21,10 @@ export function useRoteiro(viagemId) {
   const [loading, setLoading] = useState(() => !viagemId || readCache(viagemId) == null);
   const [error, setError] = useState(null);
 
+  // reload() retorna o array fresh — útil pra callers (PlanChat) que
+  // precisam garantir freshness sem depender de re-render do React.
   const reload = useCallback(async () => {
-    if (!viagemId) return;
+    if (!viagemId) return [];
     const { data: dias, error: dErr } = await supabase
       .from("roteiro_dias")
       .select("*")
@@ -31,13 +33,13 @@ export function useRoteiro(viagemId) {
     if (dErr) {
       setError(dErr.message);
       setLoading(false);
-      return;
+      return [];
     }
     if (!dias || dias.length === 0) {
       setDays([]);
       writeCache(viagemId, []);
       setLoading(false);
-      return;
+      return [];
     }
 
     const ids = dias.map((d) => d.id);
@@ -55,6 +57,7 @@ export function useRoteiro(viagemId) {
     setDays(merged);
     writeCache(viagemId, merged);
     setLoading(false);
+    return merged;
   }, [viagemId]);
 
   useEffect(() => { reload(); }, [reload]);
