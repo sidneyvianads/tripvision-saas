@@ -35,7 +35,50 @@ Combinações válidas (escolha a aplicável):
 
 Exemplo: **Dona Ana** — [📍 Ver no Maps](https://maps.google.com/?q=Restaurante+Dona+Ana+Gramado) · [📸 Instagram](https://instagram.com/restaurantedonana)
 
-O usuário precisa CLICAR — não dê só endereço em texto.`;
+O usuário precisa CLICAR — não dê só endereço em texto.
+
+PESQUISA DE PREÇOS — MULTI-PLATAFORMA (hotel / voo):
+Quando o usuário pedir HOTEL/HOSPEDAGEM ou PASSAGEM AÉREA, troque o modo "Maps
++ Instagram por local" pelo modo COMPARATIVO entre plataformas. Restaurante,
+passeio e transporte terrestre seguem a regra de LINKS padrão.
+
+HOTEL — buscas direcionadas (use site: pra filtrar):
+- \`hotel [DESTINO] [MES/ANO] site:booking.com preço\`
+- \`hotel [DESTINO] [MES/ANO] site:decolar.com\`
+- \`[DESTINO] hospedagem [MES/ANO] site:airbnb.com.br\`
+- (sobrar budget) \`hotel [DESTINO] site:trivago.com.br\` e/ou \`site:hoteis.com\`
+
+VOO — buscas direcionadas:
+- \`voo [ORIGEM] [DESTINO] [MES/ANO] site:google.com/travel/flights\`
+- \`passagem [ORIGEM] [DESTINO] [MES/ANO] site:decolar.com\`
+- \`passagem [ORIGEM] [DESTINO] [MES/ANO] site:kayak.com.br\`
+
+Apresente TABELA COMPARATIVA em markdown:
+
+🏨 **Hotéis em [DESTINO]** ([DATAS], [PESSOAS]):
+
+| Hotel | ⭐ | Booking | Decolar | Airbnb |
+|-------|-----|---------|---------|--------|
+| Hotel X | 4.5 | R$890/3n | R$920/3n | — |
+| Chalé Y | 4.3 | — | — | R$780/3n |
+
+💡 **Melhor preço:** Chalé Y no Airbnb (R$260/noite)
+
+Links por opção em linha separada:
+- **Hotel X:** [📍 Maps](...) · [Booking](...) · [Decolar](...)
+- **Chalé Y:** [📍 Maps](...) · [Airbnb](...)
+
+REGRAS:
+- SEMPRE diga DE QUAL plataforma veio cada preço (a coluna já faz isso).
+- "—" em célula sem dado — NÃO invente.
+- Total = noites × diária pra hotel; total pra voo. Indique unidade: "R$890/3n".
+- Real INTEIRO, sem centavos.
+- Negrito no melhor preço.
+- Mínimo 2 opções; ideal 3-5.
+- Budget de 5 buscas por turno é compartilhado — hotel ocupa o turno inteiro.
+- Pra hotéis, NÃO busque Instagram individual no turno comparativo. Volta a
+  buscar (regra LINKS padrão) só quando o user escolher 1 hotel específico.
+- Preço de meses atrás: avise "⚠️ Preço de [data], confirme no site".`;
 
 function buildContext({ trip, roteiro }) {
   if (!trip) return "";
