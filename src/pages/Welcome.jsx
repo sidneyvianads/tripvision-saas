@@ -14,10 +14,15 @@ const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
 
 export default function Welcome() {
-  const { signIn, signUp, loading } = useAuth();
+  const { signIn, signUp, loading, sendPasswordReset, updatePassword } = useAuth();
   const [params] = useSearchParams();
+  // mode: 'login' | 'signup' | 'forgot' | 'reset'
+  // - login/signup: fluxos normais
+  // - forgot: form pra pedir reset de senha
+  // - reset: form pra setar nova senha (quando volta do email com type=recovery)
   const [mode, setMode] = useState(params.get("mode") === "signup" ? "signup" : "login");
   const [err, setErr] = useState(null);
+  const [info, setInfo] = useState(null);
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -28,6 +33,22 @@ export default function Welcome() {
 
   const [success, setSuccess] = useState(null);
   const [justSignedUpEmail, setJustSignedUpEmail] = useState(null);
+  // Quando email confirmation está ON no Supabase, signUp não loga o user;
+  // mostramos "verifique seu email" e o user continua o fluxo pelo MP.
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+
+  // Detecta retorno do link de reset de senha. Supabase emite o evento
+  // PASSWORD_RECOVERY quando o hash da URL é consumido por detectSessionInUrl.
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("reset");
+        setErr(null);
+        setInfo("Defina sua nova senha abaixo.");
+      }
+    });
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
 
   // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
@@ -57,9 +78,42 @@ export default function Welcome() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setErr(null);
+    setInfo(null);
     setJustSignedUpEmail(null);
     try {
       await signIn(email, senha);
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    setInfo(null);
+    try {
+      await sendPasswordReset(email);
+      setInfo("Email enviado! Confira sua caixa (e o spam). O link abre o Viajjei e te deixa criar uma senha nova.");
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    if (!senha || senha !== senha2) {
+      setErr("As senhas não conferem.");
+      return;
+    }
+    try {
+      await updatePassword(senha);
+      setInfo("Senha atualizada! Você já está logado.");
+      // O onAuthStateChange já tem session válida nesse ponto — o AuthProvider
+      // carrega o profile e o app redireciona normalmente. Aqui só limpamos.
+      setSenha("");
+      setSenha2("");
+      setMode("login");
     } catch (e) {
       setErr(e.message);
     }
@@ -97,6 +151,13 @@ export default function Welcome() {
         origem,
         afiliado_id,
       });
+
+      // Se Supabase tem email confirmation ON, sinaliza pra UI ajustar o toast.
+      // O pagamento ainda continua: o webhook MP ativa o plano usando o user_id,
+      // independente do email estar confirmado ou não.
+      if (created.needsConfirmation) {
+        setNeedsConfirmation(true);
+      }
 
       try {
         const cupom = getStoredCupom() || null;
@@ -148,7 +209,9 @@ export default function Welcome() {
         >
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <span className="font-display font-bold text-sm">
-            Conta criada! Redirecionando pro login…
+            {needsConfirmation
+              ? "Conta criada! Confira seu email pra confirmar e fazer login."
+              : "Conta criada! Redirecionando pro login…"}
           </span>
         </div>
       )}
@@ -180,17 +243,86 @@ export default function Welcome() {
             </button>
 
             {err && <ErrorBox msg={err} />}
+            {info && <InfoBox msg={info} />}
+
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => { setMode("forgot"); setErr(null); setInfo(null); setSenha(""); }}
+                className="text-xs font-display font-bold text-[#64748B] hover:text-[#2E86C1] hover:underline"
+              >
+                Esqueci a senha
+              </button>
+            </div>
 
             <p className="text-center text-sm text-[#636E72] pt-2">
               Não tem conta?{" "}
               <button
                 type="button"
-                onClick={() => { setMode("signup"); setErr(null); setJustSignedUpEmail(null); }}
+                onClick={() => { setMode("signup"); setErr(null); setInfo(null); setJustSignedUpEmail(null); }}
                 className="font-display font-bold text-[#2E86C1] hover:underline"
               >
                 Cadastre-se
               </button>
             </p>
+          </form>
+        ) : mode === "forgot" ? (
+          <form onSubmit={handleForgot} className="mt-8 space-y-3">
+            <div className="text-center">
+              <h2 className="font-display font-extrabold text-[#1F2937] text-lg">Recuperar senha</h2>
+              <p className="text-[#6B7280] text-xs mt-1">
+                Digite seu email. A gente envia um link pra você criar uma senha nova.
+              </p>
+            </div>
+            <Field icon={Mail} type="email" placeholder="seu@email.com" value={email} onChange={setEmail} autoFocus autoComplete="email" />
+            <button type="submit" className="btn-primary w-full inline-flex items-center justify-center gap-2" disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              Enviar link
+            </button>
+            {err && <ErrorBox msg={err} />}
+            {info && <InfoBox msg={info} />}
+            <p className="text-center text-sm text-[#636E72] pt-2">
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setErr(null); setInfo(null); }}
+                className="font-display font-bold text-[#2E86C1] hover:underline"
+              >
+                ← Voltar pro login
+              </button>
+            </p>
+          </form>
+        ) : mode === "reset" ? (
+          <form onSubmit={handleReset} className="mt-8 space-y-3">
+            <div className="text-center">
+              <h2 className="font-display font-extrabold text-[#1F2937] text-lg">Nova senha</h2>
+              <p className="text-[#6B7280] text-xs mt-1">
+                Escolha uma senha forte. Mínimo 6 caracteres com letras e números.
+              </p>
+            </div>
+            <Field icon={KeyRound} type="password" placeholder="nova senha" value={senha} onChange={setSenha} autoFocus autoComplete="new-password" />
+            {senha && senhaForca && (
+              <div className="px-1">
+                <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${senhaForca.pct}%`, background: senhaForca.color }} />
+                </div>
+                <div className="text-[11px] mt-1 font-display font-bold flex items-center gap-1.5" style={{ color: senhaForca.color }}>
+                  <span>{senhaForca.valid ? "✓" : "⚠"}</span>
+                  <span>Força: {senhaForca.label}</span>
+                  {senhaForca.hint && <span className="text-[10px] opacity-80 font-display font-semibold normal-case">— {senhaForca.hint}</span>}
+                </div>
+              </div>
+            )}
+            <Field icon={KeyRound} type="password" placeholder="confirmar nova senha" value={senha2} onChange={setSenha2} autoComplete="new-password" />
+            <button
+              type="submit"
+              className="btn-primary w-full inline-flex items-center justify-center gap-2"
+              disabled={loading || !senhaValida || !senhasIguais}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+              Atualizar senha
+            </button>
+            {err && <ErrorBox msg={err} />}
+            {info && <InfoBox msg={info} />}
           </form>
         ) : signupStep === "plano" ? (
           <PlanPicker
@@ -824,6 +956,15 @@ function ErrorBox({ msg }) {
   return (
     <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-red-700 text-sm">
       {msg}
+    </div>
+  );
+}
+
+function InfoBox({ msg }) {
+  return (
+    <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800 text-sm flex items-start gap-2">
+      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+      <span>{msg}</span>
     </div>
   );
 }

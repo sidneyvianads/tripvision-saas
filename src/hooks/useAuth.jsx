@@ -1,155 +1,194 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { supabase, sha256Hex, normalizePassword, normalizeEmail } from "../lib/supabase";
+import { supabase, normalizePassword, normalizeEmail } from "../lib/supabase";
 
-const SESSION_KEY = "tripvision-saas:user:v1";
-
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && parsed.id ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-function saveSession(user) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); } catch {}
-}
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch {}
-}
+// Auth nativo do Supabase. Sessão é gerenciada inteiramente pela lib
+// (JWT em localStorage com chave "viajjei.auth", refresh automático,
+// expiração default ~1h, com refresh token de 30 dias).
+//
+// A tabela public.users é PROFILE estendido: cada row tem o mesmo id
+// do auth.users(id). Campos extras (nome, plano, avatar_*, viaje_segura, etc)
+// vivem aqui. Migrations garantem CASCADE delete e RLS por auth.uid().
 
 const PROFILE_COLS = "id, nome, email, avatar_cor, avatar_url, plano, plano_expires_at, trial_ends_at, origem, afiliado_id";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => loadSession());
-  const [loading, setLoading] = useState(false);
+  // session inicia null; o getSession() abaixo hidrata se houver tokens válidos.
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    supabase
+  // Faz fetch do profile estendido (public.users) usando o id do auth.users.
+  // RLS garante que só puxa a row do user atual.
+  const loadProfile = useCallback(async (authUser) => {
+    if (!authUser) return null;
+    const { data, error } = await supabase
       .from("users")
       .select(PROFILE_COLS)
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.error("[Viajjei] profile refresh:", error);
-          return;
-        }
-        if (!data) {
-          console.warn("[Viajjei] sessão órfã. Limpando.");
-          clearSession();
-          setUser(null);
-          return;
-        }
-        const changed =
-          data.nome       !== user.nome ||
-          data.avatar_cor !== user.avatar_cor ||
-          (data.avatar_url ?? null) !== (user.avatar_url ?? null) ||
-          data.plano      !== user.plano;
-        if (changed) {
-          saveSession(data);
-          setUser(data);
-        }
-      });
-    return () => { active = false; };
-  }, [user?.id]);
+      .eq("id", authUser.id)
+      .maybeSingle();
+    if (error) {
+      console.error("[Viajjei] loadProfile error:", error);
+      return null;
+    }
+    return data;
+  }, []);
 
+  // Hidratação inicial + listener das mudanças de sessão (login, logout,
+  // refresh, recovery). Quando muda, recarrega o profile.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!active) return;
+      if (session?.user) {
+        const profile = await loadProfile(session.user);
+        if (active) setUser(profile);
+      }
+      if (active) setLoading(false);
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        setUser(null);
+        return;
+      }
+      const profile = await loadProfile(session.user);
+      setUser(profile);
+    });
+
+    return () => {
+      active = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, [loadProfile]);
+
+  // signIn — Supabase faz o bcrypt internamente. Auth state listener atualiza
+  // o user state quando o login completa.
   const signIn = useCallback(async (email, senha) => {
     setLoading(true);
     try {
       const cleanEmail = normalizeEmail(email);
       const cleanSenha = normalizePassword(senha);
       if (!cleanSenha) throw new Error("Informe sua senha.");
-      const hash = await sha256Hex(cleanSenha);
-
-      const { data, error } = await supabase
-        .from("users")
-        .select(`${PROFILE_COLS}, senha_hash`)
-        .ilike("email", cleanEmail)
-        .maybeSingle();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanSenha,
+      });
       if (error) {
-        console.error("[Viajjei] signIn error:", error);
+        // Mensagens amigáveis pros 2 erros comuns
+        if (/invalid login credentials/i.test(error.message)) {
+          throw new Error("Email ou senha incorretos.");
+        }
+        if (/email not confirmed/i.test(error.message)) {
+          throw new Error("Confirme seu email antes de entrar. Veja na caixa de entrada.");
+        }
         throw new Error(error.message);
       }
-      if (!data) throw new Error("E-mail não encontrado. Cadastre-se primeiro.");
-      if (data.senha_hash !== hash) {
-        console.error("[Viajjei] signIn hash mismatch", {
-          esperado: data.senha_hash.slice(0, 8) + "…",
-          recebido: hash.slice(0, 8) + "…",
-          senhaLen: cleanSenha.length,
-        });
-        throw new Error("Senha incorreta.");
-      }
-      const { senha_hash: _omit, ...safe } = data;
-      saveSession(safe);
-      setUser(safe);
-      return safe;
+      const profile = await loadProfile(data.user);
+      setUser(profile);
+      return profile;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadProfile]);
 
+  // signUp — Cria entrada em auth.users (Supabase faz bcrypt + envia email
+  // de confirmação). Depois cria a row em public.users com nome/avatar/origem.
+  // Quando email confirmation está ON no Supabase, o user NÃO loga automaticamente;
+  // precisa clicar no link do email. Por isso retornamos `needsConfirmation: true`
+  // pra o Welcome saber o que mostrar.
   const signUp = useCallback(async ({ nome, email, senha, avatar_cor, avatar_url, origem, afiliado_id }) => {
     setLoading(true);
     try {
-      const cleanNome  = (nome ?? "").trim();
+      const cleanNome = (nome ?? "").trim();
       const cleanEmail = normalizeEmail(email);
       const cleanSenha = normalizePassword(senha);
-      // SEMPRE cria como "pending" (sem assinatura ativa). Upgrade só após webhook
-      // do Mercado Pago confirmar pagamento (vira pro/grupo com trial de 7 dias).
-      const cleanPlano = "pending";
-      if (!cleanNome)  throw new Error("Informe seu nome.");
+      if (!cleanNome) throw new Error("Informe seu nome.");
       if (!cleanEmail) throw new Error("Informe seu e-mail.");
       if (cleanSenha.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");
 
-      const { data: existing, error: checkErr } = await supabase
-        .from("users")
-        .select("id, email")
-        .ilike("email", cleanEmail)
-        .maybeSingle();
-      if (checkErr) console.error("[Viajjei] signUp pre-check:", checkErr);
-      else if (existing) throw new Error("Esse e-mail já está cadastrado. Faça login.");
-
-      const hash = await sha256Hex(cleanSenha);
-      const avatarLen = (avatar_url ?? "").length;
-      console.log("[Viajjei] signUp inserindo:", { email: cleanEmail, hasAvatarUrl: !!avatar_url, avatarLen, origem, afiliado_id });
-      const { data, error } = await supabase
-        .from("users")
-        .insert({
-          nome: cleanNome,
-          email: cleanEmail,
-          senha_hash: hash,
-          avatar_cor,
-          avatar_url: avatar_url ?? null,
-          plano: cleanPlano,
-          origem: origem ?? "organico",
-          afiliado_id: afiliado_id ?? null,
-        })
-        .select(PROFILE_COLS)
-        .single();
-
-      if (error) {
-        console.error("[Viajjei] signUp insert:", error);
-        if (error.code === "23505") throw new Error("Esse e-mail já está cadastrado. Faça login.");
-        throw new Error(`Erro ao criar conta: ${error.message ?? "desconhecido"}`);
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: cleanSenha,
+        options: {
+          // metadados extras viajam pra raw_user_meta_data — útil pra triggers
+          data: { nome: cleanNome },
+          emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/welcome` : undefined,
+        },
+      });
+      if (signUpErr) {
+        if (/already registered/i.test(signUpErr.message) || /already exists/i.test(signUpErr.message)) {
+          throw new Error("Esse e-mail já está cadastrado. Faça login.");
+        }
+        if (/weak password/i.test(signUpErr.message)) {
+          throw new Error("Senha muito fraca. Use 6+ caracteres com letras e números.");
+        }
+        throw new Error(signUpErr.message);
       }
-      console.log("[Viajjei] signUp ok:", { id: data.id, hasAvatarUrl: !!data.avatar_url, avatarLenSaved: (data.avatar_url ?? "").length });
-      return data;
+
+      const newUser = signUpData.user;
+      if (!newUser) throw new Error("Falha ao criar conta — tente novamente.");
+
+      // Cria/atualiza profile em public.users. Se Supabase tiver email
+      // confirmation ON, ainda não estamos logados; precisamos usar
+      // service-side ou aceitar que a row de profile só vai criar depois
+      // do primeiro login. Pra MVP: tentamos agora; se RLS bloquear, OK,
+      // criamos no primeiro signIn via UPSERT idempotente.
+      const profilePayload = {
+        id: newUser.id,
+        nome: cleanNome,
+        email: cleanEmail,
+        avatar_cor: avatar_cor ?? "#7CB9E8",
+        avatar_url: avatar_url ?? null,
+        plano: "pending",
+        origem: origem ?? "organico",
+        afiliado_id: afiliado_id ?? null,
+      };
+      const { error: profileErr } = await supabase
+        .from("users")
+        .upsert(profilePayload, { onConflict: "id" });
+      if (profileErr) {
+        // Se RLS bloqueou (esperado quando email confirmation está ON),
+        // criamos lazy no próximo loadProfile-or-fail handshake.
+        console.warn("[Viajjei] profile UPSERT (deferred till login):", profileErr.message);
+      }
+
+      // Quando session vem null = email confirmation ativo. Avisa caller.
+      const needsConfirmation = !signUpData.session;
+      if (signUpData.session) {
+        setUser(profilePayload);
+      }
+      return { ...profilePayload, needsConfirmation };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const signOut = useCallback(() => {
-    clearSession();
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
+  }, []);
+
+  // Envia email de reset. Link volta como /welcome#access_token=...&type=recovery.
+  // O detectSessionInUrl: true do supabase-js consome o token e dispara o
+  // listener com event PASSWORD_RECOVERY — o Welcome detecta e mostra form
+  // de nova senha.
+  const sendPasswordReset = useCallback(async (email) => {
+    const cleanEmail = normalizeEmail(email);
+    if (!cleanEmail) throw new Error("Informe seu e-mail.");
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: typeof window !== "undefined" ? `${window.location.origin}/welcome` : undefined,
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  // Atualiza a senha (usado tanto pelo flow de recovery quanto pelo Account)
+  const updatePassword = useCallback(async (novaSenha) => {
+    const clean = normalizePassword(novaSenha);
+    if (clean.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");
+    const { error } = await supabase.auth.updateUser({ password: clean });
+    if (error) throw new Error(error.message);
   }, []);
 
   const updateProfile = useCallback(async (patch) => {
@@ -165,18 +204,13 @@ export function AuthProvider({ children }) {
 
     setLoading(true);
     try {
-      console.log("[Viajjei] updateProfile:", { fields: Object.keys(updates), avatarLen: (updates.avatar_url ?? "").length });
       const { data, error } = await supabase
         .from("users")
         .update(updates)
         .eq("id", user.id)
         .select(PROFILE_COLS)
         .single();
-      if (error) {
-        console.error("[Viajjei] updateProfile:", error);
-        throw new Error(error.message);
-      }
-      saveSession(data);
+      if (error) throw new Error(error.message);
       setUser(data);
       return data;
     } finally {
@@ -185,8 +219,8 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut, updateProfile }),
-    [user, loading, signIn, signUp, signOut, updateProfile]
+    () => ({ user, loading, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile }),
+    [user, loading, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { supabase, sha256Hex, normalizePassword } from "../lib/supabase";
+import { supabase, normalizePassword } from "../lib/supabase";
 import { PLANS, planName, planIcon, isPaid, isOwner, hasActiveAccess, isInTrial, trialDaysLeft, needsSubscription } from "../data/plans";
 import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
@@ -16,7 +16,7 @@ const formatBR = (iso) => {
 };
 
 export default function Account() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [assinatura, setAssinatura] = useState(null);
@@ -52,14 +52,16 @@ export default function Account() {
 
     setPwBusy(true);
     try {
-      const oldHash = await sha256Hex(oldClean);
-      const { data: row } = await supabase.from("users").select("senha_hash").eq("id", user.id).maybeSingle();
-      if (!row || row.senha_hash !== oldHash) {
-        throw new Error("Senha atual incorreta.");
-      }
-      const newHash = await sha256Hex(newClean);
-      const { error } = await supabase.from("users").update({ senha_hash: newHash }).eq("id", user.id);
-      if (error) throw new Error(error.message);
+      // Re-autentica primeiro pra validar a senha atual. signInWithPassword
+      // retorna erro 400 com "Invalid login credentials" se a velha tiver errada.
+      // Como o user já está logado com o mesmo email, isso só refresca a session.
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: oldClean,
+      });
+      if (reauthErr) throw new Error("Senha atual incorreta.");
+
+      await updatePassword(newClean);
       setPwMsg({ type: "ok", text: "Senha atualizada!" });
       setPwOld(""); setPwNew(""); setPwNew2("");
     } catch (err) {

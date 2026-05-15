@@ -9,19 +9,23 @@ if (!isSupabaseConfigured) {
   console.warn("[Viajjei] VITE_SUPABASE_URL/ANON_KEY ausentes — modo offline.");
 }
 
+// Auth nativo do Supabase: persistSession + autoRefreshToken pra sessão
+// durar com JWT renovado automaticamente. detectSessionInUrl: true ativa
+// o handshake do flow de reset de senha (link no email volta com
+// #access_token=... + type=recovery).
 export const supabase = createClient(
   SUPABASE_URL ?? "https://placeholder.supabase.co",
   SUPABASE_ANON ?? "placeholder-anon-key",
-  { auth: { persistSession: false } }
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+      storageKey: "viajjei.auth",
+    },
+  }
 );
-
-export async function sha256Hex(text) {
-  const buf = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 const INVISIBLE_CODEPOINTS = [0x00a0, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
 const INVISIBLE_CHARS_RE = new RegExp(
