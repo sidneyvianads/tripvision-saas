@@ -2,13 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const CACHE_KEY = (viagemId) => `tripvision:roteiro:${viagemId}`;
+// TTL do cache. Cache existe pra hidratação instantânea da UI; passa
+// disso, descarta — outra aba pode ter editado, ou o usuário voltou
+// depois de horas/dias. Reload via Supabase é sempre chamado em
+// paralelo (useEffect), então o "fresh" chega rápido. Cache só serve
+// pro primeiro paint não ser branco.
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
 
 function readCache(viagemId) {
   try {
     const raw = localStorage.getItem(CACHE_KEY(viagemId));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.days) ? parsed.days : null;
+    if (!Array.isArray(parsed?.days)) return null;
+    // Descarta cache velho — outra aba pode ter editado a viagem.
+    const ts = Number(parsed?.ts ?? 0);
+    if (!ts || Date.now() - ts > CACHE_TTL_MS) return null;
+    return parsed.days;
   } catch { return null; }
 }
 function writeCache(viagemId, days) {
