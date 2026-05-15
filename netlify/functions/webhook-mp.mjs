@@ -18,6 +18,7 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
+import { trackPaymentCompleted } from "./_lib/analytics.mjs";
 
 const TRIAL_DAYS = 7;
 
@@ -272,6 +273,7 @@ async function handlePreapproval(id) {
       }),
     });
     console.log(`[webhook-mp] ✅ ${user_id} ativou ${plano}/${ciclo} (trial até ${trialEnd.toISOString()})`);
+    trackPaymentCompleted(user_id, { plano, ciclo, amount, afiliado_id });
   } else if (isCanceled) {
     // Não rebaixa imediatamente — mantém plano até plano_expires_at expirar.
     console.log(`[webhook-mp] 🚫 ${user_id} cancelou ${plano}/${ciclo} — acesso mantido até plano_expires_at`);

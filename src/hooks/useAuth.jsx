@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase, normalizePassword, normalizeEmail } from "../lib/supabase";
 import { captureException, setUser as setSentryUser, clearUser as clearSentryUser } from "../lib/sentry";
+import { identify, resetAnalytics, trackSignupCompleted } from "../lib/analytics";
 
 // Auth nativo do Supabase. Sessão é gerenciada inteiramente pela lib
 // (JWT em localStorage com chave "viajjei.auth", refresh automático,
@@ -54,11 +55,15 @@ export function AuthProvider({ children }) {
       if (event === "SIGNED_OUT" || !session) {
         setUser(null);
         clearSentryUser();
+        resetAnalytics();
         return;
       }
       const profile = await loadProfile(session.user);
       setUser(profile);
-      if (profile) setSentryUser({ id: profile.id, email: profile.email });
+      if (profile) {
+        setSentryUser({ id: profile.id, email: profile.email });
+        identify(profile.id, { email: profile.email, nome: profile.nome, plano: profile.plano });
+      }
     });
 
     return () => {
@@ -163,6 +168,12 @@ export function AuthProvider({ children }) {
       if (signUpData.session) {
         setUser(profilePayload);
       }
+      // Funil: signup completou (independente de confirmação por email).
+      trackSignupCompleted(newUser.id, {
+        origem: origem ?? "organico",
+        afiliado_id: afiliado_id ?? null,
+        needs_confirmation: needsConfirmation,
+      });
       return { ...profilePayload, needsConfirmation };
     } finally {
       setLoading(false);

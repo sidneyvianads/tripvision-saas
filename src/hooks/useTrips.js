@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase, randomSlug } from "../lib/supabase";
+import { trackTripCreated } from "../lib/analytics";
 
 const TRIP_COLS = "id, owner_id, nome, slug, data_inicio, data_fim, cidades, num_pessoas, adultos, criancas, bebes, viaje_segura, descricao, cover_emoji, cor_tema, tema, created_at";
 
@@ -75,6 +76,14 @@ export function useTrips(userId) {
       .select(TRIP_COLS)
       .single();
     if (error) throw new Error(error.message);
+    trackTripCreated(data.id, {
+      nome: data.nome,
+      cidades_count: (data.cidades ?? []).length,
+      tem_datas: !!(data.data_inicio && data.data_fim),
+      num_pessoas: data.num_pessoas,
+      tema: data.tema,
+      viaje_segura: data.viaje_segura,
+    });
     await reload();
     return data;
   }, [userId, reload]);

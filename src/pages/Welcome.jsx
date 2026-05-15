@@ -9,6 +9,7 @@ import Logo from "../components/Logo";
 import { getStoredCupom, setStoredCupom, clearStoredCupom } from "../lib/cupom";
 import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
 import { supabase } from "../lib/supabase";
+import { trackPaymentStarted } from "../lib/analytics";
 
 const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
@@ -182,6 +183,7 @@ export default function Welcome() {
         if (data?.init_point) {
           clearStoredCupom();
           clearStoredOrigem();
+          trackPaymentStarted(plano, ciclo, { user_id: created.id, has_cupom: !!cupom });
           window.location.href = data.init_point;
           return;
         }

@@ -14,6 +14,7 @@ import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rate
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner, hasActiveAccess } from "../data/plans";
 import { supabase } from "../lib/supabase";
+import { trackMessageSent, trackPlanStarted } from "../lib/analytics";
 
 const SUGESTOES = [
   "Sugere hotel",
@@ -272,6 +273,8 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
     const baseMessages = messages.length === 0 ? [welcome] : messages;
     const userMsg = { role: "user", content: trimmed, ts: Date.now() };
     const next = [...baseMessages.filter((m) => !m._welcome), userMsg];
+    const realMessagesCount = baseMessages.filter((m) => !m._welcome && m.role === "user").length;
+    const isFirstUserMessage = realMessagesCount === 0;
 
     setMessages(next);
     persist(next);
@@ -279,6 +282,11 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
     setBusy(true);
     setHasStarted(false);
     setStreamingText("");
+
+    // Funil: primeira mensagem do user nessa viagem = plan_started.
+    // Toda mensagem (incluindo a primeira) = message_sent.
+    if (isFirstUserMessage) trackPlanStarted(trip.id, { user_plano: user.plano });
+    trackMessageSent(trip.id, { user_plano: user.plano, length: trimmed.length });
 
     const controller = new AbortController();
     abortRef.current = controller;

@@ -7,6 +7,7 @@ import { PLANS, planName, planIcon, isPaid, isOwner, hasActiveAccess, isInTrial,
 import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
+import { trackChurn } from "../lib/analytics";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -104,6 +105,7 @@ export default function Account() {
       // Atualiza state local imediatamente — webhook MP confirma depois
       setAssinatura((prev) => prev ? { ...prev, status: "canceled" } : prev);
       setCancelMsg({ type: "ok", text: data?.message ?? "Assinatura cancelada." });
+      trackChurn({ user_id: user.id, plano: user.plano, ciclo: assinatura?.ciclo });
     } catch (e) {
       setCancelMsg({ type: "err", text: `Falhou ao cancelar: ${e.message}` });
     } finally {
