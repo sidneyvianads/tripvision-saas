@@ -61,7 +61,9 @@ async function sb(path, init = {}) {
 //   { ok: true, mode: "validated" }  — secret OK e assinatura confere
 //   { ok: true, mode: "permissive" } — sem secret configurado (warning logado)
 //   { ok: false, reason: "..." }     — secret configurado e assinatura inválida
-function validateMpSignature(req, dataId) {
+//
+// Exportado pra cobertura de testes (tests/hmac.test.mjs).
+export function validateMpSignature(req, dataId) {
   const secret = process.env.MP_WEBHOOK_SECRET;
   if (!secret) {
     console.warn(
