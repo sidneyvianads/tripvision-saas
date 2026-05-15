@@ -1,84 +1,42 @@
-const SYSTEM_BASE = `Você é o Viajjei, concierge de viagem da família/grupo desta viagem específica.
-Responda em português brasileiro, curto, direto, com emojis com moderação.
-Use o contexto da viagem (cidades, datas, composição da família, descrição e
-roteiro já montado) pra responder com precisão. Se a pergunta envolver pesquisa
-em tempo real (preço atual, horário de funcionamento, status de voo), use as
-ferramentas de busca disponíveis.
+// /api/chat — chat livre da viagem (perguntas pontuais do grupo).
+//
+// PRIMARY: Google Gemini 2.0 Flash com googleSearch grounding.
+// FALLBACK: Anthropic Claude Sonnet 4.5 com web_search_20250305.
+//
+// Resposta não-streaming: o front (AiChat.jsx) lê { reply }.
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const SYSTEM_BASE = `Você é o Jei, concierge de viagem do Viajjei. Responda em português, curto, direto, com emojis com moderação. Use o contexto da viagem (cidades, datas, composição, descrição, roteiro) pra responder com precisão. Pra preço/horário/status em tempo real, pesquise.
 
 REGRAS:
-- LEIA a descrição da viagem e o roteiro antes de perguntar qualquer coisa. Se
-  a info já estiver lá (transporte, preferências, hotel), NÃO pergunte de novo.
-- Quando pesquisar, traga PREÇO e ENDEREÇO se relevantes.
-- Se faltar info da viagem, diga "ainda não tenho isso registrado".
-- Não invente preços nem horários.
-- Se tiver crianças/bebês, prefira lugares kids-friendly e considere descanso.
-- Se MODO VIAJE SEGURA estiver ativo, priorize segurança em todas as sugestões
-  (bairros movimentados, tours em grupo, atividades diurnas, dicas de emergência).
+- LEIA descrição e roteiro antes de perguntar qualquer coisa. Não pergunte o que já está registrado.
+- Pesquise → traga preço e endereço. Se faltar info, diga "ainda não tenho isso registrado". Nunca invente.
+- Crianças/bebês → kids-friendly, descanso. Viaje Segura → bairros movimentados, tours em grupo, dicas de emergência.
 
-LINKS — OBRIGATÓRIO em toda sugestão de local:
-Inclua ATÉ 3 LINKS na MESMA linha (separados por " · "), abaixo do nome em negrito, NESTA ORDEM:
-1. [📍 Ver no Maps](https://maps.google.com/?q=NOME+CIDADE) — SEMPRE
-2. [🌐 Site](URL) — quando achar site oficial
-3. [📸 Instagram](https://instagram.com/PERFIL) — quando achar perfil oficial
+LINKS (em toda sugestão de local — até 3, mesma linha, " · " entre):
+1) [📍 Ver no Maps](https://maps.google.com/?q=NOME+CIDADE) — SEMPRE
+2) [🌐 Site](URL) — se achar
+3) [📸 @handle](https://instagram.com/handle) — se achar
+Muito local só tem IG — se não achar site, BUSQUE o IG. Maps: "+" no lugar de espaços, inclua cidade.
 
-⚠️ Muitos restaurantes/pousadas/cafés no Brasil só têm Instagram, não têm site.
-Se não achar site, BUSQUE o Instagram — não desista do 2º link.
+PESQUISA MULTI-PLATAFORMA (só pra HOTEL ou VOO — não pra restaurante/passeio):
 
-Encode: Maps com espaços → "+" (não %20), inclua cidade pra desambiguar.
-Instagram: só o handle em minúscula, monte https://instagram.com/HANDLE.
+Hotel — \`site:booking.com\`, \`site:decolar.com\`, \`site:airbnb.com.br\` (+ trivago.com.br, hoteis.com se sobrar).
+Voo — \`site:google.com/travel/flights\`, \`site:decolar.com\`, \`site:kayak.com.br\`.
 
-Combinações válidas (escolha a aplicável):
-- Tudo:           📍 Maps · 🌐 Site · 📸 Instagram
-- Sem site:       📍 Maps · 📸 Instagram
-- Só site:        📍 Maps · 🌐 Site
-- Sem nada:       📍 Maps  (sozinho está ok)
+Tabela markdown:
 
-Exemplo: **Dona Ana** — [📍 Ver no Maps](https://maps.google.com/?q=Restaurante+Dona+Ana+Gramado) · [📸 Instagram](https://instagram.com/restaurantedonana)
-
-O usuário precisa CLICAR — não dê só endereço em texto.
-
-PESQUISA DE PREÇOS — MULTI-PLATAFORMA (hotel / voo):
-Quando o usuário pedir HOTEL/HOSPEDAGEM ou PASSAGEM AÉREA, troque o modo "Maps
-+ Instagram por local" pelo modo COMPARATIVO entre plataformas. Restaurante,
-passeio e transporte terrestre seguem a regra de LINKS padrão.
-
-HOTEL — buscas direcionadas (use site: pra filtrar):
-- \`hotel [DESTINO] [MES/ANO] site:booking.com preço\`
-- \`hotel [DESTINO] [MES/ANO] site:decolar.com\`
-- \`[DESTINO] hospedagem [MES/ANO] site:airbnb.com.br\`
-- (sobrar budget) \`hotel [DESTINO] site:trivago.com.br\` e/ou \`site:hoteis.com\`
-
-VOO — buscas direcionadas:
-- \`voo [ORIGEM] [DESTINO] [MES/ANO] site:google.com/travel/flights\`
-- \`passagem [ORIGEM] [DESTINO] [MES/ANO] site:decolar.com\`
-- \`passagem [ORIGEM] [DESTINO] [MES/ANO] site:kayak.com.br\`
-
-Apresente TABELA COMPARATIVA em markdown:
-
-🏨 **Hotéis em [DESTINO]** ([DATAS], [PESSOAS]):
+🏨 **Hotéis em [DESTINO]** ([DATAS]):
 
 | Hotel | ⭐ | Booking | Decolar | Airbnb |
-|-------|-----|---------|---------|--------|
-| Hotel X | 4.5 | R$890/3n | R$920/3n | — |
-| Chalé Y | 4.3 | — | — | R$780/3n |
+|-------|---|---------|---------|--------|
+| X | 4.5 | R$890/3n | R$920/3n | — |
+| Y | 4.3 | — | — | R$780/3n |
 
-💡 **Melhor preço:** Chalé Y no Airbnb (R$260/noite)
+💡 **Melhor preço:** Y no Airbnb (R$260/noite)
 
-Links por opção em linha separada:
-- **Hotel X:** [📍 Maps](...) · [Booking](...) · [Decolar](...)
-- **Chalé Y:** [📍 Maps](...) · [Airbnb](...)
-
-REGRAS:
-- SEMPRE diga DE QUAL plataforma veio cada preço (a coluna já faz isso).
-- "—" em célula sem dado — NÃO invente.
-- Total = noites × diária pra hotel; total pra voo. Indique unidade: "R$890/3n".
-- Real INTEIRO, sem centavos.
-- Negrito no melhor preço.
-- Mínimo 2 opções; ideal 3-5.
-- Budget de 5 buscas por turno é compartilhado — hotel ocupa o turno inteiro.
-- Pra hotéis, NÃO busque Instagram individual no turno comparativo. Volta a
-  buscar (regra LINKS padrão) só quando o user escolher 1 hotel específico.
-- Preço de meses atrás: avise "⚠️ Preço de [data], confirme no site".`;
+Regras: indique plataforma; "—" pra sem-dado (não inventa); total em real INTEIRO ("R$890/3n"); negrito no melhor preço; mínimo 2 opções; "⚠️ Preço de [data]" pra dados antigos.`;
 
 function buildContext({ trip, roteiro }) {
   if (!trip) return "";
@@ -87,32 +45,19 @@ function buildContext({ trip, roteiro }) {
   if (trip.data_inicio || trip.data_fim) lines.push(`- Datas: ${trip.data_inicio ?? "?"} → ${trip.data_fim ?? "?"}`);
   if (trip.cidades?.length) lines.push(`- Cidades: ${trip.cidades.join(", ")}`);
 
-  const adultos = Number(trip.adultos ?? 0);
-  const criancas = Number(trip.criancas ?? 0);
-  const bebes = Number(trip.bebes ?? 0);
-  if (adultos + criancas + bebes > 0) {
-    lines.push(`- Adultos: ${adultos}, Crianças (3-12): ${criancas}, Bebês (0-2): ${bebes}`);
+  const ad = Number(trip.adultos ?? 0);
+  const cr = Number(trip.criancas ?? 0);
+  const be = Number(trip.bebes ?? 0);
+  if (ad + cr + be > 0) {
+    lines.push(`- Pessoas: ${ad} adulto(s), ${cr} criança(s), ${be} bebê(s)`);
   } else if (trip.num_pessoas) {
     lines.push(`- Pessoas: ${trip.num_pessoas}`);
   }
-
   if (trip.descricao) lines.push(`- Descrição: ${trip.descricao}`);
-
-  if (trip.viaje_segura) {
-    lines.push(
-      "",
-      "🛡️ MODO VIAJE SEGURA ATIVADO — mulher viajando sozinha. Adapte sugestões:",
-      "  - Bairros seguros, movimentados, bem iluminados (nunca isolados).",
-      "  - Hotéis com boa avaliação de mulheres, recepção 24h.",
-      "  - Tours em grupo > atividades sozinha em áreas desertas.",
-      "  - Atividades diurnas; em destinos arriscados, sugira retorno antes de escurecer.",
-      "  - Inclua dicas de segurança: 190/192, transporte verificado, compartilhar localização.",
-      "  - Tom: parceira informada, sem alarmismo."
-    );
-  }
+  if (trip.viaje_segura) lines.push("- 🛡️ MODO VIAJE SEGURA: prioriza bairros seguros, tours em grupo, atividades diurnas.");
 
   if (Array.isArray(roteiro) && roteiro.length > 0) {
-    lines.push("", "ROTEIRO RESUMIDO:");
+    lines.push("", "ROTEIRO:");
     for (const d of roteiro) {
       const head = `Dia ${d.dia}${d.data ? ` (${d.data})` : ""}: ${d.cidade ?? "—"}${d.titulo ? " — " + d.titulo : ""}${d.hotel ? " · 🏨 " + d.hotel : ""}`;
       lines.push(head);
@@ -122,21 +67,84 @@ function buildContext({ trip, roteiro }) {
       }
     }
   } else {
-    lines.push("(O roteiro ainda não tem dias definidos.)");
+    lines.push("(Roteiro vazio.)");
   }
   return lines.join("\n");
 }
+
+// ────────────────────────── PATH A: GEMINI ──────────────────────────
+
+async function replyWithGemini({ system, history, userMessage }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY ausente.");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: system,
+    tools: [{ googleSearch: {} }],
+    generationConfig: {
+      maxOutputTokens: 1024,
+      temperature: 0.7,
+    },
+  });
+  const contents = [
+    ...history.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+    { role: "user", parts: [{ text: userMessage }] },
+  ];
+  const result = await model.generateContent({ contents });
+  const text = result?.response?.text?.() ?? "";
+  return text || "Desculpe, não consegui responder agora.";
+}
+
+// ────────────────────────── PATH B: ANTHROPIC (fallback) ──────────────────────────
+
+async function replyWithAnthropic({ system, history, userMessage }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ausente.");
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 1024,
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      messages: [
+        ...history.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: userMessage },
+      ],
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    console.error("[chat/anthropic] error", data);
+    throw new Error(data?.error?.message ?? `Anthropic ${response.status}`);
+  }
+  return data.content?.[0]?.text ?? "Desculpe, não consegui responder agora.";
+}
+
+// ────────────────────────── HANDLER ──────────────────────────
 
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+
+  const useGemini = !!process.env.GEMINI_API_KEY;
+  const useAnthropic = !useGemini && !!process.env.ANTHROPIC_API_KEY;
+  if (!useGemini && !useAnthropic) {
     return new Response(
-      JSON.stringify({ reply: "⚠️ ANTHROPIC_API_KEY não configurada no Netlify." }),
+      JSON.stringify({ reply: "⚠️ Nem GEMINI_API_KEY nem ANTHROPIC_API_KEY configuradas." }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
+  console.log(useGemini ? "[JEI/chat] Usando Gemini 2.0 Flash" : "[JEI/chat] Fallback: Claude Sonnet 4.5");
 
   let body;
   try { body = await req.json(); }
@@ -157,46 +165,20 @@ export default async (req) => {
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .slice(-10);
 
-  const SYSTEM = SYSTEM_BASE + buildContext({ trip, roteiro });
+  const system = SYSTEM_BASE + buildContext({ trip, roteiro });
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 1024,
-        system: [
-          { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
-        ],
-        messages: [
-          ...sanitizedHistory,
-          { role: "user", content: message },
-        ],
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error("[chat] anthropic error", data);
-      return new Response(
-        JSON.stringify({ reply: data?.error?.message ?? "O Jei está com dificuldade. Tente de novo." }),
-        { status: 502, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    const reply = data.content?.[0]?.text ?? "Desculpe, não consegui responder agora.";
+    const reply = useGemini
+      ? await replyWithGemini({ system, history: sanitizedHistory, userMessage: message })
+      : await replyWithAnthropic({ system, history: sanitizedHistory, userMessage: message });
     return new Response(JSON.stringify({ reply }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("[chat] fetch failed", err);
+    console.error("[chat] failed:", err);
     return new Response(
       JSON.stringify({ reply: "O Jei está fora do ar agora. Tente de novo." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 502, headers: { "Content-Type": "application/json" } }
     );
   }
 };
