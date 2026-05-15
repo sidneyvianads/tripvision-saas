@@ -1,9 +1,16 @@
 // Edge Function: injeta meta tags OG na index.html pra rotas /v/:slug.
 // Bots de preview (WhatsApp, Twitter, Facebook) leem as tags; usuários reais
 // recebem o SPA normalmente porque o body fica intacto.
+//
+// SEGURANÇA (R5-4): antes usávamos SERVICE_KEY (bypass RLS) → preview de
+// WhatsApp/Twitter vazava nome+cidades+datas de viagens privadas. Agora
+// chamamos a RPC get_trip_og(slug) SECURITY DEFINER que retorna só 7
+// campos seguros e não depende de nenhuma policy de viagens. ANON_KEY
+// é suficiente.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL") || "";
-const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_KEY") || Deno.env.get("VITE_SUPABASE_ANON_KEY") || "";
+// IMPORTANTE: apenas ANON_KEY. SERVICE_KEY no edge = bypass RLS = vazamento.
+const SUPABASE_KEY = Deno.env.get("VITE_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 function escapeHtml(s) {
   if (s == null) return "";
@@ -23,16 +30,20 @@ function fmtDateBR(iso) {
 async function fetchTrip(slug) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return null;
   try {
-    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/viagens?slug=eq.${encodeURIComponent(slug)}&select=nome,cidades,data_inicio,data_fim,num_pessoas,cover_emoji,tema`;
+    // RPC SECURITY DEFINER em vez de REST direto na tabela. Retorna
+    // só os 7 campos públicos (nome/cidades/datas/num_pessoas/emoji/tema).
+    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/get_trip_og`;
     const res = await fetch(url, {
+      method: "POST",
       headers: {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ p_slug: slug }),
     });
     if (!res.ok) return null;
-    const arr = await res.json();
-    return arr?.[0] ?? null;
+    return await res.json(); // RPC retorna jsonb diretamente (objeto ou null)
   } catch (e) {
     console.error("[og] fetchTrip error:", e);
     return null;
@@ -66,7 +77,9 @@ export default async (request, context) => {
   descParts.push("Planejado com Viajjei");
   const descricao = descParts.join(" · ");
 
-  const ogImage = `${url.origin}/og-default.svg`;
+  // Arquivo real em /public/og-default.png — antes era .svg (404 silencioso
+  // em preview do WhatsApp).
+  const ogImage = `${url.origin}/og-default.png`;
   const pageUrl = `${url.origin}/v/${slug}`;
 
   const meta = `
