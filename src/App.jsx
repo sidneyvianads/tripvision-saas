@@ -25,7 +25,14 @@ const TermosPage = lazy(() => import("./pages/LegalPages").then((m) => ({ defaul
 const PrivacidadePage = lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacidadePage })));
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, isRecovering } = useAuth();
+
+  // Durante PASSWORD_RECOVERY o user tem session válida (criada pelo link
+  // do email) mas ainda precisa trocar a senha. Se redirecionarmos /welcome
+  // pra / agora, o user nunca vê o form de nova senha e a senha velha (do
+  // email comprometido) continua válida. effectiveUser=null deixa Welcome
+  // continuar renderizado até clearRecovering() ser chamado.
+  const effectiveUser = isRecovering ? null : user;
 
   // Captura ?cupom=X e ?utm_source=X da URL e guarda em localStorage.
   // Usado no signUp pra preencher users.origem + users.afiliado_id.
@@ -42,21 +49,21 @@ export default function App() {
       <Suspense fallback={<FullscreenLoader />}>
         <Routes>
         {/* Landing pública / dashboard logado */}
-        <Route path="/" element={user ? <MyTrips /> : <Landing />} />
+        <Route path="/" element={effectiveUser ? <MyTrips /> : <Landing />} />
 
-        {/* Auth */}
-        <Route path="/welcome" element={user ? <Navigate to="/" replace /> : <Welcome />} />
+        {/* Auth — durante PASSWORD_RECOVERY mantém Welcome (não redireciona) */}
+        <Route path="/welcome" element={effectiveUser ? <Navigate to="/" replace /> : <Welcome />} />
 
         {/* App autenticado */}
-        <Route path="/v/new" element={user ? <NewTrip /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug/start" element={user ? <ChooseFlow /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug" element={user ? <TripView /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug/admin" element={user ? <AdminTrip /> : <Navigate to="/welcome" replace />} />
-        <Route path="/conta" element={user ? <Account /> : <Navigate to="/welcome" replace />} />
-        <Route path="/assinatura/sucesso" element={user ? <AssinaturaSucesso /> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/new" element={effectiveUser ? <NewTrip /> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug/start" element={effectiveUser ? <ChooseFlow /> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug" element={effectiveUser ? <TripView /> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug/admin" element={effectiveUser ? <AdminTrip /> : <Navigate to="/welcome" replace />} />
+        <Route path="/conta" element={effectiveUser ? <Account /> : <Navigate to="/welcome" replace />} />
+        <Route path="/assinatura/sucesso" element={effectiveUser ? <AssinaturaSucesso /> : <Navigate to="/welcome" replace />} />
 
         {/* Admin (owner-only — guard interno) */}
-        <Route path="/admin/afiliados" element={user ? <AdminAfiliados /> : <Navigate to="/welcome" replace />} />
+        <Route path="/admin/afiliados" element={effectiveUser ? <AdminAfiliados /> : <Navigate to="/welcome" replace />} />
 
         {/* Painel público de afiliado */}
         <Route path="/afiliado/:cupom" element={<AfiliadoPainel />} />

@@ -19,6 +19,11 @@ export function AuthProvider({ children }) {
   // session inicia null; o getSession() abaixo hidrata se houver tokens válidos.
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // isRecovering: setado pelo listener PASSWORD_RECOVERY quando o user clica
+  // no link "esqueci a senha". Enquanto true, App.jsx NÃO redireciona /welcome
+  // pra / — o Welcome continua renderizado pra o user definir nova senha.
+  // Limpado por clearRecovering() depois do reset bem-sucedido.
+  const [isRecovering, setIsRecovering] = useState(false);
 
   // Faz fetch do profile estendido (public.users) usando o id do auth.users.
   // RLS garante que só puxa a row do user atual.
@@ -52,8 +57,17 @@ export function AuthProvider({ children }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // PASSWORD_RECOVERY: link do email criou uma session válida. Marcamos
+      // isRecovering=true pra App.jsx NÃO redirecionar /welcome → / antes
+      // do user trocar a senha. O Welcome.jsx vê o evento via listener
+      // local e renderiza o form de nova senha.
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecovering(true);
+        return;
+      }
       if (event === "SIGNED_OUT" || !session) {
         setUser(null);
+        setIsRecovering(false);
         clearSentryUser();
         resetAnalytics();
         return;
@@ -206,6 +220,10 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(error.message);
   }, []);
 
+  // Chamado pelo Welcome após resetar a senha. Libera o App.jsx pra
+  // navegar normalmente — o user agora tem session válida e senha nova.
+  const clearRecovering = useCallback(() => setIsRecovering(false), []);
+
   const updateProfile = useCallback(async (patch) => {
     if (!user?.id) throw new Error("Não logado.");
     const updates = {};
@@ -234,8 +252,8 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile }),
-    [user, loading, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile]
+    () => ({ user, loading, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering }),
+    [user, loading, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

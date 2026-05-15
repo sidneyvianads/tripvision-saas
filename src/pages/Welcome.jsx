@@ -15,7 +15,7 @@ const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
 
 export default function Welcome() {
-  const { signIn, signUp, loading, sendPasswordReset, updatePassword } = useAuth();
+  const { signIn, signUp, loading, sendPasswordReset, updatePassword, clearRecovering } = useAuth();
   const [params] = useSearchParams();
   // mode: 'login' | 'signup' | 'forgot' | 'reset'
   // - login/signup: fluxos normais
@@ -109,12 +109,13 @@ export default function Welcome() {
     }
     try {
       await updatePassword(senha);
-      setInfo("Senha atualizada! Você já está logado.");
-      // O onAuthStateChange já tem session válida nesse ponto — o AuthProvider
-      // carrega o profile e o app redireciona normalmente. Aqui só limpamos.
+      setInfo("Senha atualizada! Redirecionando...");
       setSenha("");
       setSenha2("");
-      setMode("login");
+      // Libera o App.jsx pra navegar normalmente — agora que a senha foi
+      // trocada, manter a session é seguro e o redirect /welcome→/ pode
+      // acontecer. Sem isso, o user ficaria preso no Welcome.
+      clearRecovering();
     } catch (e) {
       setErr(e.message);
     }
