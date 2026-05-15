@@ -78,8 +78,17 @@ function AfiliadosTab() {
   const [loading, setLoading] = useState(true);
 
   const reload = async () => {
-    const { data } = await supabase.from("afiliados").select("*").order("created_at", { ascending: false });
-    setAfiliados(data ?? []);
+    // RPC SECURITY DEFINER — guard interno checa is_platform_owner().
+    // Substitui select("*") direto na tabela (quebrado pós-R3 porque
+    // a coluna `email` foi revogada de authenticated pra proteger
+    // /afiliado/<cupom> público).
+    const { data, error } = await supabase.rpc("admin_afiliados_list");
+    if (error) {
+      console.error("[AdminAfiliados] reload erro:", error);
+      setAfiliados([]);
+    } else {
+      setAfiliados(data ?? []);
+    }
     setLoading(false);
   };
 
