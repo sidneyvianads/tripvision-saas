@@ -20,41 +20,26 @@ export default function AfiliadoPainel() {
     if (!cupom) return;
     let active = true;
     (async () => {
-      const { data: af, error: afErr } = await supabase
-        .from("afiliados")
-        .select("id, nome, cupom, instagram, comissao_percent, desconto_percent, total_indicados, total_receita, ativo, created_at")
-        .ilike("cupom", cupom)
-        .maybeSingle();
+      // RPC SECURITY DEFINER: substitui 3 queries diretas que
+      // (a) vazavam total_receita publicamente; (b) quebraram quando
+      // comissoes_select virou só-owner pós-R3. Retorna só os agregados
+      // do próprio afiliado, sem dados absolutos da tabela.
+      const { data, error: rpcErr } = await supabase.rpc("get_afiliado_panel", { p_cupom: cupom });
       if (!active) return;
-      if (afErr || !af) { setError("Cupom não encontrado."); setLoading(false); return; }
-      setAfiliado(af);
-
-      const [{ data: com }, { count: ativosCount }] = await Promise.all([
-        supabase
-          .from("comissoes")
-          .select("mes_referencia, valor_comissao, status, valor_assinatura")
-          .eq("afiliado_id", af.id)
-          .order("mes_referencia", { ascending: false }),
-        supabase
-          .from("users")
-          .select("id", { count: "exact", head: true })
-          .eq("afiliado_id", af.id),
-      ]);
-
-      const grouped = new Map();
-      for (const c of (com ?? [])) {
-        const m = grouped.get(c.mes_referencia) ?? { mes: c.mes_referencia, total: 0, pendente: 0, pago: 0, count: 0, receita: 0 };
-        m.total += Number(c.valor_comissao);
-        m.receita += Number(c.valor_assinatura);
-        m.count += 1;
-        if (c.status === "pago") m.pago += Number(c.valor_comissao);
-        else m.pendente += Number(c.valor_comissao);
-        grouped.set(c.mes_referencia, m);
+      if (rpcErr || !data) {
+        setError("Cupom não encontrado.");
+        setLoading(false);
+        return;
       }
-      if (active) {
-        setComissoesPorMes(Array.from(grouped.values()));
-        setIndicadosAtivos(ativosCount ?? 0);
-      }
+      setAfiliado(data.afiliado);
+      setComissoesPorMes((data.comissoes_por_mes ?? []).map((m) => ({
+        mes: m.mes,
+        count: Number(m.count ?? 0),
+        pendente: Number(m.pendente ?? 0),
+        pago: Number(m.pago ?? 0),
+        total: Number(m.total ?? 0),
+      })));
+      setIndicadosAtivos(Number(data.indicados_ativos ?? 0));
       setLoading(false);
     })();
     return () => { active = false; };
@@ -75,6 +60,10 @@ export default function AfiliadoPainel() {
 
   const mesAtual = comissoesPorMes.find((m) => m.mes === fmtMonth()) ?? { total: 0, pendente: 0, pago: 0, count: 0 };
   const totalPendente = comissoesPorMes.reduce((s, m) => s + Number(m.pendente), 0);
+  // "Total recebido" agora vem do agregado real de comissões pagas — antes
+  // multiplicava total_receita da tabela afiliados (que era vazado público
+  // via column-grant e nem refletia comissão paga, era receita bruta).
+  const totalRecebido = comissoesPorMes.reduce((s, m) => s + Number(m.pago), 0);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -120,7 +109,7 @@ export default function AfiliadoPainel() {
         {/* Métricas acumuladas */}
         <section className="grid grid-cols-3 gap-3">
           <MetricCard label="Indicados ativos" value={indicadosAtivos} />
-          <MetricCard label="Total recebido" value={fmtBRL(afiliado.total_receita * Number(afiliado.comissao_percent) / 100)} />
+          <MetricCard label="Total recebido" value={fmtBRL(totalRecebido)} />
           <MetricCard label="Pendente acumulado" value={fmtBRL(totalPendente)} highlight />
         </section>
 
