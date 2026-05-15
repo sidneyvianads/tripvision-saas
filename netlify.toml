@@ -16,6 +16,12 @@
 [functions."chat"]
   timeout = 26
 
+[functions."reconcile-subscriptions"]
+  timeout = 26
+
+[functions."export-user-data"]
+  timeout = 26
+
 [[edge_functions]]
   function = "og"
   path = "/v/:slug"
