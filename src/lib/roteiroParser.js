@@ -372,6 +372,85 @@ export async function applyRoteiroUpdates(viagemId, updates) {
           break;
         }
 
+        case "replace_day": {
+          // Sobrescreve um dia inteiro de uma vez: o dia + array de atividades.
+          // Se o dia já existe, apaga atividades antigas (cascade do delete do
+          // dia) e recria. Útil pra LLMs que preferem mandar 1 update por dia
+          // em vez de N tags (add_day + add_activity × N).
+          const dn = Number(u.dia_numero);
+          const existingDiaId = await getDiaId(viagemId, dn);
+          if (existingDiaId) {
+            await supabase.from("roteiro_dias").delete().eq("id", existingDiaId);
+          }
+          const dayPayload = {
+            viagem_id: viagemId,
+            dia_numero: dn,
+            data: u.data ?? null,
+            weekday: u.weekday ?? null,
+            titulo: u.titulo ?? null,
+            cidade: u.cidade ?? null,
+            hotel: u.hotel ?? null,
+            hotel_telefone: u.hotel_telefone ?? null,
+            hotel_endereco: u.hotel_endereco ?? null,
+            alerta: u.alerta ?? null,
+            cover_emoji: u.cover_emoji ?? "📍",
+          };
+          const { data: dayRow, error: dayErr } = await supabase
+            .from("roteiro_dias")
+            .insert(dayPayload)
+            .select("id")
+            .single();
+          if (dayErr || !dayRow) {
+            results.push({ action: "replace_day", dia_numero: dn, success: false, error: dayErr?.message ?? "Não consegui criar o dia." });
+            break;
+          }
+          results.push({
+            action: "replace_day",
+            dia_numero: dn,
+            titulo: dayPayload.titulo,
+            success: true,
+            // Só marca created_id se o dia NÃO existia antes (pra undo).
+            created_id: existingDiaId ? null : dayRow.id,
+          });
+          // Atividades embedded
+          const atividades = Array.isArray(u.atividades) ? u.atividades : [];
+          for (let i = 0; i < atividades.length; i++) {
+            const a = atividades[i];
+            const titulo = (a?.titulo ?? "").trim();
+            if (!titulo) {
+              results.push({ action: "add_activity", dia_numero: dn, success: false, error: "Atividade sem título." });
+              continue;
+            }
+            const actPayload = {
+              dia_id: dayRow.id,
+              horario: a.horario ?? null,
+              titulo,
+              descricao: a.descricao ?? null,
+              tipo: safeTipo(a.tipo),
+              preco: a.preco ?? null,
+              status: safeStatus(a.status),
+              endereco: a.endereco ?? null,
+              telefone: a.telefone ?? null,
+              maps_url: a.maps_url ?? null,
+              ordem: a.ordem != null ? Number(a.ordem) : (i + 1),
+            };
+            const { data: actRow, error: actErr } = await supabase
+              .from("roteiro_atividades")
+              .insert(actPayload)
+              .select("id")
+              .single();
+            results.push({
+              action: "add_activity",
+              dia_numero: dn,
+              titulo: actPayload.titulo,
+              success: !actErr,
+              error: actErr?.message,
+              created_id: actRow?.id ?? null,
+            });
+          }
+          break;
+        }
+
         default:
           results.push({ action: u.action, success: false, error: "Action desconhecida." });
       }
