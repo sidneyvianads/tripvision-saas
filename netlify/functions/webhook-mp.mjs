@@ -155,30 +155,33 @@ async function handlePreapproval(id) {
   // Cross-check: o payer_email retornado pelo MP precisa bater com o email
   // do user_id no external_reference. Impede ataque de forjar external_reference
   // ("user_id de outra pessoa") pra ganhar plano sem pagar.
-  // Erro 404 = user não existe (ataque ou bug). Mismatch = recusa ativação.
+  //
+  // IMPORTANTE: erros transitórios (Supabase 5xx, network blip) re-throw pro
+  // catch externo — handler retorna 500 → MP reentrega o webhook. Antes:
+  // return silencioso → 200 OK → MP nunca reentregava → ativação perdida
+  // pra sempre. Só mismatch real (user inexistente / email diferente)
+  // recusa definitivamente com return.
   const payerEmail = (pa.payer_email ?? "").trim().toLowerCase();
   if (payerEmail) {
-    try {
-      const userRows = await sb(
-        `users?id=eq.${user_id}&select=id,email`,
-        { method: "GET", headers: { Prefer: "" } }
+    const userRows = await sb(
+      `users?id=eq.${user_id}&select=id,email`,
+      { method: "GET", headers: { Prefer: "" } }
+    );
+    const userRow = Array.isArray(userRows) ? userRows[0] : null;
+    if (!userRow) {
+      console.error(`[webhook-mp] 🚨 user_id ${user_id} não existe — recusando ativação`);
+      captureMessage("webhook-mp: user_id não existe", "warning", { user_id, preapproval: id });
+      return;
+    }
+    const userEmail = (userRow.email ?? "").trim().toLowerCase();
+    if (userEmail !== payerEmail) {
+      console.error(
+        `[webhook-mp] 🚨 payer_email mismatch — user_id=${user_id} email=${userEmail} ` +
+        `payer=${payerEmail} preapproval=${id} — recusando ativação (possível tampering em external_reference)`
       );
-      const userRow = Array.isArray(userRows) ? userRows[0] : null;
-      if (!userRow) {
-        console.error(`[webhook-mp] 🚨 user_id ${user_id} não existe — recusando ativação`);
-        return;
-      }
-      const userEmail = (userRow.email ?? "").trim().toLowerCase();
-      if (userEmail !== payerEmail) {
-        console.error(
-          `[webhook-mp] 🚨 payer_email mismatch — user_id=${user_id} email=${userEmail} ` +
-          `payer=${payerEmail} preapproval=${id} — recusando ativação (possível tampering em external_reference)`
-        );
-        return;
-      }
-    } catch (err) {
-      console.error("[webhook-mp] erro no cross-check payer_email:", err);
-      // Falha de leitura — não ativa, melhor seguro que arrependido
+      captureMessage("webhook-mp: payer_email mismatch", "warning", {
+        user_id, userEmail, payerEmail, preapproval: id,
+      });
       return;
     }
   } else {
@@ -296,12 +299,16 @@ export default async (req) => {
   try { body = await req.json(); } catch {}
   const url = new URL(req.url);
   const topic = url.searchParams.get("topic") || body?.type || body?.topic;
-  const id = url.searchParams.get("id") || body?.data?.id || body?.id;
+  // PREFERIR body.data.id pra HMAC. MP calcula a assinatura com data.id do
+  // payload, não com o id da query string. Quando body está vazio (raro,
+  // reentrega só por query), cai pra URL como último recurso.
+  const dataIdForHmac = body?.data?.id || body?.id || url.searchParams.get("id");
+  const id = dataIdForHmac;
 
-  console.log("[webhook-mp] recebido:", { topic, id });
+  console.log("[webhook-mp] recebido:", { topic, id, hmacSource: body?.data?.id ? "body" : "url" });
 
-  // Valida HMAC. dataId = id do data.id do payload (não confundir com id do recurso).
-  const sig = validateMpSignature(req, id);
+  // Valida HMAC. dataId precisa bater com o id que MP usou no manifesto.
+  const sig = validateMpSignature(req, dataIdForHmac);
   if (!sig.ok) {
     console.error(`[webhook-mp] 🚨 HMAC inválido: ${sig.reason} — recusando request`);
     captureMessage(`webhook-mp HMAC inválido: ${sig.reason}`, "warning", { topic, id });
@@ -320,6 +327,14 @@ export default async (req) => {
   } catch (err) {
     console.error("[webhook-mp] erro:", err);
     captureException(err, { topic, id, source: "webhook-mp" });
+    // Retorna 500 pra MP reentregar — antes devolvia 200 e ativações que
+    // falhassem em erro transitório (Supabase 5xx, network) ficavam
+    // perdidas pra sempre. Trade-off: bug não-transitório dispara loop
+    // de retries até MP desistir (~24h). Sentry alert vai capturar.
+    return new Response(JSON.stringify({ error: err?.message ?? "internal" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   return new Response("OK", { status: 200 });
