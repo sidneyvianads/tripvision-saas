@@ -6,6 +6,13 @@
 // Auth: exige Authorization: Bearer <access_token>. user_id sai do JWT.
 // Não inclui dados de outros users (mensagens dos co-membros são
 // referenciadas só por user_id, não pelo conteúdo das outras pessoas).
+//
+// RATE LIMIT: 3 exports/hora/user. Antes era unlimited — atacante
+// autenticado dispara N exports em loop e queima egress do Supabase.
+// timeout: 26s (configurado em netlify.toml). Users grandes com 1k+
+// mensagens podiam estourar 10s default.
+
+import { rateLimit } from "./_lib/rate-limit.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
@@ -49,6 +56,18 @@ export default async (req) => {
   const authed = await verifyAuth(req);
   if (!authed) return new Response(JSON.stringify({ error: "Não autenticado." }), { status: 401, headers: { "Content-Type": "application/json" } });
   const userId = authed.id;
+
+  // Rate limit: 3 exports por hora por user. Export é operação cara
+  // (10+ queries com joins). Burst denota spam/abuse.
+  const rl = await rateLimit({ key: `export:user:${userId}`, limit: 3, windowSec: 3600 });
+  if (!rl.ok) {
+    const resetIn = rl.resetAt ? Math.max(60, Math.ceil((rl.resetAt - Date.now()) / 1000)) : 3600;
+    const min = Math.ceil(resetIn / 60);
+    return new Response(
+      JSON.stringify({ error: `Limite de exportações atingido. Tente em ${min} minutos.` }),
+      { status: 429, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   try {
     // Profile + viagens onde é membro (com tudo dentro)
