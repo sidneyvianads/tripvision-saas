@@ -17,6 +17,7 @@
 // do webhook de cada renovação).
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { captureException, captureMessage } from "./_lib/sentry.mjs";
 
 const TRIAL_DAYS = 7;
 
@@ -301,6 +302,7 @@ export default async (req) => {
   const sig = validateMpSignature(req, id);
   if (!sig.ok) {
     console.error(`[webhook-mp] 🚨 HMAC inválido: ${sig.reason} — recusando request`);
+    captureMessage(`webhook-mp HMAC inválido: ${sig.reason}`, "warning", { topic, id });
     return new Response("Invalid signature", { status: 401 });
   }
   if (sig.mode === "validated") {
@@ -315,6 +317,7 @@ export default async (req) => {
     }
   } catch (err) {
     console.error("[webhook-mp] erro:", err);
+    captureException(err, { topic, id, source: "webhook-mp" });
   }
 
   return new Response("OK", { status: 200 });

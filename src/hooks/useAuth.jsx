@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase, normalizePassword, normalizeEmail } from "../lib/supabase";
+import { captureException, setUser as setSentryUser, clearUser as clearSentryUser } from "../lib/sentry";
 
 // Auth nativo do Supabase. Sessão é gerenciada inteiramente pela lib
 // (JWT em localStorage com chave "viajjei.auth", refresh automático,
@@ -29,6 +30,7 @@ export function AuthProvider({ children }) {
       .maybeSingle();
     if (error) {
       console.error("[Viajjei] loadProfile error:", error);
+      captureException(error, { phase: "loadProfile", userId: authUser.id });
       return null;
     }
     return data;
@@ -51,10 +53,12 @@ export function AuthProvider({ children }) {
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         setUser(null);
+        clearSentryUser();
         return;
       }
       const profile = await loadProfile(session.user);
       setUser(profile);
+      if (profile) setSentryUser({ id: profile.id, email: profile.email });
     });
 
     return () => {

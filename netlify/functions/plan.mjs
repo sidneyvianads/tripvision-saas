@@ -22,6 +22,7 @@
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
+import { captureException, captureMessage } from "./_lib/sentry.mjs";
 
 // Rate limits do /api/plan. /api/plan é o endpoint caro (LLM + web search),
 // então protegemos contra burst. Stub Upstash: no-op até env ser setado.
@@ -608,6 +609,7 @@ export default async (req) => {
   if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => streamWithOpenAI(params) });
   if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => streamWithGemini(params) });
 
+  const providerErrors = [];
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];
     try {
@@ -616,11 +618,13 @@ export default async (req) => {
       return new Response(stream, { status: 200, headers: SSE_HEADERS });
     } catch (err) {
       console.error(`[JEI] ${p.label} falhou:`, err?.message ?? err);
+      providerErrors.push({ label: p.label, message: err?.message ?? String(err) });
       // continua pro próximo provider
     }
   }
 
   console.error("[JEI] Todos os providers falharam.");
+  captureMessage("plan: todos providers falharam", "error", { user_id, providerErrors });
   return jsonResponse({ error: FRIENDLY_ERROR }, 502);
 };
 
