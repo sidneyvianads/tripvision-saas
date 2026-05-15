@@ -115,25 +115,35 @@ export function PrivacidadePage() {
           <li><strong>Mercado Pago</strong> (somente pra processar pagamentos do Pro)</li>
         </ul>
       </Section>
+      <Section title="Conversas com o Jei">
+        Quando você fala com o Jei, sua mensagem + contexto da viagem (datas,
+        cidades, composição familiar, roteiro atual) são enviados ao provedor
+        de IA pra gerar a resposta. As conversas ficam guardadas em <code>ia_conversas</code> pra
+        manter o contexto entre sessões. Você pode apagar todo o histórico do Jei
+        a qualquer momento em <strong>Conta → Seus dados (LGPD) → Apagar histórico do Jei</strong>,
+        sem precisar deletar a conta inteira.
+      </Section>
       <Section title="Seus direitos">
         Você pode a qualquer momento:
         <ul className="list-disc pl-5 space-y-1 mt-1">
-          <li>Acessar seus dados</li>
-          <li>Corrigir informações</li>
-          <li>Excluir sua conta e todos os dados associados</li>
-          <li>Exportar seus dados em formato legível</li>
+          <li><strong>Acessar e baixar seus dados</strong> — botão "Baixar meus dados" em Conta. Devolve JSON com tudo (LGPD Art.18-V).</li>
+          <li><strong>Apagar histórico do Jei</strong> — botão dedicado em Conta, mantém a conta.</li>
+          <li><strong>Corrigir informações</strong> — edite nome/avatar direto em Conta.</li>
+          <li><strong>Excluir a conta inteira</strong> — botão "Excluir minha conta" em Conta. Apaga viagens, mensagens, conversas e profile. Comissões já registradas com afiliados são mantidas com snapshot do email pra auditoria fiscal (obrigatório).</li>
         </ul>
-        Pra exercer qualquer direito, escreva pra sidney@grupomultvision.com.
-        Atendemos em até 15 dias úteis.
+        Dúvidas adicionais: sidney@grupomultvision.com — atendemos em até 15 dias úteis.
       </Section>
       <Section title="Retenção">
-        Mantemos seus dados enquanto sua conta estiver ativa. Após exclusão da
-        conta, os dados são removidos em até 30 dias (exceto registros
-        financeiros, que mantemos pelo prazo legal).
+        Dados ficam ativos enquanto a conta estiver ativa. Exclusão da conta
+        apaga viagens/mensagens/conversas em até 24h. Registros financeiros
+        (assinaturas, comissões pagas a afiliados) são mantidos pelo prazo
+        legal de 5 anos com identificação por email-snapshot, mesmo que a
+        conta original tenha sido excluída.
       </Section>
       <Section title="Segurança">
-        Senhas são armazenadas com hash criptográfico. Comunicação via HTTPS.
-        Acesso administrativo restrito.
+        Senhas armazenadas com bcrypt (via Supabase Auth). Comunicação via
+        HTTPS. Row-Level Security real no banco — você só lê o que é seu.
+        Acesso administrativo restrito ao DPO.
       </Section>
       <Section title="Encarregado (DPO)">
         Sidney Viana — sidney@grupomultvision.com

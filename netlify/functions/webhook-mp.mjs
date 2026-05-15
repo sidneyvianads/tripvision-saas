@@ -236,6 +236,14 @@ async function handlePreapproval(id) {
           { method: "GET", headers: { Prefer: "" } }
         );
         if (Array.isArray(existentes) && existentes.length === 0) {
+          // Snapshot do user + plano/ciclo pra preservar audit trail mesmo
+          // se o user deletar a conta no futuro (assinatura_id vira NULL
+          // via FK ON DELETE SET NULL — sem snapshot, perderia o vínculo).
+          const userRowsForSnap = await sb(
+            `users?id=eq.${user_id}&select=email`,
+            { method: "GET", headers: { Prefer: "" } }
+          );
+          const userEmailSnap = Array.isArray(userRowsForSnap) ? userRowsForSnap[0]?.email : null;
           await sb(`comissoes`, {
             method: "POST",
             body: JSON.stringify({
@@ -246,6 +254,9 @@ async function handlePreapproval(id) {
               valor_comissao: valorComissao,
               mes_referencia: mes,
               status: "pendente",
+              user_email_snapshot: userEmailSnap ?? null,
+              plano_snapshot: plano,
+              ciclo_snapshot: ciclo,
             }),
           });
           await sb(`afiliados?id=eq.${afiliado_id}`, {

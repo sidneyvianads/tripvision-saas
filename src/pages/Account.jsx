@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw, Download, MessageCircleOff } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase, normalizePassword } from "../lib/supabase";
 import { PLANS, planName, planIcon, isPaid, isOwner, hasActiveAccess, isInTrial, trialDaysLeft, needsSubscription } from "../data/plans";
@@ -42,6 +42,65 @@ export default function Account() {
 
   // Notificações
   const [notifOn, setNotifOn] = useState(user?.notifications_on ?? true);
+
+  // LGPD: export + apagar histórico do Jei
+  const [exportBusy, setExportBusy] = useState(false);
+  const [iaHistoryBusy, setIaHistoryBusy] = useState(false);
+  const [lgpdMsg, setLgpdMsg] = useState(null);
+
+  const handleExportData = async () => {
+    setExportBusy(true);
+    setLgpdMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada — faça login de novo.");
+      const res = await fetch("/api/export-user-data", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? `HTTP ${res.status}`);
+      }
+      // Browser triggera download — Content-Disposition no response.
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `viajjei-export-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setLgpdMsg({ type: "ok", text: "Exportação pronta — download iniciado." });
+    } catch (e) {
+      setLgpdMsg({ type: "err", text: `Falhou: ${e.message}` });
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const handleDeleteIaHistory = async () => {
+    if (!confirm("Apagar TODO o histórico de conversas com o Jei? Não dá pra desfazer.")) return;
+    setIaHistoryBusy(true);
+    setLgpdMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada — faça login de novo.");
+      const res = await fetch("/api/delete-ia-history", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? `HTTP ${res.status}`);
+      }
+      setLgpdMsg({ type: "ok", text: "Histórico do Jei apagado." });
+    } catch (e) {
+      setLgpdMsg({ type: "err", text: `Falhou: ${e.message}` });
+    } finally {
+      setIaHistoryBusy(false);
+    }
+  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -374,6 +433,41 @@ export default function Account() {
               />
             </button>
           </label>
+        </section>
+
+        {/* LGPD — dados pessoais */}
+        <section className="card p-5 mt-3">
+          <div className="font-display font-extrabold text-[#1F2937] flex items-center gap-2">
+            <Download className="w-4 h-4 text-[#6366F1]" /> Seus dados (LGPD)
+          </div>
+          <p className="text-[13px] text-[#374151] mt-2">
+            Pela LGPD, você tem direito de baixar uma cópia completa dos seus dados e de apagar o histórico de conversas com o Jei sem deletar a conta.
+          </p>
+          {lgpdMsg && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-[13px] ${lgpdMsg.type === "ok" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-700"}`}>
+              {lgpdMsg.text}
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={handleExportData}
+              disabled={exportBusy}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border"
+              style={{ borderColor: "#E5E7EB", color: "#374151", background: "white" }}
+            >
+              {exportBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Baixar meus dados
+            </button>
+            <button
+              onClick={handleDeleteIaHistory}
+              disabled={iaHistoryBusy}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-display font-bold border"
+              style={{ borderColor: "#FECACA", color: "#B91C1C", background: "white" }}
+            >
+              {iaHistoryBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircleOff className="w-3.5 h-3.5" />}
+              Apagar histórico do Jei
+            </button>
+          </div>
         </section>
 
         {/* Deletar conta */}
