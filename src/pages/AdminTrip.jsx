@@ -131,7 +131,6 @@ function DayList({ trip, onEdit }) {
   };
 
   const tema = getTema(trip.tema);
-  console.log("[AdminTrip] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
@@ -206,6 +205,7 @@ function DayList({ trip, onEdit }) {
 }
 
 function DayEditor({ day: initial, trip, onClose }) {
+  const { user } = useAuth();
   const [day, setDay] = useState(initial);
   const [atividades, setAtividades] = useState(initial.atividades ?? []);
   const [saving, setSaving] = useState(false);
@@ -268,10 +268,10 @@ function DayEditor({ day: initial, trip, onClose }) {
       for (const id of existingIds) {
         if (!keepIds.has(id)) await deleteAtividade(id);
       }
-      // Log edit (item 40)
+      // Log edit (item 40) — usa user.id do useAuth (chave localStorage antiga
+      // "tripvision-saas:user:v1" foi removida na migração Supabase Auth).
       try {
-        const u = JSON.parse(localStorage.getItem("tripvision-saas:user:v1") ?? "{}");
-        await logEdit(trip.id, u?.id, `editou Dia ${day.dia_numero}`, { atividades: atividades.length });
+        await logEdit(trip.id, user?.id, `editou Dia ${day.dia_numero}`, { atividades: atividades.length });
       } catch {}
       onClose();
     } catch (e) {
@@ -280,7 +280,6 @@ function DayEditor({ day: initial, trip, onClose }) {
   };
 
   const tema = getTema(trip.tema);
-  console.log("[AdminTrip] trip.tema:", trip.tema, "→ tema.gradient:", tema.gradient);
 
   return (
     <div className="min-h-screen flex flex-col bg-app" style={temaCssVars(trip.tema)}>
