@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { validateRoteiroUpdate, validateViagemUpdate } from "./roteiroSchemas";
 
 const ROTEIRO_TAG_RE = /<roteiro_update>([\s\S]*?)<\/roteiro_update>/i;
 const VIAGEM_TAG_RE  = /<viagem_update>([\s\S]*?)<\/viagem_update>/i;
@@ -36,15 +37,14 @@ export function parseViagemUpdate(text) {
 
   try {
     const parsed = JSON.parse(raw);
-    const action = parsed?.action ?? "update_viagem";
-    const fields = (action === "update_viagem" && parsed?.fields && typeof parsed.fields === "object")
-      ? parsed.fields
-      : null;
-    if (!fields) {
-      console.warn("[roteiroParser] <viagem_update> sem fields válidos:", raw.slice(0, 200));
-      return { cleanText, viagemUpdate: null, raw };
+    // Zod normaliza coerções (string → number), pula campos desconhecidos
+    // mantendo passthrough, e retorna erro estruturado se faltar field.
+    const v = validateViagemUpdate(parsed);
+    if (!v.ok) {
+      console.warn("[roteiroParser] <viagem_update> rejeitado pelo schema:", v.error, raw.slice(0, 200));
+      return { cleanText, viagemUpdate: null, raw, schemaError: v.error };
     }
-    return { cleanText, viagemUpdate: { action, fields }, raw };
+    return { cleanText, viagemUpdate: v.value, raw };
   } catch (e) {
     console.error("[roteiroParser] JSON inválido em <viagem_update>:", e, raw.slice(0, 200));
     return { cleanText, viagemUpdate: null, raw };
@@ -242,8 +242,17 @@ export async function applyRoteiroUpdates(viagemId, updates) {
   if (!viagemId || !Array.isArray(updates) || updates.length === 0) return [];
   const results = [];
 
-  for (const u of updates) {
+  for (const rawU of updates) {
     try {
+      // Valida com Zod ANTES de tocar no banco. Erros viram results
+      // com success:false e mensagem clara (ex.: "dia_numero: Required").
+      // Updates desconhecidos / mal formados são descartados sem crashar.
+      const v = validateRoteiroUpdate(rawU);
+      if (!v.ok) {
+        results.push({ action: rawU?.action ?? "(unknown)", success: false, error: v.error });
+        continue;
+      }
+      const u = v.value;
       switch (u.action) {
         case "add_day": {
           // Pra suportar undo: só consideramos "criado" se NÃO existia antes.
@@ -500,8 +509,8 @@ export async function applyRoteiroUpdates(viagemId, updates) {
           results.push({ action: u.action, success: false, error: "Action desconhecida." });
       }
     } catch (err) {
-      console.error("[roteiroParser] apply error:", err, u);
-      results.push({ action: u.action, success: false, error: err.message });
+      console.error("[roteiroParser] apply error:", err, rawU);
+      results.push({ action: rawU?.action ?? "(unknown)", success: false, error: err.message });
     }
   }
 
