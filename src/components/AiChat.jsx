@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Avatar from "./Avatar";
+import { supabase } from "../lib/supabase";
 
 // Markdown leve pra bolha do assistente. Links coloridos por tipo:
 // 📸 Instagram = rosa, 🌐 Site = azul, 📍 Mapa = verde.
@@ -77,9 +78,14 @@ export default function AiChat({ trip, days, user }) {
     setErr(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada — faça login de novo.");
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           message: text,
           history: next.slice(0, -1).filter((m) => m !== initialGreeting).map((m) => ({ role: m.role, content: m.content })),
