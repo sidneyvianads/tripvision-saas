@@ -748,6 +748,8 @@ function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
     );
   }
 
+  // Agrupa atividades por dia. Garante que TODO dia montado (add_day OU
+  // replace_day) apareça mesmo sem atividades novas adicionadas.
   const byDay = new Map();
   for (const a of summary.added) {
     if (!byDay.has(a.dia_numero)) byDay.set(a.dia_numero, []);
@@ -756,6 +758,11 @@ function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
   for (const d of summary.days) {
     if (!byDay.has(d.dia_numero)) byDay.set(d.dia_numero, []);
   }
+
+  // Pra rotular "Dia X (refeito)" quando for replace_day vs add_day novo.
+  const replacedDayNumbers = new Set(
+    applied.filter((r) => r.action === "replace_day" && r.success).map((r) => r.dia_numero)
+  );
 
   return (
     <div
@@ -772,13 +779,24 @@ function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
       </div>
 
       <div className="mt-2 space-y-2">
-        {summary.days.map((d, i) => (
-          <div key={`d-${i}`} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#D1FAE5" }}>
-            <MapPin className="w-3 h-3" />
-            <span className="font-display font-bold">Dia {d.dia_numero}</span>
-            <span className="opacity-90">— {d.titulo ?? "novo dia"}</span>
-          </div>
-        ))}
+        {summary.days.map((d, i) => {
+          const isReplace = replacedDayNumbers.has(d.dia_numero);
+          // Pega hotel/cidade se vieram do parser (replace_day inclui).
+          const meta = [d.cidade, d.hotel].filter(Boolean).join(" · ");
+          return (
+            <div key={`d-${i}`} className="flex items-baseline gap-1.5 text-[12px]" style={{ color: "#D1FAE5" }}>
+              <MapPin className="w-3 h-3 shrink-0 self-center" />
+              <span className="font-display font-bold">Dia {d.dia_numero}</span>
+              <span className="opacity-90 truncate">— {d.titulo ?? (isReplace ? "refeito" : "novo dia")}</span>
+              {meta && <span className="opacity-70 text-[11px] truncate">· {meta}</span>}
+              {isReplace && (
+                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-display font-extrabold shrink-0" style={{ background: "rgba(255,255,255,0.15)", color: "#FFFFFF" }}>
+                  refeito
+                </span>
+              )}
+            </div>
+          );
+        })}
 
         {Array.from(byDay.entries()).map(([dia, list]) =>
           list.length > 0 ? (

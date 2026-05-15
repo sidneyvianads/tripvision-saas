@@ -374,14 +374,34 @@ export async function applyRoteiroUpdates(viagemId, updates) {
 
         case "replace_day": {
           // Sobrescreve um dia inteiro de uma vez: o dia + array de atividades.
-          // Se o dia já existe, apaga atividades antigas (cascade do delete do
-          // dia) e recria. Útil pra LLMs que preferem mandar 1 update por dia
-          // em vez de N tags (add_day + add_activity × N).
+          // ANTES de apagar, salva snapshot (dia + atividades antigas) no
+          // result pra undo restaurar exatamente o que estava lá.
           const dn = Number(u.dia_numero);
+
+          // 1) snapshot pré-replace (se o dia já existe). Salva tudo
+          //    que precisamos pra restaurar via undo — incluindo viagem_id,
+          //    senão a recriação no undo falha.
+          let prevSnapshot = null;
           const existingDiaId = await getDiaId(viagemId, dn);
           if (existingDiaId) {
+            const { data: prevDia } = await supabase
+              .from("roteiro_dias")
+              .select("dia_numero,data,weekday,titulo,cidade,hotel,hotel_telefone,hotel_endereco,alerta,cover_emoji")
+              .eq("id", existingDiaId)
+              .maybeSingle();
+            const { data: prevAts } = await supabase
+              .from("roteiro_atividades")
+              .select("horario,titulo,descricao,tipo,preco,status,endereco,telefone,maps_url,ordem")
+              .eq("dia_id", existingDiaId)
+              .order("ordem");
+            prevSnapshot = {
+              dia: prevDia ? { ...prevDia, viagem_id: viagemId } : null,
+              atividades: prevAts ?? [],
+            };
             await supabase.from("roteiro_dias").delete().eq("id", existingDiaId);
           }
+
+          // 2) cria o dia novo
           const dayPayload = {
             viagem_id: viagemId,
             dia_numero: dn,
@@ -404,16 +424,26 @@ export async function applyRoteiroUpdates(viagemId, updates) {
             results.push({ action: "replace_day", dia_numero: dn, success: false, error: dayErr?.message ?? "Não consegui criar o dia." });
             break;
           }
+
+          // Resultado do replace inclui:
+          // - created_id se o dia era novo (undo simples = delete);
+          // - prev_snapshot se o dia já existia (undo = delete novo + recria antigo);
+          // - count_atividades pra UI saber quantas atividades vão entrar.
+          const atividades = Array.isArray(u.atividades) ? u.atividades : [];
           results.push({
             action: "replace_day",
             dia_numero: dn,
             titulo: dayPayload.titulo,
+            cidade: dayPayload.cidade,
+            hotel: dayPayload.hotel,
             success: true,
-            // Só marca created_id se o dia NÃO existia antes (pra undo).
             created_id: existingDiaId ? null : dayRow.id,
+            replaced_id: existingDiaId ? dayRow.id : null,   // dia novo, pra undo deletar
+            prev_snapshot: prevSnapshot,                     // pra undo restaurar antigo
+            count_atividades: atividades.length,
           });
-          // Atividades embedded
-          const atividades = Array.isArray(u.atividades) ? u.atividades : [];
+
+          // 3) atividades embedded
           for (let i = 0; i < atividades.length; i++) {
             const a = atividades[i];
             const titulo = (a?.titulo ?? "").trim();
@@ -443,6 +473,8 @@ export async function applyRoteiroUpdates(viagemId, updates) {
               action: "add_activity",
               dia_numero: dn,
               titulo: actPayload.titulo,
+              horario: actPayload.horario,
+              tipo: actPayload.tipo,
               success: !actErr,
               error: actErr?.message,
               created_id: actRow?.id ?? null,
@@ -463,29 +495,97 @@ export async function applyRoteiroUpdates(viagemId, updates) {
   return results;
 }
 
-// Desfaz inserções de um applyRoteiroUpdates anterior.
-// Só remove o que FOI inserido (created_id presente). Update/remove não tem undo.
+// Desfaz inserções de um applyRoteiroUpdates anterior. 3 categorias:
+//   1. add_day novo:        delete dia (cascata atividades).
+//   2. add_activity novo:   delete atividade.
+//   3. replace_day:         caso A - era dia novo (created_id): delete o dia
+//                           que substituiu. Caso B - tinha dia antigo
+//                           (replaced_id + prev_snapshot): delete o dia
+//                           novo E recria o antigo + atividades antigas.
+// Update e remove puros não têm undo (não dá pra reverter sem snapshot).
 export async function undoRoteiroUpdates(results) {
   if (!Array.isArray(results)) return { activities: 0, days: 0, errors: [] };
-  const actIds = results.filter((r) => r.action === "add_activity" && r.created_id).map((r) => r.created_id);
-  const dayIds = results.filter((r) => r.action === "add_day" && r.created_id).map((r) => r.created_id);
   const errors = [];
 
-  // Apaga atividades primeiro (pra evitar cascade do dia)
+  // 1) Atividades inseridas DENTRO dum replace_day já caem em cascata
+  //    quando deletamos o dia novo abaixo. Pra evitar dupla exclusão,
+  //    coletamos só atividades de add_activity que NÃO sejam parte de
+  //    replace_day (que tem replaced_id ou created_id).
+  const replaceDays = results.filter((r) => r.action === "replace_day" && r.success);
+  const replacedDayNumbers = new Set(replaceDays.map((r) => r.dia_numero));
+
+  const actIds = results
+    .filter((r) => r.action === "add_activity" && r.created_id && !replacedDayNumbers.has(r.dia_numero))
+    .map((r) => r.created_id);
+
+  const addDayIds = results
+    .filter((r) => r.action === "add_day" && r.created_id)
+    .map((r) => r.created_id);
+
+  // 2) Apaga atividades soltas primeiro
   if (actIds.length) {
     const { error } = await supabase.from("roteiro_atividades").delete().in("id", actIds);
     if (error) errors.push(error.message);
   }
-  if (dayIds.length) {
-    const { error } = await supabase.from("roteiro_dias").delete().in("id", dayIds);
+
+  // 3) Apaga add_day novos (cascata leva atividades filhas)
+  if (addDayIds.length) {
+    const { error } = await supabase.from("roteiro_dias").delete().in("id", addDayIds);
     if (error) errors.push(error.message);
   }
-  return { activities: actIds.length, days: dayIds.length, errors };
+
+  // 4) Processa cada replace_day individualmente
+  let replacedDaysCount = 0;
+  let restoredAtividades = 0;
+  for (const r of replaceDays) {
+    // Caso A: era dia novo → só deleta o dia que entrou (cascata)
+    if (r.created_id && !r.prev_snapshot) {
+      const { error } = await supabase.from("roteiro_dias").delete().eq("id", r.created_id);
+      if (error) errors.push(error.message);
+      else replacedDaysCount++;
+      continue;
+    }
+    // Caso B: substituiu dia que já existia → deleta o novo + restaura antigo
+    if (r.replaced_id && r.prev_snapshot?.dia?.viagem_id) {
+      // Delete o dia novo (cascata leva atividades novas)
+      const { error: delErr } = await supabase.from("roteiro_dias").delete().eq("id", r.replaced_id);
+      if (delErr) { errors.push(delErr.message); continue; }
+      // Recria dia antigo (viagem_id já vem do snapshot)
+      const { data: restoredDia, error: insErr } = await supabase
+        .from("roteiro_dias")
+        .insert(r.prev_snapshot.dia)
+        .select("id")
+        .single();
+      if (insErr || !restoredDia) {
+        errors.push(insErr?.message ?? "Falha ao recriar dia antigo.");
+        continue;
+      }
+      replacedDaysCount++;
+      // Recria atividades antigas em batch
+      const prevAts = Array.isArray(r.prev_snapshot.atividades) ? r.prev_snapshot.atividades : [];
+      if (prevAts.length) {
+        const payload = prevAts.map((a) => ({ ...a, dia_id: restoredDia.id }));
+        const { error: actErr } = await supabase.from("roteiro_atividades").insert(payload);
+        if (actErr) errors.push(actErr.message);
+        else restoredAtividades += prevAts.length;
+      }
+    }
+  }
+
+  return {
+    activities: actIds.length + restoredAtividades,
+    days: addDayIds.length + replacedDaysCount,
+    errors,
+  };
 }
 
 export function summarizeUpdates(results) {
+  // Atividades adicionadas direto OU dentro dum replace_day.
   const added = results.filter((r) => r.action === "add_activity" && r.success);
-  const days = results.filter((r) => r.action === "add_day" && r.success);
+  // "days" inclui add_day E replace_day — UI mostra ambos como "Dia X montado".
+  const days = results.filter(
+    (r) => (r.action === "add_day" || r.action === "replace_day") && r.success
+  );
   const updated = results.filter((r) => /^update_/.test(r.action) && r.success);
   const removed = results.filter((r) => /^remove_/.test(r.action) && r.success);
   const errors = results.filter((r) => !r.success);
