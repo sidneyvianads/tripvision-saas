@@ -111,31 +111,58 @@ export default function Account() {
     if (newClean !== normalizePassword(pwNew2)) return setPwMsg({ type: "err", text: "As senhas não conferem." });
 
     setPwBusy(true);
+    // reauthOk: marca se a re-autenticação passou. Distingue dois tipos
+    // de erro nas mensagens: senha velha errada vs falha pós-reauth.
+    let reauthOk = false;
     try {
-      // Re-autentica primeiro pra validar a senha atual. signInWithPassword
-      // retorna erro 400 com "Invalid login credentials" se a velha tiver errada.
-      // Como o user já está logado com o mesmo email, isso só refresca a session.
+      // Re-autentica primeiro pra validar a senha atual. Erro 400 com
+      // "Invalid login credentials" se a velha tiver errada.
       const { error: reauthErr } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: oldClean,
       });
       if (reauthErr) throw new Error("Senha atual incorreta.");
+      reauthOk = true;
 
+      // Reauth OK — se updatePassword falhar daqui, é network/Supabase
+      // (não senha velha errada). Mensagem específica pro user não pensar
+      // que mudou e ficar bloqueado depois.
       await updatePassword(newClean);
       setPwMsg({ type: "ok", text: "Senha atualizada!" });
       setPwOld(""); setPwNew(""); setPwNew2("");
     } catch (err) {
-      setPwMsg({ type: "err", text: err.message });
+      const friendly = reauthOk
+        ? `A senha NÃO foi alterada (erro de rede). Sua senha atual continua válida. Tente de novo: ${err.message}`
+        : err.message;
+      setPwMsg({ type: "err", text: friendly });
     } finally { setPwBusy(false); }
   };
 
   const handleDeleteAccount = async () => {
     setDelBusy(true);
     try {
-      // Apaga viagens onde é owner (CASCADE remove tudo associado)
-      await supabase.from("viagens").delete().eq("owner_id", user.id);
-      await supabase.from("users").delete().eq("id", user.id);
-      signOut();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Sessão expirada — faça login de novo.");
+      // Endpoint server-side com service_role chama auth.admin.deleteUser
+      // (que CASCADE em public.users e tudo dependente). Antes era delete
+      // client-side só em public.users — deixava auth.users órfão, email
+      // queimado pra sempre.
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ confirm: "DELETE_MY_ACCOUNT" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? `HTTP ${res.status}`);
+      }
+      // await signOut antes do navigate — antes era fire-and-forget e o
+      // App.jsx podia renderizar estado intermediário (user truthy ainda
+      // por instantes depois do navigate).
+      await signOut();
       navigate("/", { replace: true });
     } catch (err) {
       alert("Erro ao deletar conta: " + err.message);
@@ -377,9 +404,9 @@ export default function Account() {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (!confirm("Sair? Sua sessão será encerrada nesse navegador.")) return;
-                signOut();
+                await signOut();
                 navigate("/");
               }}
               className="text-sm text-red-600 hover:underline font-display font-bold"
