@@ -115,6 +115,51 @@ async function streamPlan(req, signal, onDelta) {
   return full;
 }
 
+// Extrai texto plano de children React (string | array | element) pra detectar
+// o tipo do link (📸 / 🌐 / 📍) só pelo emoji do rótulo.
+function flatChildrenText(children) {
+  if (children == null) return "";
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(flatChildrenText).join("");
+  if (children.props?.children) return flatChildrenText(children.props.children);
+  return "";
+}
+
+// Classifica o link pra colorir e estilizar conforme o spec:
+// 📸 Instagram → #E1306C, 🌐 Site → #2563EB, 📍 Mapa → #059669.
+// Fallback (host conhecido): instagram.com, maps.google.com.
+function detectLinkType(text, href) {
+  if (text.includes("📸") || /instagram\.com/i.test(href)) return "instagram";
+  if (text.includes("📍") || /maps\.google\.com|google\.com\/maps/i.test(href)) return "maps";
+  if (text.includes("🌐")) return "site";
+  return "default";
+}
+
+const LINK_STYLES = {
+  instagram: { color: "#E1306C", fontSize: 13 },
+  site:      { color: "#2563EB", fontSize: 13 },
+  maps:      { color: "#059669", fontSize: 13 },
+  default:   { color: "#F97316" },
+};
+
+function RichLink({ href, children }) {
+  const text = flatChildrenText(children);
+  const type = detectLinkType(text, href ?? "");
+  const style = LINK_STYLES[type];
+  const isTagged = type !== "default";
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition ${isTagged ? "" : ""}`}
+      style={style}
+    >
+      {children}
+    </a>
+  );
+}
+
 const MD_COMPONENTS_LIGHT = {
   p:      ({ children }) => <p className="m-0 leading-relaxed">{children}</p>,
   ul:     ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
@@ -123,7 +168,7 @@ const MD_COMPONENTS_LIGHT = {
   strong: ({ children }) => <strong className="font-display font-extrabold text-[#1F2937]">{children}</strong>,
   em:     ({ children }) => <em className="italic">{children}</em>,
   code:   ({ children }) => <code className="px-1 py-0.5 rounded bg-[#F3F4F6] text-[#374151] text-[0.9em]">{children}</code>,
-  a:      ({ children, href }) => <a href={href} target="_blank" rel="noopener noreferrer" className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition" style={{ color: "#F97316" }}>{children}</a>,
+  a:      ({ children, href }) => <RichLink href={href}>{children}</RichLink>,
   h1:     ({ children }) => <h1 className="text-base font-display font-extrabold text-[#1F2937] mt-1">{children}</h1>,
   h2:     ({ children }) => <h2 className="text-sm font-display font-extrabold text-[#1F2937] mt-1">{children}</h2>,
   h3:     ({ children }) => <h3 className="text-sm font-display font-bold text-[#1F2937] mt-1">{children}</h3>,

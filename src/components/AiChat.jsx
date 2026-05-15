@@ -3,8 +3,43 @@ import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Avatar from "./Avatar";
 
-// Markdown leve pra bolha do assistente — links laranja em nova aba pra
-// abrir Google Maps / site oficial das sugestões sem sair do app.
+// Markdown leve pra bolha do assistente. Links coloridos por tipo:
+// 📸 Instagram = rosa, 🌐 Site = azul, 📍 Mapa = verde.
+function flatChildrenText(children) {
+  if (children == null) return "";
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(flatChildrenText).join("");
+  if (children.props?.children) return flatChildrenText(children.props.children);
+  return "";
+}
+function detectLinkType(text, href) {
+  if (text.includes("📸") || /instagram\.com/i.test(href)) return "instagram";
+  if (text.includes("📍") || /maps\.google\.com|google\.com\/maps/i.test(href)) return "maps";
+  if (text.includes("🌐")) return "site";
+  return "default";
+}
+const LINK_STYLES = {
+  instagram: { color: "#E1306C", fontSize: 13 },
+  site:      { color: "#2563EB", fontSize: 13 },
+  maps:      { color: "#059669", fontSize: 13 },
+  default:   { color: "#F97316" },
+};
+function RichLink({ href, children }) {
+  const text = flatChildrenText(children);
+  const type = detectLinkType(text, href ?? "");
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition"
+      style={LINK_STYLES[type]}
+    >
+      {children}
+    </a>
+  );
+}
+
 const MD_AI = {
   p:      ({ children }) => <p className="m-0 leading-relaxed">{children}</p>,
   ul:     ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
@@ -12,17 +47,7 @@ const MD_AI = {
   li:     ({ children }) => <li className="leading-relaxed">{children}</li>,
   strong: ({ children }) => <strong className="font-display font-extrabold">{children}</strong>,
   em:     ({ children }) => <em className="italic">{children}</em>,
-  a:      ({ children, href }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition"
-      style={{ color: "#F97316" }}
-    >
-      {children}
-    </a>
-  ),
+  a:      ({ children, href }) => <RichLink href={href}>{children}</RichLink>,
 };
 
 export default function AiChat({ trip, days, user }) {
