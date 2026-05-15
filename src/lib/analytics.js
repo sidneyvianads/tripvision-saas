@@ -53,12 +53,37 @@ export function track(event, props) {
 }
 
 // Liga eventos a um user (depois do login/signup).
+//
+// LGPD: traits com PII (email, nome) só vão pro provedor SE o user
+// consentiu explicitamente. O consent é guardado em localStorage
+// (viajjei.consent_analytics === "true"). Sem consent, mandamos só
+// o user_id (identifier opaco) — suficiente pra cohort/funnel.
+//
+// Pra coletar consentimento, mostre um banner de cookies que dispara
+// setAnalyticsConsent(true). Por enquanto não temos banner — então
+// na prática só user_id sai daqui.
 export function identify(userId, traits) {
   if (!ENABLED) {
-    console.debug("[analytics:stub:identify]", userId, traits ?? "");
+    console.debug("[analytics:stub:identify]", userId, hasConsent() ? traits : "(no PII — sem consent)");
     return;
   }
-  // TODO: posthog.identify(userId, traits);
+  // TODO: posthog.identify(userId);  // sempre, ID-only
+  // TODO: if (hasConsent() && traits) posthog.setPersonProperties(traits);
+}
+
+const CONSENT_KEY = "viajjei.consent_analytics";
+
+export function hasConsent() {
+  if (typeof window === "undefined") return false;
+  try { return window.localStorage.getItem(CONSENT_KEY) === "true"; }
+  catch { return false; }
+}
+
+export function setAnalyticsConsent(consented) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CONSENT_KEY, consented ? "true" : "false");
+  } catch {}
 }
 
 // Limpa identificação (depois do logout).

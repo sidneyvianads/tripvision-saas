@@ -75,8 +75,11 @@ export function AuthProvider({ children }) {
       const profile = await loadProfile(session.user);
       setUser(profile);
       if (profile) {
+        // Sentry user é interno/error-tracking, OK ter email pra debug.
         setSentryUser({ id: profile.id, email: profile.email });
-        identify(profile.id, { email: profile.email, nome: profile.nome, plano: profile.plano });
+        // identify() decide internamente se envia PII conforme consent.
+        // plano é traits funcional (não PII) — sempre OK enviar.
+        identify(profile.id, { plano: profile.plano, email: profile.email, nome: profile.nome });
       }
     });
 
