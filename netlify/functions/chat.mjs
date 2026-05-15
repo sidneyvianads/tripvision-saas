@@ -162,6 +162,24 @@ async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
   throw lastErr;
 }
 
+// Constrói messages com cache breakpoint na penúltima do histórico.
+// Mesma lógica do plan.mjs — duplicado por enquanto até extrair pra _lib.
+function buildMessagesWithCache(history, userMessage) {
+  const baseHistory = history.map((m) => ({ role: m.role, content: m.content }));
+  if (baseHistory.length >= 3) {
+    const breakpointIdx = baseHistory.length - 3;
+    baseHistory[breakpointIdx] = {
+      role: baseHistory[breakpointIdx].role,
+      content: [{
+        type: "text",
+        text: baseHistory[breakpointIdx].content,
+        cache_control: { type: "ephemeral" },
+      }],
+    };
+  }
+  return [...baseHistory, { role: "user", content: userMessage }];
+}
+
 // ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
 
 async function replyWithClaude({ system, history, userMessage }) {
@@ -180,10 +198,10 @@ async function replyWithClaude({ system, history, userMessage }) {
         max_tokens: 1024,
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
-        messages: [
-          ...history.map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: userMessage },
-        ],
+        // Cache breakpoint na penúltima msg do histórico — corta input cost
+        // do histórico em ~80%. Ver plan.mjs:buildMessagesWithCache pra
+        // detalhes da técnica.
+        messages: buildMessagesWithCache(history, userMessage),
       }),
     });
     const data = await response.json();

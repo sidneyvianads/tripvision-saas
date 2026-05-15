@@ -377,11 +377,36 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
+// Constrói lista de messages com cache breakpoint na PENÚLTIMA msg do
+// histórico. Anthropic permite até 4 cache_control breakpoints; o
+// system já usa 1. As últimas 2 msgs ficam sem cache (mais voláteis,
+// muda a cada turno). Tudo antes vira cache hit ($0.10/M vs $1/M).
+//
+// Como cache_control em content block requer formato array, convertemos
+// só a msg do breakpoint pra { type: "text", text, cache_control }.
+function buildMessagesWithCache(history, userMessage) {
+  const baseHistory = history.map((m) => ({ role: m.role, content: m.content }));
+  // Só vale a pena marcar cache se há histórico suficiente pra economizar
+  // (>=3 msgs significa que há algo "estável" antes das últimas 2).
+  if (baseHistory.length >= 3) {
+    const breakpointIdx = baseHistory.length - 3; // 3a-de-trás-pra-frente
+    baseHistory[breakpointIdx] = {
+      role: baseHistory[breakpointIdx].role,
+      content: [{
+        type: "text",
+        text: baseHistory[breakpointIdx].content,
+        cache_control: { type: "ephemeral" },
+      }],
+    };
+  }
+  return [...baseHistory, { role: "user", content: userMessage }];
+}
+
 // ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
 //
 // Modelo: claude-haiku-4-5 (alias estável). Streaming SSE Anthropic já
 // chega no formato que o front lê — basta retornar upstream.body. Web
-// search via tool web_search_20250305 (max_uses=5 por turno).
+// search via tool web_search_20250305 (max_uses=1 por turno).
 
 async function streamWithClaude({ system, history, userMessage }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -404,10 +429,12 @@ async function streamWithClaude({ system, history, userMessage }) {
         stream: true,
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
-        messages: [
-          ...history.map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: userMessage },
-        ],
+        // Cache do histórico: marcamos a PENÚLTIMA msg com cache_control
+        // ephemeral. As últimas 2 msgs ficam fora do cache (são as mais
+        // voláteis). Quando user manda nova msg, tudo até o cache breakpoint
+        // bate cache hit ($0.10/M em vez de $1/M no input). Corte de ~80%
+        // no custo de input do histórico.
+        messages: buildMessagesWithCache(history, userMessage),
       }),
     });
     if (!upstream.ok || !upstream.body) {
@@ -608,7 +635,7 @@ export default async (req) => {
   // ===== PREPARE PROMPT + HISTORY =====
   const sanitizedHistory = (Array.isArray(history) ? history : [])
     .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
-    .slice(-20)
+    .slice(-10)  // 10 msgs cobre ~5 turnos completos — suficiente pro contexto recente, corta input ~50% vs slice(-20)
     .map((m) => ({ role: m.role, content: m.content }));
 
   const system = SYSTEM_TEMPLATE(viagem);
