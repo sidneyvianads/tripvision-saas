@@ -135,8 +135,15 @@ export function AuthProvider({ children }) {
         email: cleanEmail,
         password: cleanSenha,
         options: {
-          // metadados extras viajam pra raw_user_meta_data — útil pra triggers
-          data: { nome: cleanNome },
+          // raw_user_meta_data — usado pelo trigger SQL on_auth_user_created
+          // pra preencher public.users no momento do INSERT em auth.users.
+          // Sem isso, profile teria nome="parte antes do @" como fallback.
+          data: {
+            nome: cleanNome,
+            avatar_cor: avatar_cor ?? "#7CB9E8",
+            origem: origem ?? "organico",
+            afiliado_id: afiliado_id ?? null,
+          },
           emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/welcome` : undefined,
         },
       });
@@ -153,11 +160,11 @@ export function AuthProvider({ children }) {
       const newUser = signUpData.user;
       if (!newUser) throw new Error("Falha ao criar conta — tente novamente.");
 
-      // Cria/atualiza profile em public.users. Se Supabase tiver email
-      // confirmation ON, ainda não estamos logados; precisamos usar
-      // service-side ou aceitar que a row de profile só vai criar depois
-      // do primeiro login. Pra MVP: tentamos agora; se RLS bloquear, OK,
-      // criamos no primeiro signIn via UPSERT idempotente.
+      // Profile já foi criado pelo trigger SQL on_auth_user_created. Aqui
+      // só fazemos UPDATE pra avatar_url (que não cabe em raw_user_meta_data
+      // por ser uma data URL/Base64 que pode passar dos 2KB). Se RLS
+      // bloquear (sem session por email confirmation ON), tudo bem — o
+      // avatar fica default até o primeiro login.
       const profilePayload = {
         id: newUser.id,
         nome: cleanNome,
@@ -168,13 +175,14 @@ export function AuthProvider({ children }) {
         origem: origem ?? "organico",
         afiliado_id: afiliado_id ?? null,
       };
-      const { error: profileErr } = await supabase
-        .from("users")
-        .upsert(profilePayload, { onConflict: "id" });
-      if (profileErr) {
-        // Se RLS bloqueou (esperado quando email confirmation está ON),
-        // criamos lazy no próximo loadProfile-or-fail handshake.
-        console.warn("[Viajjei] profile UPSERT (deferred till login):", profileErr.message);
+      if (avatar_url) {
+        // só atualiza avatar_url (única coluna que não veio via trigger).
+        // RLS users_update_own column-grant permite avatar_url.
+        const { error: updErr } = await supabase
+          .from("users")
+          .update({ avatar_url })
+          .eq("id", newUser.id);
+        if (updErr) console.warn("[Viajjei] avatar update (will retry on login):", updErr.message);
       }
 
       // Quando session vem null = email confirmation ativo. Avisa caller.
