@@ -1,17 +1,18 @@
 // /api/plan — motor de planejamento conversacional do Viajjei.
 //
-// PRIMARY: Google Gemini 2.0 Flash com googleSearch grounding nativo (web
-// search direto pelo Google, sem rate limit baixo, ~30× mais barato que o
-// path antigo via Anthropic).
-//
-// FALLBACK: Anthropic Claude Sonnet 4.5 com web_search_20250305 — usado
-// quando GEMINI_API_KEY não está configurada.
+// CHAIN DE PROVIDERS (tenta na ordem, cai pro próximo se falhar):
+//   1. PRIMARY: OpenAI GPT-4o-mini via Responses API com tool
+//      web_search_preview (web search nativo). Mais estável que Gemini,
+//      segue instruções melhor, mais barato.
+//   2. FALLBACK 1: Google Gemini 2.5 Flash com googleSearch grounding.
+//   3. FALLBACK 2: Anthropic Claude Sonnet 4.5 com web_search_20250305.
 //
 // O frontend (PlanChat.jsx) lê SSE em formato Anthropic
 // (data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"…"}}).
-// Pra não tocar no front, o path Gemini reembrulha cada chunk nesse mesmo
-// schema. Forward direto do upstream continua sendo o atalho do path Claude.
+// Cada provider reembrulha os deltas nesse schema pra o front não mudar.
+// Forward direto do upstream continua sendo o atalho do path Claude.
 
+import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ────────────────────────── SYSTEM PROMPT ──────────────────────────
@@ -284,7 +285,61 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
-// ────────────────────────── PATH A: GEMINI ──────────────────────────
+// ────────────────────────── PATH A: OPENAI (primary) ──────────────────────────
+//
+// Usa a Responses API com tool web_search_preview — grounding nativo do
+// OpenAI, sem precisar gerenciar function calling manual. O stream emite
+// eventos semânticos (response.output_text.delta) que reembrulhamos no
+// schema SSE Anthropic que o front já lê.
+
+async function streamWithOpenAI({ system, history, userMessage }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY ausente.");
+
+  // OpenAI usa role "assistant" pra mensagens do modelo (que veio do front
+  // já no formato user/assistant). Histórico passa direto.
+  const input = [
+    { role: "system", content: system },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  const stream = await withRetry(async () => {
+    const client = new OpenAI({ apiKey });
+    return await client.responses.create({
+      model: "gpt-4o-mini",
+      tools: [{ type: "web_search_preview" }],
+      input,
+      max_output_tokens: 4096,
+      stream: true,
+    });
+  }, "openai-init", 2, 1000);
+
+  const encoder = new TextEncoder();
+  const sseStream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of stream) {
+          // Responses API emite vários tipos de evento. Só nos interessa o
+          // delta de texto incremental — o resto (tool_use, completed, etc)
+          // o cliente não precisa ver.
+          if (event?.type === "response.output_text.delta" && typeof event.delta === "string" && event.delta.length > 0) {
+            controller.enqueue(encoder.encode(sseTextDeltaEvent(event.delta)));
+          }
+        }
+        controller.close();
+      } catch (err) {
+        console.error("[plan/openai] stream error (mid-stream):", err?.message ?? err);
+        controller.enqueue(encoder.encode(sseErrorEvent()));
+        controller.close();
+      }
+    },
+  });
+
+  return sseStream;
+}
+
+// ────────────────────────── PATH B: GEMINI (fallback 1) ──────────────────────────
 
 async function streamWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -338,7 +393,7 @@ async function streamWithGemini({ system, history, userMessage }) {
   return stream;
 }
 
-// ────────────────────────── PATH B: ANTHROPIC (fallback) ──────────────────────────
+// ────────────────────────── PATH C: ANTHROPIC (fallback 2) ──────────────────────────
 
 async function streamWithAnthropic({ system, history, userMessage }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -378,13 +433,18 @@ async function streamWithAnthropic({ system, history, userMessage }) {
 export default async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasGemini = !!process.env.GEMINI_API_KEY;
   const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  if (!hasGemini && !hasAnthropic) {
+  if (!hasOpenAI && !hasGemini && !hasAnthropic) {
     console.error("[JEI] Nenhuma API key configurada — devolvendo erro amigável.");
     return jsonResponse({ error: FRIENDLY_ERROR }, 503);
   }
-  console.log(hasGemini ? "[JEI] Path primário: Gemini 2.5 Flash" : "[JEI] Path primário: Claude Sonnet 4.5");
+  console.log(
+    hasOpenAI ? "[JEI] Path primário: GPT-4o-mini"
+    : hasGemini ? "[JEI] Path primário: Gemini 2.5 Flash"
+    : "[JEI] Path primário: Claude Sonnet 4.5"
+  );
 
   let body;
   try { body = await req.json(); }
@@ -438,35 +498,32 @@ export default async (req) => {
   const system = SYSTEM_TEMPLATE(viagem);
 
   // ===== STREAM =====
-  // Estratégia: Gemini (com retry interno) → fallback Claude se Gemini falhar
-  // → mensagem amigável se ambos falharem. Nunca expõe error.message do SDK
-  // pro client; tudo passa pra logs internos.
+  // Chain: OpenAI → Gemini → Claude. Cada path tem retry interno; se um
+  // path falha após retries, cai pro próximo. Só devolve erro amigável
+  // quando TODOS falharem. Logs internos preservam detalhes pra debug.
   const userMessage = message.trim();
   const params = { system, history: sanitizedHistory, userMessage };
 
-  try {
-    if (hasGemini) {
-      try {
-        const stream = await streamWithGemini(params);
-        return new Response(stream, { status: 200, headers: SSE_HEADERS });
-      } catch (geminiErr) {
-        console.error("[JEI] Gemini falhou após retries:", geminiErr?.message ?? geminiErr);
-        if (hasAnthropic) {
-          console.log("[JEI] Tentando fallback Claude...");
-          const stream = await streamWithAnthropic(params);
-          return new Response(stream, { status: 200, headers: SSE_HEADERS });
-        }
-        throw geminiErr;
-      }
-    } else {
-      const stream = await streamWithAnthropic(params);
+  // Lista ordenada de tentativas (só inclui os providers disponíveis)
+  const providers = [];
+  if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => streamWithOpenAI(params) });
+  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => streamWithGemini(params) });
+  if (hasAnthropic) providers.push({ label: "Claude Sonnet 4.5",  run: () => streamWithAnthropic(params) });
+
+  for (let i = 0; i < providers.length; i++) {
+    const p = providers[i];
+    try {
+      if (i > 0) console.log(`[JEI] Fallback: ${p.label}`);
+      const stream = await p.run();
       return new Response(stream, { status: 200, headers: SSE_HEADERS });
+    } catch (err) {
+      console.error(`[JEI] ${p.label} falhou:`, err?.message ?? err);
+      // continua pro próximo provider
     }
-  } catch (err) {
-    console.error("[JEI] Todos os paths falharam:", err?.message ?? err);
-    // Resposta amigável. Sem details, sem stack, sem nada do SDK.
-    return jsonResponse({ error: FRIENDLY_ERROR }, 502);
   }
+
+  console.error("[JEI] Todos os providers falharam.");
+  return jsonResponse({ error: FRIENDLY_ERROR }, 502);
 };
 
 export const config = { path: "/api/plan" };

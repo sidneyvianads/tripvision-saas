@@ -1,10 +1,13 @@
 // /api/chat — chat livre da viagem (perguntas pontuais do grupo).
 //
-// PRIMARY: Google Gemini 2.0 Flash com googleSearch grounding.
-// FALLBACK: Anthropic Claude Sonnet 4.5 com web_search_20250305.
+// Chain (tenta na ordem, cai pro próximo se falhar):
+//   1. PRIMARY: OpenAI GPT-4o-mini via Responses API com web_search_preview.
+//   2. FALLBACK 1: Google Gemini 2.5 Flash com googleSearch.
+//   3. FALLBACK 2: Anthropic Claude Sonnet 4.5.
 //
 // Resposta não-streaming: o front (AiChat.jsx) lê { reply }.
 
+import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_BASE = `Você é o Jei, concierge de viagem pessoal do Viajjei.
@@ -91,7 +94,34 @@ async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
   throw lastErr;
 }
 
-// ────────────────────────── PATH A: GEMINI ──────────────────────────
+// ────────────────────────── PATH A: OPENAI (primary) ──────────────────────────
+
+async function replyWithOpenAI({ system, history, userMessage }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY ausente.");
+  const input = [
+    { role: "system", content: system },
+    ...history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
+  ];
+  return await withRetry(async () => {
+    const client = new OpenAI({ apiKey });
+    const result = await client.responses.create({
+      model: "gpt-4o-mini",
+      tools: [{ type: "web_search_preview" }],
+      input,
+      max_output_tokens: 1024,
+    });
+    // Responses API expõe output_text (string agregada) ou output[].
+    const text = result?.output_text
+      ?? result?.output?.find?.((o) => o.type === "message")
+        ?.content?.find?.((c) => c.type === "output_text")?.text
+      ?? "";
+    return text || FRIENDLY_ERROR;
+  }, "openai-chat", 2, 1000);
+}
+
+// ────────────────────────── PATH B: GEMINI (fallback 1) ──────────────────────────
 
 async function replyWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -117,7 +147,7 @@ async function replyWithGemini({ system, history, userMessage }) {
   }, "gemini-chat", 2, 1000);
 }
 
-// ────────────────────────── PATH B: ANTHROPIC (fallback) ──────────────────────────
+// ────────────────────────── PATH C: ANTHROPIC (fallback 2) ──────────────────────────
 
 async function replyWithAnthropic({ system, history, userMessage }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -154,16 +184,21 @@ export default async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasGemini = !!process.env.GEMINI_API_KEY;
   const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  if (!hasGemini && !hasAnthropic) {
+  if (!hasOpenAI && !hasGemini && !hasAnthropic) {
     console.error("[JEI/chat] Nenhuma API key — devolvendo mensagem amigável.");
     return new Response(
       JSON.stringify({ reply: FRIENDLY_ERROR }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
-  console.log(hasGemini ? "[JEI/chat] Path primário: Gemini 2.5 Flash" : "[JEI/chat] Path primário: Claude Sonnet 4.5");
+  console.log(
+    hasOpenAI ? "[JEI/chat] Path primário: GPT-4o-mini"
+    : hasGemini ? "[JEI/chat] Path primário: Gemini 2.5 Flash"
+    : "[JEI/chat] Path primário: Claude Sonnet 4.5"
+  );
 
   let body;
   try { body = await req.json(); }
@@ -187,35 +222,31 @@ export default async (req) => {
   const system = SYSTEM_BASE + buildContext({ trip, roteiro });
   const params = { system, history: sanitizedHistory, userMessage: message };
 
-  // Gemini (com retry interno) → fallback Claude → mensagem amigável.
-  // NUNCA propaga error.message do SDK pro client.
-  try {
-    let reply;
-    if (hasGemini) {
-      try {
-        reply = await replyWithGemini(params);
-      } catch (geminiErr) {
-        console.error("[JEI/chat] Gemini falhou após retries:", geminiErr?.message ?? geminiErr);
-        if (hasAnthropic) {
-          console.log("[JEI/chat] Tentando fallback Claude...");
-          reply = await replyWithAnthropic(params);
-        } else {
-          throw geminiErr;
-        }
-      }
-    } else {
-      reply = await replyWithAnthropic(params);
+  // Chain: OpenAI → Gemini → Claude. Cada path com retry interno; se um
+  // falha após retries, cai pro próximo. Erro amigável só se TODOS falharem.
+  const providers = [];
+  if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => replyWithOpenAI(params) });
+  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => replyWithGemini(params) });
+  if (hasAnthropic) providers.push({ label: "Claude Sonnet 4.5",  run: () => replyWithAnthropic(params) });
+
+  for (let i = 0; i < providers.length; i++) {
+    const p = providers[i];
+    try {
+      if (i > 0) console.log(`[JEI/chat] Fallback: ${p.label}`);
+      const reply = await p.run();
+      return new Response(JSON.stringify({ reply }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      console.error(`[JEI/chat] ${p.label} falhou:`, err?.message ?? err);
     }
-    return new Response(JSON.stringify({ reply }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error("[JEI/chat] Todos os paths falharam:", err?.message ?? err);
-    return new Response(
-      JSON.stringify({ reply: FRIENDLY_ERROR }),
-      { status: 502, headers: { "Content-Type": "application/json" } }
-    );
   }
+
+  console.error("[JEI/chat] Todos os providers falharam.");
+  return new Response(
+    JSON.stringify({ reply: FRIENDLY_ERROR }),
+    { status: 502, headers: { "Content-Type": "application/json" } }
+  );
 };
 
 export const config = { path: "/api/chat" };
