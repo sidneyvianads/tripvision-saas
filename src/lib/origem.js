@@ -60,15 +60,19 @@ export async function resolveOrigemPayload() {
 
   if (stored.origem === "afiliado" && stored.cupom) {
     try {
+      // eq exato (não ilike) — captureOrigemFromUrl já fez toUpperCase.
+      // ilike interpretaria '%' do localStorage manipulado e auto-atribuiria
+      // o primeiro afiliado ativo (low-severity mas semanticamente errado).
+      const code = String(stored.cupom).trim().toUpperCase().slice(0, 30);
+      if (!code) return { origem: "organico", afiliado_id: null };
       const { data } = await supabase
         .from("afiliados")
         .select("id, ativo")
-        .ilike("cupom", stored.cupom)
+        .eq("cupom", code)
         .maybeSingle();
       if (data?.ativo) {
         return { origem: "afiliado", afiliado_id: data.id };
       }
-      // cupom não existe / inativo → trata como orgânico
       return { origem: "organico", afiliado_id: null };
     } catch (e) {
       console.warn("[origem] resolve afiliado falhou:", e);

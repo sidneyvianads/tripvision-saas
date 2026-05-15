@@ -77,8 +77,13 @@ function round2(n) {
 
 async function fetchAfiliadoByCupom(cupom) {
   if (!cupom || !SUPABASE_URL || !SUPABASE_KEY) return null;
+  // Normaliza ANTES de ir na URL pra eliminar % e outros wildcards de
+  // ILIKE (atacante autenticado podia mandar cupom='%' no body e ganhar
+  // o primeiro afiliado ativo).
+  const code = String(cupom).trim().toUpperCase().slice(0, 30);
+  if (!code) return null;
   try {
-    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/afiliados?cupom=ilike.${encodeURIComponent(cupom)}&ativo=eq.true&select=id,nome,cupom,comissao_percent,desconto_percent`;
+    const url = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/afiliados?cupom=eq.${encodeURIComponent(code)}&ativo=eq.true&select=id,nome,cupom,comissao_percent,desconto_percent`;
     const res = await fetch(url, {
       headers: {
         apikey: SUPABASE_KEY,

@@ -34,13 +34,20 @@ export function clearStoredCupom() {
 }
 
 // Valida cupom contra tabela afiliados. Retorna { ok, afiliado, motivo }.
+// IMPORTANTE: comissao_percent foi REVOKE'd do column-grant em R4-H2 pra
+// proteger afiliados/comissao da exposição pública. Frontend não precisa
+// de comissao_percent (só desconto_percent pra mostrar pro user "X% off").
+// Tentar lê-la aqui dispararia "permission denied for column" e quebraria
+// o fluxo de signup inteiro.
 export async function validateCupom(cupom) {
   const code = (cupom ?? "").trim().toUpperCase();
   if (!code) return { ok: false, motivo: "vazio" };
+  // .eq exato — não usar ilike: code já vem .toUpperCase, e a tabela
+  // armazena cupons UPPER. .ilike interpretaria %_ como wildcard.
   const { data, error } = await supabase
     .from("afiliados")
-    .select("id, nome, cupom, ativo, comissao_percent, desconto_percent")
-    .ilike("cupom", code)
+    .select("id, nome, cupom, ativo, desconto_percent, foto_url, instagram")
+    .eq("cupom", code)
     .maybeSingle();
   if (error) {
     console.warn("[cupom] erro ao validar:", error);
