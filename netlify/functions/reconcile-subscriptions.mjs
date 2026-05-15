@@ -88,9 +88,16 @@ async function reconcileOne(sub, stats) {
       const endTs = new Date(sub.current_period_end).getTime();
       const cutoffMs = (sub.ciclo === "anual" ? 380 : 30) * 24 * 60 * 60 * 1000;
       if (endTs > Date.now() + cutoffMs) {
+        // Rebaixa AMBOS plano_expires_at E trial_ends_at. Antes só
+        // plano_expires_at → UI mostrava "Trial" pra user cancelado
+        // e métricas de trial contavam errado.
+        const now = new Date().toISOString();
         await sb(`users?id=eq.${sub.user_id}`, {
           method: "PATCH",
-          body: JSON.stringify({ plano_expires_at: new Date().toISOString() }),
+          body: JSON.stringify({
+            plano_expires_at: now,
+            trial_ends_at: now,
+          }),
         });
         stats.downgraded++;
         console.log(`[reconcile] user ${sub.user_id} rebaixado (MP=${mpStatus}, ciclo=${sub.ciclo}, period_end=${sub.current_period_end})`);
