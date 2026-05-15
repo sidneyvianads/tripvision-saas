@@ -713,6 +713,44 @@ function ViagemUpdateCard({ patch }) {
 }
 
 const UNDO_WINDOW_MS = 30_000;
+
+// Compõe a linha-resumo do UpdateCard a partir dos results reais.
+// Casos:
+//   1 dia + atividades → "Dia 5 — Gramado · 3 atividades"
+//   N dias              → "3 dias montados · 12 atividades"
+//   só updates/removes  → "X atualizações" / "Y remoções"
+//   sem nada            → "Roteiro atualizado" (fallback)
+function buildHeadline(summary, applied) {
+  const days = summary.days;
+  const adds = summary.added.length;
+  if (days.length === 1) {
+    const d = days[0];
+    const partes = [`Dia ${d.dia_numero}`];
+    const where = [d.cidade, d.hotel].filter(Boolean).join(" · ");
+    if (d.titulo) partes.push(`— ${d.titulo}`);
+    else if (where) partes.push(`— ${where}`);
+    if (adds > 0) partes.push(`· ${adds} ${adds === 1 ? "atividade" : "atividades"}`);
+    return partes.join(" ");
+  }
+  if (days.length > 1) {
+    const parts = [`${days.length} dias montados`];
+    if (adds > 0) parts.push(`${adds} ${adds === 1 ? "atividade" : "atividades"}`);
+    return parts.join(" · ");
+  }
+  if (summary.updated.length > 0) {
+    const n = summary.updated.length;
+    return `${n} ${n === 1 ? "ajuste" : "ajustes"} no roteiro`;
+  }
+  if (summary.removed.length > 0) {
+    const n = summary.removed.length;
+    return `${n} ${n === 1 ? "remoção" : "remoções"} no roteiro`;
+  }
+  if (adds > 0) {
+    return `${adds} ${adds === 1 ? "atividade adicionada" : "atividades adicionadas"}`;
+  }
+  return "Roteiro atualizado";
+}
+
 function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
   const summary = summarizeUpdates(applied);
   const total = summary.added.length + summary.days.length + summary.updated.length + summary.removed.length;
@@ -790,8 +828,11 @@ function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
         color: "#FFFFFF",
       }}
     >
-      <div className="font-display font-extrabold text-[13px] flex items-center gap-1.5 text-white">
-        ✅ Roteiro atualizado
+      {/* Headline com resumo concreto: "Dia 5 — Gramado · 3 atividades"
+          (1 dia) ou "3 dias montados · 12 atividades" (vários). */}
+      <div className="font-display font-extrabold text-[13px] flex items-baseline gap-1.5 text-white">
+        <span>✅</span>
+        <span>{buildHeadline(summary, applied)}</span>
       </div>
 
       <div className="mt-2 space-y-2">
