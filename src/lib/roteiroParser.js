@@ -98,31 +98,44 @@ function sanitizeViagemPatch(fields) {
       if (typeof v === "string") patch[k] = v.trim().slice(0, 1000);
     }
   }
-  // Coerência: se mudou adultos/criancas/bebes mas não num_pessoas, recalcula
-  if (patch.adultos != null || patch.criancas != null || patch.bebes != null) {
-    if (patch.num_pessoas == null) {
-      // não temos os valores antigos aqui — caller pode resolver depois
-    }
-  }
+  // Coerência num_pessoas = adultos+criancas+bebes é resolvida em
+  // applyViagemUpdate (que tem acesso ao banco).
   return patch;
 }
 
 // Aplica o update de viagem. Recebe o objeto vindo de parseViagemUpdate
-// + a viagem atual (pra resolver num_pessoas como soma quando ausente).
+// + (opcional) currentTrip pra recalcular num_pessoas como soma do
+// breakdown. Quando currentTrip não vem, busca os valores atuais do DB —
+// num_pessoas NUNCA fica null se houve mudança em adultos/criancas/bebes.
 export async function applyViagemUpdate(viagemId, viagemUpdate, currentTrip = null) {
   if (!viagemUpdate?.fields) return { ok: false, error: "Update sem fields." };
   const patch = sanitizeViagemPatch(viagemUpdate.fields);
+  // Remove num_pessoas: null vindo da IA — esse campo é derivado da soma.
+  // Deixar null aqui quebra a invariante "num_pessoas = adultos + criancas + bebes".
+  if (patch.num_pessoas === null) delete patch.num_pessoas;
   if (Object.keys(patch).length === 0) return { ok: false, error: "Nenhum campo válido pra atualizar." };
 
-  // Recalcula num_pessoas como soma quando o user mexeu no breakdown e não
-  // passou o total explicitamente.
+  // Recalcula num_pessoas SEMPRE que o user mexeu em adultos/criancas/bebes
+  // e não passou um total explícito. Antes deixava null se currentTrip
+  // não viesse — agora busca do banco se precisar. Garantia: num_pessoas
+  // está coerente com o breakdown após todo update.
   const touchedBreakdown = ["adultos", "criancas", "bebes"].some((k) => k in patch);
-  if (touchedBreakdown && patch.num_pessoas == null && currentTrip) {
-    const ad = patch.adultos ?? currentTrip.adultos ?? 0;
-    const cr = patch.criancas ?? currentTrip.criancas ?? 0;
-    const be = patch.bebes ?? currentTrip.bebes ?? 0;
+  if (touchedBreakdown && patch.num_pessoas == null) {
+    let baseTrip = currentTrip;
+    if (!baseTrip) {
+      const { data: row } = await supabase
+        .from("viagens")
+        .select("adultos,criancas,bebes")
+        .eq("id", viagemId)
+        .maybeSingle();
+      baseTrip = row ?? {};
+    }
+    const ad = patch.adultos ?? Number(baseTrip.adultos ?? 0);
+    const cr = patch.criancas ?? Number(baseTrip.criancas ?? 0);
+    const be = patch.bebes ?? Number(baseTrip.bebes ?? 0);
     const total = ad + cr + be;
-    if (total > 0) patch.num_pessoas = total;
+    // Garante o mínimo 1 (constraint do DB: num_pessoas >= 1).
+    patch.num_pessoas = total > 0 ? total : 1;
   }
 
   patch.updated_at = new Date().toISOString();
