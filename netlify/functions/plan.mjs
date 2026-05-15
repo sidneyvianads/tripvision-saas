@@ -21,6 +21,13 @@
 
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
+
+// Rate limits do /api/plan. /api/plan é o endpoint caro (LLM + web search),
+// então protegemos contra burst. Stub Upstash: no-op até env ser setado.
+const RL_USER_LIMIT = 20;     // 20 req/min por user logado
+const RL_IP_LIMIT = 60;       // 60 req/min por IP (cobre múltiplos users na mesma rede)
+const RL_WINDOW_SEC = 60;
 
 // ────────────────────────── SYSTEM PROMPT ──────────────────────────
 
@@ -525,6 +532,25 @@ export default async (req) => {
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
     // ↑ "Mensagem vazia" é validação de input do usuário, não erro técnico — pode mostrar.
+  }
+
+  // ===== RATE LIMIT =====
+  // Checa user_id (mais estrito) e IP (mais permissivo). Qualquer um derruba.
+  // Stub mode quando UPSTASH_REDIS_REST_URL não está setado: passa direto.
+  const ip = getClientIp(req);
+  const rlChecks = [
+    user_id ? rateLimit({ key: `plan:user:${user_id}`, limit: RL_USER_LIMIT, windowSec: RL_WINDOW_SEC }) : null,
+    rateLimit({ key: `plan:ip:${ip}`, limit: RL_IP_LIMIT, windowSec: RL_WINDOW_SEC }),
+  ].filter(Boolean);
+  const rlResults = await Promise.all(rlChecks);
+  const blocked = rlResults.find((r) => !r.ok);
+  if (blocked) {
+    const resetIn = blocked.resetAt ? Math.max(1, Math.ceil((blocked.resetAt - Date.now()) / 1000)) : 60;
+    console.log("[plan] RATE LIMIT blocked", { user_id, ip, resetIn });
+    return jsonResponse(
+      { error: `Muitas requisições. Tenta de novo em ${resetIn}s.`, scope: "rate_limit" },
+      429
+    );
   }
 
   // ===== EFFECTIVE PLAN + GATES =====
