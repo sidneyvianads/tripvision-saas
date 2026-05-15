@@ -1,16 +1,23 @@
 // /api/plan — motor de planejamento conversacional do Viajjei.
 //
 // CHAIN DE PROVIDERS (tenta na ordem, cai pro próximo se falhar):
-//   1. PRIMARY: OpenAI GPT-4o-mini via Responses API com tool
-//      web_search_preview (web search nativo). Mais estável que Gemini,
-//      segue instruções melhor, mais barato.
-//   2. FALLBACK 1: Google Gemini 2.5 Flash com googleSearch grounding.
-//   3. FALLBACK 2: Anthropic Claude Sonnet 4.5 com web_search_20250305.
+//   1. PRIMARY: Anthropic Claude Haiku 4.5 com web_search_20250305.
+//      Custo/conta:
+//        - Tokens:  $1/M in,  $5/M out
+//        - Search:  $10 / 1k buscas (3× mais barato que OpenAI/Gemini)
+//      Único modelo que fecha conta no Pro (R$14,90) com margem positiva
+//      mantendo qualidade Claude — segue instruções fortes, streaming
+//      estável, structured output confiável pros tags <roteiro_update>
+//      e <viagem_update>. Histórico: testamos GPT-4o-mini e Gemini Flash
+//      e ambos deram alucinação/cortes de stream em produção.
+//   2. FALLBACK 1: OpenAI GPT-4o-mini via Responses API (web_search_preview).
+//      Web search da OpenAI é caro ($30/1k); só usa se Claude cair.
+//   3. FALLBACK 2: Google Gemini 2.5 Flash com googleSearch.
 //
 // O frontend (PlanChat.jsx) lê SSE em formato Anthropic
 // (data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"…"}}).
-// Cada provider reembrulha os deltas nesse schema pra o front não mudar.
-// Forward direto do upstream continua sendo o atalho do path Claude.
+// Path Claude forwarda direto o upstream (Anthropic já emite nesse formato).
+// Paths OpenAI e Gemini reembrulham os deltas nesse schema.
 
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -345,12 +352,52 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
-// ────────────────────────── PATH A: OPENAI (primary) ──────────────────────────
+// ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
 //
-// Usa a Responses API com tool web_search_preview — grounding nativo do
-// OpenAI, sem precisar gerenciar function calling manual. O stream emite
-// eventos semânticos (response.output_text.delta) que reembrulhamos no
-// schema SSE Anthropic que o front já lê.
+// Modelo: claude-haiku-4-5 (alias estável). Streaming SSE Anthropic já
+// chega no formato que o front lê — basta retornar upstream.body. Web
+// search via tool web_search_20250305 (max_uses=5 por turno).
+
+async function streamWithClaude({ system, history, userMessage }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ausente.");
+
+  // withRetry envolve a chamada de init. Erros 5xx ou network blip
+  // costumam aparecer aqui; uma vez começado o stream, falhas viram
+  // SSE error amigável (controlado pelo front via parseRoteiroUpdate).
+  return await withRetry(async () => {
+    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 4096,
+        stream: true,
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+        messages: [
+          ...history.map((m) => ({ role: m.role, content: m.content })),
+          { role: "user", content: userMessage },
+        ],
+      }),
+    });
+    if (!upstream.ok || !upstream.body) {
+      let errBody = null;
+      try { errBody = await upstream.json(); } catch {}
+      throw new Error(errBody?.error?.message ?? `Anthropic ${upstream.status}`);
+    }
+    return upstream.body;
+  }, "claude-init", 2, 1000);
+}
+
+// ────────────────────────── PATH B: OPENAI (fallback 1) ──────────────────────────
+//
+// Responses API com web_search_preview. Eventos response.output_text.delta
+// reembrulhados no schema SSE Anthropic.
 
 async function streamWithOpenAI({ system, history, userMessage }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -399,7 +446,7 @@ async function streamWithOpenAI({ system, history, userMessage }) {
   return sseStream;
 }
 
-// ────────────────────────── PATH B: GEMINI (fallback 1) ──────────────────────────
+// ────────────────────────── PATH C: GEMINI (fallback 2) ──────────────────────────
 
 async function streamWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -453,57 +500,22 @@ async function streamWithGemini({ system, history, userMessage }) {
   return stream;
 }
 
-// ────────────────────────── PATH C: ANTHROPIC (fallback 2) ──────────────────────────
-
-async function streamWithAnthropic({ system, history, userMessage }) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ausente.");
-
-  const upstream = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: 4096,
-      stream: true,
-      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
-      messages: [
-        ...history.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: userMessage },
-      ],
-    }),
-  });
-
-  if (!upstream.ok || !upstream.body) {
-    let errBody = null;
-    try { errBody = await upstream.json(); } catch {}
-    throw new Error(errBody?.error?.message ?? `Anthropic ${upstream.status}`);
-  }
-  // Anthropic já emite SSE no formato que o front espera — forward direto.
-  return upstream.body;
-}
-
 // ────────────────────────── HANDLER ──────────────────────────
 
 export default async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
+  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasGemini = !!process.env.GEMINI_API_KEY;
-  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  if (!hasOpenAI && !hasGemini && !hasAnthropic) {
+  if (!hasAnthropic && !hasOpenAI && !hasGemini) {
     console.error("[JEI] Nenhuma API key configurada — devolvendo erro amigável.");
     return jsonResponse({ error: FRIENDLY_ERROR }, 503);
   }
   console.log(
-    hasOpenAI ? "[JEI] Path primário: GPT-4o-mini"
-    : hasGemini ? "[JEI] Path primário: Gemini 2.5 Flash"
-    : "[JEI] Path primário: Claude Sonnet 4.5"
+    hasAnthropic ? "[JEI] Path primário: Claude Haiku 4.5"
+    : hasOpenAI ? "[JEI] Path primário: GPT-4o-mini"
+    : "[JEI] Path primário: Gemini 2.5 Flash"
   );
 
   let body;
@@ -558,17 +570,18 @@ export default async (req) => {
   const system = SYSTEM_TEMPLATE(viagem);
 
   // ===== STREAM =====
-  // Chain: OpenAI → Gemini → Claude. Cada path tem retry interno; se um
-  // path falha após retries, cai pro próximo. Só devolve erro amigável
-  // quando TODOS falharem. Logs internos preservam detalhes pra debug.
+  // Chain: Claude Haiku 4.5 → OpenAI → Gemini. Cada path tem retry
+  // interno; se um path falha após retries, cai pro próximo. Só devolve
+  // erro amigável quando TODOS falharem. Logs internos preservam
+  // detalhes pra debug.
   const userMessage = message.trim();
   const params = { system, history: sanitizedHistory, userMessage };
 
   // Lista ordenada de tentativas (só inclui os providers disponíveis)
   const providers = [];
+  if (hasAnthropic) providers.push({ label: "Claude Haiku 4.5",   run: () => streamWithClaude(params) });
   if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => streamWithOpenAI(params) });
   if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => streamWithGemini(params) });
-  if (hasAnthropic) providers.push({ label: "Claude Sonnet 4.5",  run: () => streamWithAnthropic(params) });
 
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];

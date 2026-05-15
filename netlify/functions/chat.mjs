@@ -1,9 +1,9 @@
 // /api/chat — chat livre da viagem (perguntas pontuais do grupo).
 //
 // Chain (tenta na ordem, cai pro próximo se falhar):
-//   1. PRIMARY: OpenAI GPT-4o-mini via Responses API com web_search_preview.
-//   2. FALLBACK 1: Google Gemini 2.5 Flash com googleSearch.
-//   3. FALLBACK 2: Anthropic Claude Sonnet 4.5.
+//   1. PRIMARY: Anthropic Claude Haiku 4.5 com web_search_20250305.
+//   2. FALLBACK 1: OpenAI GPT-4o-mini via Responses API.
+//   3. FALLBACK 2: Google Gemini 2.5 Flash com googleSearch.
 //
 // Resposta não-streaming: o front (AiChat.jsx) lê { reply }.
 
@@ -109,7 +109,45 @@ async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
   throw lastErr;
 }
 
-// ────────────────────────── PATH A: OPENAI (primary) ──────────────────────────
+// ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
+
+async function replyWithClaude({ system, history, userMessage }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ausente.");
+  return await withRetry(async () => {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 1024,
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+        messages: [
+          ...history.map((m) => ({ role: m.role, content: m.content })),
+          { role: "user", content: userMessage },
+        ],
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("[chat/claude] error", data);
+      throw new Error(data?.error?.message ?? `Anthropic ${response.status}`);
+    }
+    // O assistant pode emitir vários content blocks (text + tool_use + text).
+    // Pra a resposta final pegamos o último bloco de tipo "text".
+    const blocks = Array.isArray(data?.content) ? data.content : [];
+    const textBlocks = blocks.filter((b) => b?.type === "text" && typeof b.text === "string");
+    const text = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
+    return text || FRIENDLY_ERROR;
+  }, "claude-chat", 2, 1000);
+}
+
+// ────────────────────────── PATH B: OPENAI (fallback 1) ──────────────────────────
 
 async function replyWithOpenAI({ system, history, userMessage }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -136,7 +174,7 @@ async function replyWithOpenAI({ system, history, userMessage }) {
   }, "openai-chat", 2, 1000);
 }
 
-// ────────────────────────── PATH B: GEMINI (fallback 1) ──────────────────────────
+// ────────────────────────── PATH C: GEMINI (fallback 2) ──────────────────────────
 
 async function replyWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -162,36 +200,6 @@ async function replyWithGemini({ system, history, userMessage }) {
   }, "gemini-chat", 2, 1000);
 }
 
-// ────────────────────────── PATH C: ANTHROPIC (fallback 2) ──────────────────────────
-
-async function replyWithAnthropic({ system, history, userMessage }) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ausente.");
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1024,
-      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-      messages: [
-        ...history.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: userMessage },
-      ],
-    }),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    console.error("[chat/anthropic] error", data);
-    throw new Error(data?.error?.message ?? `Anthropic ${response.status}`);
-  }
-  return data.content?.[0]?.text ?? "Desculpe, não consegui responder agora.";
-}
-
 // ────────────────────────── HANDLER ──────────────────────────
 
 export default async (req) => {
@@ -199,10 +207,10 @@ export default async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
   const hasOpenAI = !!process.env.OPENAI_API_KEY;
   const hasGemini = !!process.env.GEMINI_API_KEY;
-  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
-  if (!hasOpenAI && !hasGemini && !hasAnthropic) {
+  if (!hasAnthropic && !hasOpenAI && !hasGemini) {
     console.error("[JEI/chat] Nenhuma API key — devolvendo mensagem amigável.");
     return new Response(
       JSON.stringify({ reply: FRIENDLY_ERROR }),
@@ -210,9 +218,9 @@ export default async (req) => {
     );
   }
   console.log(
-    hasOpenAI ? "[JEI/chat] Path primário: GPT-4o-mini"
-    : hasGemini ? "[JEI/chat] Path primário: Gemini 2.5 Flash"
-    : "[JEI/chat] Path primário: Claude Sonnet 4.5"
+    hasAnthropic ? "[JEI/chat] Path primário: Claude Haiku 4.5"
+    : hasOpenAI ? "[JEI/chat] Path primário: GPT-4o-mini"
+    : "[JEI/chat] Path primário: Gemini 2.5 Flash"
   );
 
   let body;
@@ -240,9 +248,9 @@ export default async (req) => {
   // Chain: OpenAI → Gemini → Claude. Cada path com retry interno; se um
   // falha após retries, cai pro próximo. Erro amigável só se TODOS falharem.
   const providers = [];
+  if (hasAnthropic) providers.push({ label: "Claude Haiku 4.5",   run: () => replyWithClaude(params) });
   if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => replyWithOpenAI(params) });
   if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => replyWithGemini(params) });
-  if (hasAnthropic) providers.push({ label: "Claude Sonnet 4.5",  run: () => replyWithAnthropic(params) });
 
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];
