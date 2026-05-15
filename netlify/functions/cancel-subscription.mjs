@@ -2,9 +2,34 @@
 // Não rebaixa users.plano imediatamente — o usuário mantém acesso até
 // users.plano_expires_at (final do período já pago). Webhook do MP confirma
 // a mudança em assinaturas.status='canceled'.
+//
+// AUTH: exige Authorization: Bearer <access_token> de Supabase Auth.
+// O user_id é extraído do token (NÃO do body) — impede que qualquer um
+// cancele a assinatura de outro chutando user_id no body.
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || SUPABASE_KEY;
+
+// Verifica o JWT do header Authorization batendo no /auth/v1/user do Supabase.
+// Supabase já valida a assinatura do JWT internamente. Retorna o user ou null.
+async function verifyAuth(req) {
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user?.id ? user : null;
+  } catch (err) {
+    console.error("[cancel-sub] verifyAuth erro:", err);
+    return null;
+  }
+}
 
 function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -39,12 +64,12 @@ async function sb(path, init = {}) {
 export default async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  let body;
-  try { body = await req.json(); }
-  catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
-
-  const { user_id } = body ?? {};
-  if (!user_id) return jsonResponse({ error: "user_id é obrigatório." }, 400);
+  // Auth obrigatória — user_id vem do token, não do body
+  const authedUser = await verifyAuth(req);
+  if (!authedUser) {
+    return jsonResponse({ error: "Não autenticado." }, 401);
+  }
+  const user_id = authedUser.id;
 
   // 1) Acha assinatura ativa do usuário
   let assinaturas;
