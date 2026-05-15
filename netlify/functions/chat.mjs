@@ -74,21 +74,28 @@ function buildContext({ trip, roteiro }) {
   return lines.join("\n");
 }
 
+// ────────────────────────── ERROR HANDLING ──────────────────────────
+
+const FRIENDLY_ERROR = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
+
+async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn(); }
+    catch (err) {
+      lastErr = err;
+      console.error(`[JEI/chat] ${label} tentativa ${i + 1}/${attempts} falhou:`, err?.message ?? err);
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 // ────────────────────────── PATH A: GEMINI ──────────────────────────
 
 async function replyWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY ausente.");
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: system,
-    tools: [{ googleSearch: {} }],
-    generationConfig: {
-      maxOutputTokens: 1024,
-      temperature: 0.7,
-    },
-  });
   const contents = [
     ...history.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
@@ -96,9 +103,18 @@ async function replyWithGemini({ system, history, userMessage }) {
     })),
     { role: "user", parts: [{ text: userMessage }] },
   ];
-  const result = await model.generateContent({ contents });
-  const text = result?.response?.text?.() ?? "";
-  return text || "Desculpe, não consegui responder agora.";
+  return await withRetry(async () => {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: system,
+      tools: [{ googleSearch: {} }],
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+    });
+    const result = await model.generateContent({ contents });
+    const text = result?.response?.text?.() ?? "";
+    return text || FRIENDLY_ERROR;
+  }, "gemini-chat", 2, 1000);
 }
 
 // ────────────────────────── PATH B: ANTHROPIC (fallback) ──────────────────────────
@@ -138,20 +154,21 @@ export default async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const useGemini = !!process.env.GEMINI_API_KEY;
-  const useAnthropic = !useGemini && !!process.env.ANTHROPIC_API_KEY;
-  if (!useGemini && !useAnthropic) {
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasGemini && !hasAnthropic) {
+    console.error("[JEI/chat] Nenhuma API key — devolvendo mensagem amigável.");
     return new Response(
-      JSON.stringify({ reply: "⚠️ Nem GEMINI_API_KEY nem ANTHROPIC_API_KEY configuradas." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ reply: FRIENDLY_ERROR }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
-  console.log(useGemini ? "[JEI/chat] Usando Gemini 2.0 Flash" : "[JEI/chat] Fallback: Claude Sonnet 4.5");
+  console.log(hasGemini ? "[JEI/chat] Path primário: Gemini 2.5 Flash" : "[JEI/chat] Path primário: Claude Sonnet 4.5");
 
   let body;
   try { body = await req.json(); }
   catch {
-    return new Response(JSON.stringify({ reply: "Requisição inválida." }), {
+    return new Response(JSON.stringify({ reply: FRIENDLY_ERROR }), {
       status: 400, headers: { "Content-Type": "application/json" },
     });
   }
@@ -168,18 +185,34 @@ export default async (req) => {
     .slice(-10);
 
   const system = SYSTEM_BASE + buildContext({ trip, roteiro });
+  const params = { system, history: sanitizedHistory, userMessage: message };
 
+  // Gemini (com retry interno) → fallback Claude → mensagem amigável.
+  // NUNCA propaga error.message do SDK pro client.
   try {
-    const reply = useGemini
-      ? await replyWithGemini({ system, history: sanitizedHistory, userMessage: message })
-      : await replyWithAnthropic({ system, history: sanitizedHistory, userMessage: message });
+    let reply;
+    if (hasGemini) {
+      try {
+        reply = await replyWithGemini(params);
+      } catch (geminiErr) {
+        console.error("[JEI/chat] Gemini falhou após retries:", geminiErr?.message ?? geminiErr);
+        if (hasAnthropic) {
+          console.log("[JEI/chat] Tentando fallback Claude...");
+          reply = await replyWithAnthropic(params);
+        } else {
+          throw geminiErr;
+        }
+      }
+    } else {
+      reply = await replyWithAnthropic(params);
+    }
     return new Response(JSON.stringify({ reply }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("[chat] failed:", err);
+    console.error("[JEI/chat] Todos os paths falharam:", err?.message ?? err);
     return new Response(
-      JSON.stringify({ reply: "O Jei está fora do ar agora. Tente de novo." }),
+      JSON.stringify({ reply: FRIENDLY_ERROR }),
       { status: 502, headers: { "Content-Type": "application/json" } }
     );
   }

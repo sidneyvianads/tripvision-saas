@@ -380,11 +380,14 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       const isAbort = e?.name === "AbortError" || /aborted/i.test(e?.message ?? "");
       const isHttp5xx = /HTTP\s+5\d{2}/.test(e?.message ?? "");
       const isTimeout = isAbort || isHttp5xx;
+      // NUNCA interpolar e.message — pode vazar "GoogleGenerativeAI", "Failed
+      // to parse stream", "rate limit", URL/token. Mensagens fixas amigáveis.
+      const FRIENDLY = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
       const errMsg = {
         role: "assistant",
         content: isTimeout
           ? "O Jei está pesquisando muita coisa. Tenta perguntar uma coisa por vez! ⏱️"
-          : `O Jei está com dificuldade pra processar agora: ${e.message}. Tenta de novo. 🧳`,
+          : FRIENDLY,
         ts: Date.now(),
         _error: true,
       };
@@ -392,7 +395,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       setMessages(after);
       persist(after);
       setStreamingText("");
-      setErr(isTimeout ? "Timeout — pergunte uma coisa por vez." : (e.message || String(e)));
+      setErr(isTimeout ? "Timeout — pergunte uma coisa por vez." : FRIENDLY);
     } finally {
       abortRef.current = null;
       setBusy(false);

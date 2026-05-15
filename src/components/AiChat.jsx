@@ -107,12 +107,15 @@ export default function AiChat({ trip, days, user }) {
           })),
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error("upstream");
       const data = await res.json();
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply ?? "(sem resposta)" }]);
     } catch (e2) {
-      setErr(e2.message ?? String(e2));
-      setMessages((prev) => [...prev, { role: "assistant", content: "Erro ao conectar com IA. Tente novamente." }]);
+      console.error("[AiChat] erro:", e2?.message ?? e2);
+      // Mensagem fixa pro usuário — não interpolar e2.message.
+      const FRIENDLY = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
+      setErr(FRIENDLY);
+      setMessages((prev) => [...prev, { role: "assistant", content: FRIENDLY }]);
     } finally {
       setLoading(false);
     }

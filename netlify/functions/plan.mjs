@@ -232,6 +232,30 @@ async function callRpc(name, payload) {
 
 const countMonthlyUserMessages = (uid) => callRpc("count_ia_user_messages_in_month", { uid });
 
+// ────────────────────────── ERROR HANDLING ──────────────────────────
+
+// Mensagem ÚNICA que o usuário vê. Nunca vazamos error.message original do
+// SDK (pode conter "GoogleGenerativeAI", "rate limit", "Failed to parse",
+// hostname, token, etc). Logs internos sempre têm o erro cru.
+const FRIENDLY_ERROR = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
+
+// Retry helper — tenta `fn` até `attempts` vezes, com `delayMs` de espera
+// entre tentativas. Loga cada falha pro Netlify Functions logs. Última
+// falha propaga pro caller.
+async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      console.error(`[JEI] ${label} tentativa ${i + 1}/${attempts} falhou:`, err?.message ?? err);
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 // ────────────────────────── SSE HELPERS ──────────────────────────
 
 // Encoder pra empacotar texto em SSE Anthropic-shape (formato que o front
@@ -244,10 +268,11 @@ function sseTextDeltaEvent(text) {
   return `data: ${payload}\n\n`;
 }
 
-function sseErrorEvent(message) {
+function sseErrorEvent() {
+  // Sempre a mesma mensagem amigável. NUNCA recebe error.message original.
   const payload = JSON.stringify({
     type: "error",
-    error: { message: String(message ?? "Erro desconhecido") },
+    error: { message: FRIENDLY_ERROR },
   });
   return `data: ${payload}\n\n`;
 }
@@ -264,16 +289,6 @@ const SSE_HEADERS = {
 async function streamWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY ausente.");
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: system,
-    tools: [{ googleSearch: {} }],
-    generationConfig: {
-      maxOutputTokens: 4096,
-      temperature: 0.7,
-    },
-  });
 
   // Gemini espera contents = [{role, parts}] com role "user"/"model"
   const contents = [
@@ -284,7 +299,20 @@ async function streamWithGemini({ system, history, userMessage }) {
     { role: "user", parts: [{ text: userMessage }] },
   ];
 
-  const result = await model.generateContentStream({ contents });
+  // Retry SÓ na inicialização do stream (chamada de generateContentStream).
+  // Erros transitórios — rate limit, network blip, "Failed to parse stream"
+  // — costumam aparecer aqui. Uma vez iniciado o stream, retentar não faz
+  // sentido (parte do texto já saiu pro client).
+  const result = await withRetry(async () => {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: system,
+      tools: [{ googleSearch: {} }],
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
+    });
+    return await model.generateContentStream({ contents });
+  }, "gemini-init", 2, 1000);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -299,8 +327,9 @@ async function streamWithGemini({ system, history, userMessage }) {
         }
         controller.close();
       } catch (err) {
-        console.error("[plan/gemini] stream error:", err);
-        controller.enqueue(encoder.encode(sseErrorEvent(err?.message ?? "Falha no stream Gemini.")));
+        // Log interno detalhado; pro client emite SÓ a mensagem amigável.
+        console.error("[plan/gemini] stream error (mid-stream):", err?.message ?? err);
+        controller.enqueue(encoder.encode(sseErrorEvent()));
         controller.close();
       }
     },
@@ -349,20 +378,22 @@ async function streamWithAnthropic({ system, history, userMessage }) {
 export default async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const useGemini = !!process.env.GEMINI_API_KEY;
-  const useAnthropic = !useGemini && !!process.env.ANTHROPIC_API_KEY;
-  if (!useGemini && !useAnthropic) {
-    return jsonResponse({ error: "Nem GEMINI_API_KEY nem ANTHROPIC_API_KEY configuradas." }, 500);
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasAnthropic = !!process.env.ANTHROPIC_API_KEY;
+  if (!hasGemini && !hasAnthropic) {
+    console.error("[JEI] Nenhuma API key configurada — devolvendo erro amigável.");
+    return jsonResponse({ error: FRIENDLY_ERROR }, 503);
   }
-  console.log(useGemini ? "[JEI] Usando Gemini 2.0 Flash" : "[JEI] Fallback: Claude Sonnet 4.5");
+  console.log(hasGemini ? "[JEI] Path primário: Gemini 2.5 Flash" : "[JEI] Path primário: Claude Sonnet 4.5");
 
   let body;
   try { body = await req.json(); }
-  catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
+  catch { return jsonResponse({ error: FRIENDLY_ERROR }, 400); }
 
   const { message, history = [], viagem = {}, user_plano = "pending", user_id = null } = body ?? {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
+    // ↑ "Mensagem vazia" é validação de input do usuário, não erro técnico — pode mostrar.
   }
 
   // ===== EFFECTIVE PLAN + GATES =====
@@ -407,18 +438,34 @@ export default async (req) => {
   const system = SYSTEM_TEMPLATE(viagem);
 
   // ===== STREAM =====
-  try {
-    const stream = useGemini
-      ? await streamWithGemini({ system, history: sanitizedHistory, userMessage: message.trim() })
-      : await streamWithAnthropic({ system, history: sanitizedHistory, userMessage: message.trim() });
+  // Estratégia: Gemini (com retry interno) → fallback Claude se Gemini falhar
+  // → mensagem amigável se ambos falharem. Nunca expõe error.message do SDK
+  // pro client; tudo passa pra logs internos.
+  const userMessage = message.trim();
+  const params = { system, history: sanitizedHistory, userMessage };
 
-    return new Response(stream, { status: 200, headers: SSE_HEADERS });
+  try {
+    if (hasGemini) {
+      try {
+        const stream = await streamWithGemini(params);
+        return new Response(stream, { status: 200, headers: SSE_HEADERS });
+      } catch (geminiErr) {
+        console.error("[JEI] Gemini falhou após retries:", geminiErr?.message ?? geminiErr);
+        if (hasAnthropic) {
+          console.log("[JEI] Tentando fallback Claude...");
+          const stream = await streamWithAnthropic(params);
+          return new Response(stream, { status: 200, headers: SSE_HEADERS });
+        }
+        throw geminiErr;
+      }
+    } else {
+      const stream = await streamWithAnthropic(params);
+      return new Response(stream, { status: 200, headers: SSE_HEADERS });
+    }
   } catch (err) {
-    console.error("[plan] stream init failed:", err);
-    return jsonResponse(
-      { error: "O Jei está com dificuldade pra responder. Tente de novo em instantes.", details: String(err?.message ?? err) },
-      502
-    );
+    console.error("[JEI] Todos os paths falharam:", err?.message ?? err);
+    // Resposta amigável. Sem details, sem stack, sem nada do SDK.
+    return jsonResponse({ error: FRIENDLY_ERROR }, 502);
   }
 };
 
