@@ -1,53 +1,74 @@
 import { supabase } from "./supabase";
 import { validateRoteiroUpdate, validateViagemUpdate } from "./roteiroSchemas";
 
-const ROTEIRO_TAG_RE = /<roteiro_update>([\s\S]*?)<\/roteiro_update>/i;
-const VIAGEM_TAG_RE  = /<viagem_update>([\s\S]*?)<\/viagem_update>/i;
+// Flag /g é crítica — no modo ⚡ o Jei pode emitir várias tags <roteiro_update>
+// numa resposta só. Sem /g, matchAll só pega a primeira e o resto sumia
+// silenciosamente. Agora cada tag é parseada e os updates concatenados.
+const ROTEIRO_TAG_RE = /<roteiro_update>([\s\S]*?)<\/roteiro_update>/gi;
+const VIAGEM_TAG_RE  = /<viagem_update>([\s\S]*?)<\/viagem_update>/gi;
 
 export function parseRoteiroUpdate(text) {
-  if (typeof text !== "string") return { cleanText: "", updates: null, raw: null };
-  const match = text.match(ROTEIRO_TAG_RE);
-  if (!match) return { cleanText: text, updates: null, raw: null };
+  if (typeof text !== "string") return { cleanText: "", updates: null, raw: null, parseError: null };
+  const matches = [...text.matchAll(ROTEIRO_TAG_RE)];
+  if (matches.length === 0) return { cleanText: text, updates: null, raw: null, parseError: null };
 
   const cleanText = text.replace(ROTEIRO_TAG_RE, "").trim();
-  const raw = match[1].trim();
+  const rawConcat = matches.map((m) => m[1].trim()).join("\n---\n");
+  const allUpdates = [];
+  let parseError = null;
 
-  let updates = null;
-  try {
-    const parsed = JSON.parse(raw);
-    updates = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.updates) ? parsed.updates : null);
-  } catch (e) {
-    console.error("[roteiroParser] JSON inválido em <roteiro_update>:", e, raw.slice(0, 200));
-    return { cleanText, updates: null, raw };
+  for (const m of matches) {
+    const raw = m[1].trim();
+    try {
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.updates) ? parsed.updates : null);
+      if (arr) allUpdates.push(...arr);
+      else {
+        parseError = parseError || "Formato inesperado — esperava array ou {updates:[...]}.";
+        console.warn("[roteiroParser] tag sem updates utilizáveis:", raw.slice(0, 200));
+      }
+    } catch (e) {
+      parseError = parseError || `JSON inválido: ${e.message}`;
+      console.error("[roteiroParser] JSON inválido em <roteiro_update>:", e, raw.slice(0, 200));
+    }
   }
 
-  return { cleanText, updates, raw };
+  return {
+    cleanText,
+    updates: allUpdates.length > 0 ? allUpdates : null,
+    raw: rawConcat,
+    parseError, // pra PlanChat mostrar toast quando JSON falhar
+  };
 }
 
 // Extrai <viagem_update> da resposta do Jei e retorna { cleanText, viagemUpdate, raw }.
 // O JSON dentro tem formato { "action": "update_viagem", "fields": { ... } }.
 // Retornamos só `fields` em viagemUpdate.fields pra simplificar o consumo.
 export function parseViagemUpdate(text) {
-  if (typeof text !== "string") return { cleanText: "", viagemUpdate: null, raw: null };
-  const match = text.match(VIAGEM_TAG_RE);
-  if (!match) return { cleanText: text, viagemUpdate: null, raw: null };
+  if (typeof text !== "string") return { cleanText: "", viagemUpdate: null, raw: null, parseError: null };
+  const matches = [...text.matchAll(VIAGEM_TAG_RE)];
+  if (matches.length === 0) return { cleanText: text, viagemUpdate: null, raw: null, parseError: null };
 
+  // Em viagem só faz sentido aplicar o último (merge cumulativo perderia
+  // semântica — Jei normalmente emite 1 tag por turno). Logamos se houver
+  // múltiplas, mas usamos só a última.
+  if (matches.length > 1) {
+    console.warn("[roteiroParser] múltiplas <viagem_update> — usando a última.");
+  }
   const cleanText = text.replace(VIAGEM_TAG_RE, "").trim();
-  const raw = match[1].trim();
+  const raw = matches[matches.length - 1][1].trim();
 
   try {
     const parsed = JSON.parse(raw);
-    // Zod normaliza coerções (string → number), pula campos desconhecidos
-    // mantendo passthrough, e retorna erro estruturado se faltar field.
     const v = validateViagemUpdate(parsed);
     if (!v.ok) {
       console.warn("[roteiroParser] <viagem_update> rejeitado pelo schema:", v.error, raw.slice(0, 200));
-      return { cleanText, viagemUpdate: null, raw, schemaError: v.error };
+      return { cleanText, viagemUpdate: null, raw, parseError: `Schema rejeitou: ${v.error}` };
     }
-    return { cleanText, viagemUpdate: v.value, raw };
+    return { cleanText, viagemUpdate: v.value, raw, parseError: null };
   } catch (e) {
     console.error("[roteiroParser] JSON inválido em <viagem_update>:", e, raw.slice(0, 200));
-    return { cleanText, viagemUpdate: null, raw };
+    return { cleanText, viagemUpdate: null, raw, parseError: `JSON inválido: ${e.message}` };
   }
 }
 

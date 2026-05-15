@@ -277,7 +277,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
     const isFirstUserMessage = realMessagesCount === 0;
 
     setMessages(next);
-    persist(next);
+    // await pra garantir que a próxima mensagem do user (caso rápida)
+    // veja o histórico consistente em DB. Antes era fire-and-forget e
+    // duas msgs em rápida sequência podiam corromper o histórico.
+    await persist(next);
     setInput("");
     setBusy(true);
     setHasStarted(false);
@@ -346,11 +349,23 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       const viagemParsed = parseViagemUpdate(fullText);
       const afterViagemStrip = viagemParsed.viagemUpdate ? viagemParsed.cleanText : fullText;
 
-      const { cleanText, updates, raw } = parseRoteiroUpdate(afterViagemStrip);
+      const roteiroParsed = parseRoteiroUpdate(afterViagemStrip);
+      const { cleanText, updates, raw } = roteiroParsed;
       console.log("[Viajjei] parse result:", {
         hasRoteiroTag: !!raw, updatesCount: updates?.length ?? 0,
         hasViagemTag: !!viagemParsed.viagemUpdate,
       });
+
+      // Se o Jei tentou emitir tag mas o JSON/schema falhou, sinaliza via toast.
+      // Sem isso, antes o user via apenas a resposta-texto e nunca sabia que
+      // uma atualização foi perdida.
+      const tagFailed =
+        (raw && !updates && roteiroParsed.parseError) ||
+        (viagemParsed.raw && !viagemParsed.viagemUpdate && viagemParsed.parseError);
+      if (tagFailed) {
+        const reason = roteiroParsed.parseError || viagemParsed.parseError || "formato inesperado";
+        setErr(`⚠️ Jei tentou atualizar mas o formato saiu errado (${reason}). Peça de novo.`);
+      }
 
       let appliedResults = null;
       if (updates && updates.length > 0) {
@@ -380,7 +395,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       };
       const after = [...next, assistantMsg];
       setMessages(after);
-      persist(after);
+      await persist(after);
       setStreamingText("");
       setLastUserText(null);
       // Pro: bump contador diário antigo. Free já foi bumpado ANTES do envio (hard gate).
@@ -395,7 +410,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       if (e?.code === "FREE_LIMIT") {
         const rolledBack = next.slice(0, -1);
         setMessages(rolledBack);
-        persist(rolledBack);
+        await persist(rolledBack);
         setStreamingText("");
         setShowUpgrade(true);
         return;
@@ -417,7 +432,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       };
       const after = [...next, errMsg];
       setMessages(after);
-      persist(after);
+      await persist(after);
       setStreamingText("");
       setErr(isTimeout ? "Timeout — pergunte uma coisa por vez." : FRIENDLY);
     } finally {
