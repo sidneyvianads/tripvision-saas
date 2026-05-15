@@ -162,16 +162,21 @@ export default function Welcome() {
 
       try {
         const cupom = getStoredCupom() || null;
+        // Pega session do Supabase (signUp já loga quando email confirmation
+        // está OFF). Em caso de confirmation ON, signUp retorna session=null
+        // e o flow inteiro precisa esperar confirmação — tratado mais acima
+        // via needsConfirmation.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error("Sessão não disponível — confirme seu email antes de assinar.");
+        }
         const res = await fetch("/api/create-subscription", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plano,
-            ciclo,
-            userId: created.id,
-            userEmail: created.email,
-            cupom,
-          }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ plano, ciclo, cupom }),
         });
         const data = await res.json();
         if (res.status === 503 && data?.placeholder) {

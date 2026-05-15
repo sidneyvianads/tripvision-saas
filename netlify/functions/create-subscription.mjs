@@ -2,6 +2,14 @@
 // Quando MERCADOPAGO_ACCESS_TOKEN não está configurado, retorna 503
 // com placeholder: true pra frontend mostrar "em breve" gracefully.
 //
+// AUTH: exige Authorization: Bearer <access_token>. userId e userEmail
+// vêm do JWT, NÃO do body — antes era spam vector (atacante anônimo
+// podia criar N preapprovals com user_id forjado polluindo dashboard MP
+// e gastando rate-limit no Supabase em /afiliados lookup).
+//
+// RATE-LIMIT: 5 preapprovals/min por user, 10/min por IP. Stub mode até
+// UPSTASH_REDIS_REST_URL ser setado.
+//
 // Trial de 7 dias APENAS no plano MENSAL. No anual o MP rejeitava o
 // free_trial em alguns cenários, então pra não bloquear o cadastro o anual
 // cobra direto (oferta de "33% off" já é o gancho dele).
@@ -16,9 +24,32 @@
 // preapproval estiver com esse valor — caso queiram restaurar pro valor
 // cheio depois do primeiro mês, usar PUT /preapproval/{id} com novo amount.
 
+import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
+
 const SITE_BASE = "https://viajjei.com.br";
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || SUPABASE_KEY;
+
+// Valida JWT do Supabase Auth via /auth/v1/user. Mesmo padrão do
+// cancel-subscription.mjs. Retorna {id, email, ...} ou null.
+async function verifyAuth(req) {
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user?.id ? user : null;
+  } catch (err) {
+    console.error("[create-sub] verifyAuth erro:", err);
+    return null;
+  }
+}
 
 const TRIAL_DAYS = 7;
 
@@ -71,15 +102,38 @@ export default async (req) => {
   const tok = process.env.MERCADOPAGO_ACCESS_TOKEN || "";
   console.log("[MP] token prefix:", tok ? tok.slice(0, 8) + "…" : "(vazio)", "len:", tok.length);
 
+  // Auth obrigatória — userId/userEmail saem do token, não do body
+  const authedUser = await verifyAuth(req);
+  if (!authedUser) {
+    return jsonResponse({ error: "Não autenticado." }, 401);
+  }
+  const userId = authedUser.id;
+  const userEmail = authedUser.email;
+
+  // Rate limit: 5 preapprovals/min/user, 10/min/IP. Criar preapproval é
+  // operação rara — bursts indicam spam/automação.
+  const ip = getClientIp(req);
+  const rl = await Promise.all([
+    rateLimit({ key: `createsub:user:${userId}`, limit: 5, windowSec: 60 }),
+    rateLimit({ key: `createsub:ip:${ip}`, limit: 10, windowSec: 60 }),
+  ]);
+  const blocked = rl.find((r) => !r.ok);
+  if (blocked) {
+    const resetIn = blocked.resetAt ? Math.max(1, Math.ceil((blocked.resetAt - Date.now()) / 1000)) : 60;
+    return jsonResponse({ error: `Muitas tentativas. Tenta de novo em ${resetIn}s.` }, 429);
+  }
+
   let body;
   try { body = await req.json(); }
   catch { return jsonResponse({ error: "Requisição inválida." }, 400); }
 
-  console.log("[MP] Request body:", JSON.stringify(body));
+  console.log("[MP] Request body (sanitized):", JSON.stringify({
+    ...body, userId: undefined, userEmail: undefined,  // ignoramos do body
+  }));
 
-  const { plano, ciclo, userId, userEmail, cupom } = body ?? {};
-  if (!plano || !ciclo || !userId || !userEmail) {
-    return jsonResponse({ error: "Faltam campos: plano, ciclo, userId, userEmail." }, 400);
+  const { plano, ciclo, cupom } = body ?? {};
+  if (!plano || !ciclo) {
+    return jsonResponse({ error: "Faltam campos: plano, ciclo." }, 400);
   }
   const cfg = PRICES[plano]?.[ciclo];
   if (!cfg) return jsonResponse({ error: `Plano/ciclo inválido: ${plano}/${ciclo}` }, 400);
