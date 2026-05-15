@@ -3,10 +3,20 @@
 // Quando MERCADOPAGO_ACCESS_TOKEN não está configurado, apenas loga e
 // retorna 200 pra MP não ficar reentregando.
 //
+// SEGURANÇA:
+// 1) HMAC validation via x-signature (modo permissivo: sem MP_WEBHOOK_SECRET
+//    apenas loga warning, com secret valida e recusa request inválido).
+//    Doc: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks#bookmark_validar_o_origen_de_la_notificación
+// 2) Cross-check payer_email do MP vs users.email pelo user_id do
+//    external_reference (impede forjar external_reference de outro user
+//    e ganhar plano grátis).
+//
 // Trial de 7 dias: quando o preapproval é autorizado, o usuário entra em
 // trial. trial_ends_at = NOW + 7d. plano_expires_at = trial_ends_at + ciclo
 // (dá acesso ao trial + o primeiro ciclo de uma vez, evita ficar dependente
 // do webhook de cada renovação).
+
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 const TRIAL_DAYS = 7;
 
@@ -40,6 +50,48 @@ async function sb(path, init = {}) {
     throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
   }
   return json;
+}
+
+// Valida x-signature do MP. Manifesto: id:<data.id>;request-id:<x-request-id>;ts:<ts>;
+// Compara HMAC-SHA256(manifest, secret) com v1 do header x-signature.
+//
+// Retornos:
+//   { ok: true, mode: "validated" }  — secret OK e assinatura confere
+//   { ok: true, mode: "permissive" } — sem secret configurado (warning logado)
+//   { ok: false, reason: "..." }     — secret configurado e assinatura inválida
+function validateMpSignature(req, dataId) {
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  if (!secret) {
+    console.warn(
+      "[webhook-mp] ⚠️  MP_WEBHOOK_SECRET não configurado — request aceito sem validar HMAC. " +
+      "Configure no painel do MP (Webhooks → Secret) e seta MP_WEBHOOK_SECRET no Netlify."
+    );
+    return { ok: true, mode: "permissive" };
+  }
+  const sigHeader = req.headers.get("x-signature");
+  const requestId = req.headers.get("x-request-id");
+  if (!sigHeader) return { ok: false, reason: "x-signature ausente" };
+
+  // Parse "ts=...,v1=..."
+  const parts = Object.fromEntries(
+    sigHeader.split(",").map((p) => {
+      const [k, ...v] = p.trim().split("=");
+      return [k, v.join("=")];
+    })
+  );
+  const ts = parts.ts;
+  const v1 = parts.v1;
+  if (!ts || !v1) return { ok: false, reason: "x-signature mal formado" };
+
+  const manifest = `id:${dataId};request-id:${requestId ?? ""};ts:${ts};`;
+  const expected = createHmac("sha256", secret).update(manifest).digest("hex");
+
+  // timingSafeEqual exige buffers do mesmo tamanho
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(v1, "hex");
+  if (a.length !== b.length) return { ok: false, reason: "v1 com tamanho inválido" };
+  if (!timingSafeEqual(a, b)) return { ok: false, reason: "HMAC não confere" };
+  return { ok: true, mode: "validated" };
 }
 
 function planoFromExternalRef(ref) {
@@ -96,6 +148,39 @@ async function handlePreapproval(id) {
   if (!user_id) {
     console.warn("[webhook-mp] external_reference inválido:", pa.external_reference);
     return;
+  }
+
+  // Cross-check: o payer_email retornado pelo MP precisa bater com o email
+  // do user_id no external_reference. Impede ataque de forjar external_reference
+  // ("user_id de outra pessoa") pra ganhar plano sem pagar.
+  // Erro 404 = user não existe (ataque ou bug). Mismatch = recusa ativação.
+  const payerEmail = (pa.payer_email ?? "").trim().toLowerCase();
+  if (payerEmail) {
+    try {
+      const userRows = await sb(
+        `users?id=eq.${user_id}&select=id,email`,
+        { method: "GET", headers: { Prefer: "" } }
+      );
+      const userRow = Array.isArray(userRows) ? userRows[0] : null;
+      if (!userRow) {
+        console.error(`[webhook-mp] 🚨 user_id ${user_id} não existe — recusando ativação`);
+        return;
+      }
+      const userEmail = (userRow.email ?? "").trim().toLowerCase();
+      if (userEmail !== payerEmail) {
+        console.error(
+          `[webhook-mp] 🚨 payer_email mismatch — user_id=${user_id} email=${userEmail} ` +
+          `payer=${payerEmail} preapproval=${id} — recusando ativação (possível tampering em external_reference)`
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("[webhook-mp] erro no cross-check payer_email:", err);
+      // Falha de leitura — não ativa, melhor seguro que arrependido
+      return;
+    }
+  } else {
+    console.warn(`[webhook-mp] preapproval ${id} sem payer_email — pulando cross-check`);
   }
 
   const status = pa.status; // pending, authorized, paused, cancelled
@@ -210,7 +295,17 @@ export default async (req) => {
   const topic = url.searchParams.get("topic") || body?.type || body?.topic;
   const id = url.searchParams.get("id") || body?.data?.id || body?.id;
 
-  console.log("[webhook-mp] recebido:", { topic, id, body });
+  console.log("[webhook-mp] recebido:", { topic, id });
+
+  // Valida HMAC. dataId = id do data.id do payload (não confundir com id do recurso).
+  const sig = validateMpSignature(req, id);
+  if (!sig.ok) {
+    console.error(`[webhook-mp] 🚨 HMAC inválido: ${sig.reason} — recusando request`);
+    return new Response("Invalid signature", { status: 401 });
+  }
+  if (sig.mode === "validated") {
+    console.log("[webhook-mp] ✓ HMAC validado");
+  }
 
   try {
     if (topic === "subscription_preapproval" || topic === "preapproval") {
