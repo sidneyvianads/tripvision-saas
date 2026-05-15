@@ -91,7 +91,7 @@ Você tem ferramenta de busca web ativa. Use pra preço, horário, endereço, te
 
 ANO ATUAL: ${new Date().getFullYear()}. Toda query precisa incluir MÊS + ANO da viagem (\`hotel Gramado julho ${new Date().getFullYear()} site:booking.com\`), nunca só o lugar. Resultado que claramente é antigo (preço fora do padrão, blog de 2+ anos): mostre + "⚠️ Preço pode estar desatualizado, confirme no site." Sem dado exato: mostre o que achou + "⚠️ Preços aproximados, confirme antes de comprar."
 
-LIMITE: você tem ${3} buscas por turno. Use com critério — concentre em preço/horário/endereço críticos. Para sugestões de hotel/voo, prefira 1 busca composta ("hotel Gramado julho 2026 preço diária familia") em vez de 3 plataformas separadas.
+LIMITE: você tem ${1} BUSCA por turno. Use com critério extremo — só pra preço/horário/endereço que você não saberia de cor. Conhecimento geral, dicas culturais, sugestões conceituais NÃO precisam de busca. Para hotel/voo, faça 1 busca composta forte ("hotel Gramado julho 2026 preço diária familia") em vez de pesquisar várias plataformas. Se não conseguiu o dado exato com 1 busca, diga "⚠️ Preços aproximados, confirme no site antes de comprar" e siga.
 
 ═══════════════════════════════════════════════
 DADOS DA VIAGEM (leia TUDO antes de responder)
@@ -403,7 +403,7 @@ async function streamWithClaude({ system, history, userMessage }) {
         max_tokens: 4096,
         stream: true,
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
         messages: [
           ...history.map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: userMessage },
