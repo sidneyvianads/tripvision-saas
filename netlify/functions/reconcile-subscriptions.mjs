@@ -116,34 +116,39 @@ async function reconcileOne(sub, stats) {
       }
     }
 
-    // ─── REBAIXAMENTO (R6-6 + R7-4) — só ANUAL trial cancelado ─────────
-    // Heurística antiga (R6-6): rebaixa anual se period_end > now + 380d.
-    // BUG (R7): webhook seta period_end = NOW + 7d trial + 365d = 372d.
-    // 372 < 380 → escapa rebaixamento → user anual cancelando em D+5
-    // ainda assim leva 1 ano grátis.
+    // ─── REBAIXAMENTO (R8-3) — só ANUAL durante o trial INICIAL ─────────
+    // Heurística R6-6: rebaixava anual se endTs - startTs > 358d.
+    // BUG (R8): renovação ANUAL normal também seta period_start=NOW,
+    // period_end=NOW+365 → diff=365 > 358 → user FIEL cancelando
+    // auto-renovação perde acesso instantâneo (deveria manter até
+    // current_period_end).
     //
-    // Fix R7-4: comparar com a janela do TRIAL (7d) — se foi cancelado
-    // dentro do trial E o period_end está mais de 358d à frente (mais
-    // do que faria sentido sem trial+1ano), rebaixa. Usa
-    // sub.current_period_start como ponto de referência (data da
-    // ativação) em vez de NOW pra ser robusto contra cron rodando
-    // dias depois do cancel.
+    // Fix R8-3: rebaixar SÓ na ativação inicial com trial. Sinal: a sub
+    // foi criada há POUCO TEMPO (created_at recente) → é a primeira
+    // ativação, não renovação. Threshold: 30 dias desde created_at
+    // garante que renovações (que vêm a cada 365d num anual) NUNCA
+    // caem aqui.
     if (mpStatusLocal === "canceled" && sub.current_period_end && sub.ciclo === "anual") {
       const endTs = new Date(sub.current_period_end).getTime();
-      const startTs = sub.current_period_start
-        ? new Date(sub.current_period_start).getTime()
-        : Date.now();
-      // Duração total do plano restante a partir do START. Se >358d, era
-      // trial + 1 ano e o cancel veio antes de chegar dia 8 (cobrança).
-      // Mensal jamais cai aqui (sub.ciclo !== "anual").
-      if (endTs - startTs > 358 * ONE_DAY_MS) {
+      const createdTs = sub.created_at
+        ? new Date(sub.created_at).getTime()
+        : 0;
+      const subAgeDays = (Date.now() - createdTs) / ONE_DAY_MS;
+      const remainingDays = (endTs - Date.now()) / ONE_DAY_MS;
+      // Conditions cumulativas:
+      // 1. Sub criada nos últimos 30 dias (= ativação inicial, não renovação)
+      // 2. Ainda restam >300 dias de acesso (= trial+ciclo vigente, cancelou antes do cobrar)
+      // Renovação normal: subAgeDays > 30 → NÃO entra. ✓
+      // Mensal: já filtrado pelo `sub.ciclo === "anual"`. ✓
+      // Anual cancelado em D+364: remainingDays ~0 → NÃO entra. ✓
+      if (subAgeDays < 30 && remainingDays > 300) {
         const now = new Date().toISOString();
         await sb(`users?id=eq.${sub.user_id}`, {
           method: "PATCH",
           body: JSON.stringify({ plano_expires_at: now, trial_ends_at: now }),
         });
         stats.downgraded++;
-        console.log(`[reconcile] user ${sub.user_id} rebaixado (anual trial cancelado antes de pagar)`);
+        console.log(`[reconcile] user ${sub.user_id} rebaixado (anual trial cancelado antes de pagar, subAge=${subAgeDays.toFixed(1)}d)`);
       }
     }
   } catch (err) {
@@ -170,7 +175,7 @@ export default async () => {
     // vão primeiro. Próxima execução cobre as próximas. Cap de 200 por run
     // pra não estourar timeout — a 20 paralelos × 2s = 20s pra 200 subs.
     const subs = await sb(
-      "assinaturas?mp_preapproval_id=not.is.null&select=id,user_id,plano,ciclo,status,mp_preapproval_id,current_period_start,current_period_end&order=updated_at.asc&limit=200"
+      "assinaturas?mp_preapproval_id=not.is.null&select=id,user_id,plano,ciclo,status,mp_preapproval_id,current_period_start,current_period_end,created_at&order=updated_at.asc&limit=200"
     );
     if (!Array.isArray(subs) || subs.length === 0) {
       return new Response(JSON.stringify({ ok: true, ...stats, message: "no subs" }), {
