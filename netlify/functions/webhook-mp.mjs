@@ -130,6 +130,15 @@ async function fetchPreapproval(id) {
   }, "mp-preapproval", 2, 500);
 }
 
+// Retorna a maior data ISO entre duas (ou a única não-null). Evita que
+// webhook reentregue encurte plano_expires_at de quem já estava com data
+// estendida (R6-2 cron faz extensão proativa).
+function maxIsoDate(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(a).getTime() > new Date(b).getTime() ? a : b;
+}
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -285,19 +294,43 @@ async function handlePreapproval(id) {
     }
   }
 
-  // 3) UPDATE users — ativa plano + registra trial
+  // 3) UPDATE users — ativa plano + registra trial (SE for o primeiro)
   if (isActive) {
+    // Trial é DIREITO DE UM por conta: se o user já teve trial (cancelou
+    // ou pagou pra valer antes), reassinar NÃO ganha trial de novo —
+    // só ganha o plano. Sem esse check, atacante criava 5 preapprovals
+    // sequenciais com cancel após cada `authorized` → trial farming infinito.
+    //
+    // Lê o estado atual antes de patch. Se user ainda nunca teve trial
+    // (trial_ends_at IS NULL ou está expirado E plano é pending/free),
+    // ATIVA trial. Caso contrário, NÃO toca trial_ends_at — só plano +
+    // plano_expires_at + mp_preapproval_id.
+    const userBefore = await sb(`users?id=eq.${user_id}&select=trial_ends_at,plano`, {
+      method: "GET", headers: { Prefer: "" },
+    });
+    const beforeRow = Array.isArray(userBefore) ? userBefore[0] : null;
+    const trialJaUsado = beforeRow?.trial_ends_at != null
+      && new Date(beforeRow.trial_ends_at).getTime() < Date.now() + 24 * 60 * 60 * 1000;
+    // trialJaUsado: tinha trial_ends_at no passado (já expirou ou está expirando hoje)
+    // → não conceder trial novo, mas mantém o histórico.
+
+    const patch = {
+      plano,
+      // plano_expires_at sempre toma o MAIOR entre o atual e o novo accessEnd —
+      // webhook reentregue não pode encurtar plano de quem já estava ativo.
+      plano_expires_at: maxIsoDate(beforeRow?.plano_expires_at, accessEnd.toISOString()),
+      mp_preapproval_id: id,
+    };
+    if (!trialJaUsado) {
+      patch.trial_ends_at = trialEnd.toISOString();
+    }
     await sb(`users?id=eq.${user_id}`, {
       method: "PATCH",
-      body: JSON.stringify({
-        plano,
-        plano_expires_at: accessEnd.toISOString(),
-        trial_ends_at: trialEnd.toISOString(),
-        mp_preapproval_id: id,
-      }),
+      body: JSON.stringify(patch),
     });
-    console.log(`[webhook-mp] ✅ ${user_id} ativou ${plano}/${ciclo} (trial até ${trialEnd.toISOString()})`);
-    trackPaymentCompleted(user_id, { plano, ciclo, amount, afiliado_id });
+    const status = trialJaUsado ? "reativou" : `ativou + trial até ${trialEnd.toISOString()}`;
+    console.log(`[webhook-mp] ✅ ${user_id} ${status} ${plano}/${ciclo}`);
+    trackPaymentCompleted(user_id, { plano, ciclo, amount, afiliado_id, trial_concedido: !trialJaUsado });
   } else if (isCanceled) {
     // Não rebaixa imediatamente — mantém plano até plano_expires_at expirar.
     console.log(`[webhook-mp] 🚫 ${user_id} cancelou ${plano}/${ciclo} — acesso mantido até plano_expires_at`);
