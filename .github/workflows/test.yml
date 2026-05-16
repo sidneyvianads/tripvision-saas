@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+# Princípio do menor privilégio — workflow só precisa ler o repo.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: smoke tests
@@ -27,8 +31,33 @@ jobs:
       # 2. Cupom: eq não ilike, sem comissao_percent
       # 3. Auth: normalizeEmail/Password helpers
       # 4. Trips: randomSlug invariants
-      # 5. AfiliadoPainel RPC: wildcard rejected (smoke real só com secrets)
+      # 5. AfiliadoPainel RPC: wildcard sanitization (smoke real só com secrets — ver job tests-real abaixo)
       - name: Run smoke tests
+        run: npm test
+
+  tests-real:
+    # Smoke tests REAIS contra Supabase prod — só roda em push pra main
+    # (não em PRs de fork, que não recebem secrets por segurança).
+    # Pega regressão tipo "alguém troca UPPER(cupom) = v_cupom por
+    # cupom ILIKE v_cupom em migration futura" que escapa o smoke local.
+    name: tests com Supabase real
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Smoke tests com Supabase
+        # Só roda se os secrets estiverem disponíveis — em fork PR
+        # ou primeira config sem secret, este job é skipado silenciosamente.
+        if: env.VITE_SUPABASE_URL != '' && env.VITE_SUPABASE_ANON_KEY != ''
         run: npm test
 
   build:
