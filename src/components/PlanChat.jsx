@@ -189,7 +189,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
   const blocked = !hasAccess || proBlocked;
 
   useEffect(() => {
-    console.log("[PlanChat] hasAccess:", hasAccess, "user.plano:", user?.plano, "blocked:", blocked);
+    if (import.meta.env.DEV) console.log("[PlanChat] hasAccess:", hasAccess, "user.plano:", user?.plano, "blocked:", blocked);
   }, [hasAccess, user?.plano, blocked]);
 
   // Sincroniza contador mensal com o BANCO (fonte da verdade) ao montar.
@@ -343,7 +343,10 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       );
       clearTimeout(safetyTimer);
 
-      console.log("[Viajjei] fullText recebido (", fullText.length, "chars):\n", fullText);
+      // Removido em R6-4: log do fullText completo vazava prompt+resposta
+      // do Claude no DevTools de qualquer usuário. Mantém só o tamanho
+      // em DEV pra debug local.
+      if (import.meta.env.DEV) console.log("[Viajjei] fullText recebido", fullText.length, "chars");
 
       // Extrai <viagem_update> primeiro pra liberar o texto pro parser de roteiro
       const viagemParsed = parseViagemUpdate(fullText);
@@ -351,7 +354,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
 
       const roteiroParsed = parseRoteiroUpdate(afterViagemStrip);
       const { cleanText, updates, raw } = roteiroParsed;
-      console.log("[Viajjei] parse result:", {
+      if (import.meta.env.DEV) console.log("[Viajjei] parse result:", {
         hasRoteiroTag: !!raw, updatesCount: updates?.length ?? 0,
         hasViagemTag: !!viagemParsed.viagemUpdate,
       });
@@ -370,7 +373,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       let appliedResults = null;
       if (updates && updates.length > 0) {
         appliedResults = await applyRoteiroUpdates(trip.id, updates);
-        console.log("[Viajjei] roteiro apply result:", appliedResults);
+        if (import.meta.env.DEV) console.log("[Viajjei] roteiro apply result:", appliedResults);
         const errors = appliedResults.filter((r) => !r.success);
         if (errors.length) console.warn("[Viajjei] apply errors:", errors);
         await reloadRoteiro();
@@ -380,7 +383,7 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       let viagemResult = null;
       if (viagemParsed.viagemUpdate) {
         viagemResult = await applyViagemUpdate(trip.id, viagemParsed.viagemUpdate, trip);
-        console.log("[Viajjei] viagem apply result:", viagemResult);
+        if (import.meta.env.DEV) console.log("[Viajjei] viagem apply result:", viagemResult);
         if (viagemResult.ok && onTripChanged) {
           try { await onTripChanged(); } catch (e) { console.warn("[Viajjei] reloadTrip falhou:", e); }
         }

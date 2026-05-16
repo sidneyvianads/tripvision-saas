@@ -14,7 +14,7 @@ export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", 
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
-    console.log("[Viajjei] PhotoPicker file selected:", { hasFile: !!file, name: file?.name, type: file?.type, fileSize: file?.size });
+    if (import.meta.env.DEV) console.log("[Viajjei] PhotoPicker file selected:", { hasFile: !!file, name: file?.name, type: file?.type, fileSize: file?.size });
     if (!file) return;
     // HEIC/HEIF (iOS default) — Canvas API não decodifica em Chrome/Firefox.
     if (/heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name)) {
@@ -27,7 +27,8 @@ export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", 
     setBusy(true);
     try {
       const dataUrl = await fileToResizedDataUrl(file, 200, 0.7);
-      console.log("[Viajjei] PhotoPicker resized:", { fileSize: file.size, base64Length: dataUrl.length, base64Preview: dataUrl.slice(0, 40) + "…" });
+      // base64Preview removido em R6-4 — vazava 40 chars da imagem no DevTools
+      if (import.meta.env.DEV) console.log("[Viajjei] PhotoPicker resized:", { fileSize: file.size, base64Length: dataUrl.length });
       onChange(dataUrl);
     } catch (err) {
       console.error("[Viajjei] PhotoPicker erro no resize:", err);
