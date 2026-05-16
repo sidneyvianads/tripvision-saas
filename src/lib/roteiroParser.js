@@ -464,7 +464,36 @@ export async function applyRoteiroUpdates(viagemId, updates) {
             .select("id")
             .single();
           if (dayErr || !dayRow) {
-            results.push({ action: "replace_day", dia_numero: dn, success: false, error: dayErr?.message ?? "Não consegui criar o dia." });
+            // R8-4: ROLLBACK do snapshot quando INSERT falha. Antes o
+            // DELETE acima já tinha apagado o dia antigo — sem o
+            // rollback, o user perderia o dia + atividades pra sempre.
+            // Só rolla se o dia ANTES existia (existingDiaId).
+            if (existingDiaId && prevSnapshot?.dia) {
+              try {
+                const { data: restored } = await supabase
+                  .from("roteiro_dias")
+                  .insert(prevSnapshot.dia)
+                  .select("id")
+                  .single();
+                if (restored && prevSnapshot.atividades?.length) {
+                  await supabase
+                    .from("roteiro_atividades")
+                    .insert(prevSnapshot.atividades.map((a) => ({ ...a, dia_id: restored.id })));
+                }
+                console.warn(`[roteiroParser] rollback OK: restaurei dia ${dn} de snapshot.`);
+              } catch (e) {
+                console.error(`[roteiroParser] ROLLBACK FALHOU dia ${dn}:`, e?.message ?? e);
+                // Last-resort: comissão pendente p/ debug; user precisa
+                // refazer manualmente. Log já registra.
+              }
+            }
+            results.push({
+              action: "replace_day",
+              dia_numero: dn,
+              success: false,
+              error: dayErr?.message ?? "Não consegui criar o dia.",
+              rolled_back: !!(existingDiaId && prevSnapshot?.dia),
+            });
             break;
           }
 
