@@ -305,14 +305,16 @@ async function handlePreapproval(id) {
     // (trial_ends_at IS NULL ou está expirado E plano é pending/free),
     // ATIVA trial. Caso contrário, NÃO toca trial_ends_at — só plano +
     // plano_expires_at + mp_preapproval_id.
-    const userBefore = await sb(`users?id=eq.${user_id}&select=trial_ends_at,plano`, {
+    const userBefore = await sb(`users?id=eq.${user_id}&select=trial_ends_at,plano,plano_expires_at`, {
       method: "GET", headers: { Prefer: "" },
     });
     const beforeRow = Array.isArray(userBefore) ? userBefore[0] : null;
-    const trialJaUsado = beforeRow?.trial_ends_at != null
-      && new Date(beforeRow.trial_ends_at).getTime() < Date.now() + 24 * 60 * 60 * 1000;
-    // trialJaUsado: tinha trial_ends_at no passado (já expirou ou está expirando hoje)
-    // → não conceder trial novo, mas mantém o histórico.
+    // R8-2: qualquer trial_ends_at não-null indica que esse user JÁ teve
+    // trial — independente de estar no passado, presente ou futuro.
+    // Versão anterior (R7-3) só pegava trial_ends_at < NOW+24h, deixando
+    // furo: user com trial AINDA ATIVO cancela e reassina → ganha trial
+    // novo em cima do trial vigente (10+ dias efetivos).
+    const trialJaUsado = beforeRow?.trial_ends_at != null;
 
     const patch = {
       plano,
