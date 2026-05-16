@@ -116,16 +116,27 @@ async function reconcileOne(sub, stats) {
       }
     }
 
-    // ─── REBAIXAMENTO (R6-6) — só ANUAL ─────────────────────────────────
-    // Antes rebaixava mensal também (cutoff 30d) → user cancelava em D+5
-    // e perdia 25 dias pagos. Indústria-padrão (Netflix/Spotify) honra o
-    // fim do período já pago. Pra mensal deixamos plano_expires_at
-    // expirar naturalmente. Anual cancelado ANTES de pagar (cutoff 380d
-    // = trial+1ano) continua sendo rebaixado pra evitar 365 dias de
-    // acesso "grátis" por trial-then-cancel.
+    // ─── REBAIXAMENTO (R6-6 + R7-4) — só ANUAL trial cancelado ─────────
+    // Heurística antiga (R6-6): rebaixa anual se period_end > now + 380d.
+    // BUG (R7): webhook seta period_end = NOW + 7d trial + 365d = 372d.
+    // 372 < 380 → escapa rebaixamento → user anual cancelando em D+5
+    // ainda assim leva 1 ano grátis.
+    //
+    // Fix R7-4: comparar com a janela do TRIAL (7d) — se foi cancelado
+    // dentro do trial E o period_end está mais de 358d à frente (mais
+    // do que faria sentido sem trial+1ano), rebaixa. Usa
+    // sub.current_period_start como ponto de referência (data da
+    // ativação) em vez de NOW pra ser robusto contra cron rodando
+    // dias depois do cancel.
     if (mpStatusLocal === "canceled" && sub.current_period_end && sub.ciclo === "anual") {
       const endTs = new Date(sub.current_period_end).getTime();
-      if (endTs > Date.now() + 380 * ONE_DAY_MS) {
+      const startTs = sub.current_period_start
+        ? new Date(sub.current_period_start).getTime()
+        : Date.now();
+      // Duração total do plano restante a partir do START. Se >358d, era
+      // trial + 1 ano e o cancel veio antes de chegar dia 8 (cobrança).
+      // Mensal jamais cai aqui (sub.ciclo !== "anual").
+      if (endTs - startTs > 358 * ONE_DAY_MS) {
         const now = new Date().toISOString();
         await sb(`users?id=eq.${sub.user_id}`, {
           method: "PATCH",
@@ -159,7 +170,7 @@ export default async () => {
     // vão primeiro. Próxima execução cobre as próximas. Cap de 200 por run
     // pra não estourar timeout — a 20 paralelos × 2s = 20s pra 200 subs.
     const subs = await sb(
-      "assinaturas?mp_preapproval_id=not.is.null&select=id,user_id,plano,ciclo,status,mp_preapproval_id,current_period_end&order=updated_at.asc&limit=200"
+      "assinaturas?mp_preapproval_id=not.is.null&select=id,user_id,plano,ciclo,status,mp_preapproval_id,current_period_start,current_period_end&order=updated_at.asc&limit=200"
     );
     if (!Array.isArray(subs) || subs.length === 0) {
       return new Response(JSON.stringify({ ok: true, ...stats, message: "no subs" }), {
