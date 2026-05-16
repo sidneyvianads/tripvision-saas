@@ -71,4 +71,31 @@ describe("safeHref — protocol allowlist", () => {
     expect(safeHref("not-a-url")).toBe("#");
     expect(safeHref("alert(1)")).toBe("#");
   });
+
+  // R8-1: regressões reportadas na rodada Mythos R8
+  describe("R8-1 vetores protocol-relative e variantes", () => {
+    it("BLOQUEIA //evil.com (protocol-relative — vira https no browser)", () => {
+      expect(safeHref("//evil.com")).toBe("#");
+    });
+
+    it("BLOQUEIA //evil.com/path?q=1", () => {
+      expect(safeHref("//evil.com/path?q=1")).toBe("#");
+    });
+
+    it("BLOQUEIA com whitespace antes: '  //evil.com'", () => {
+      expect(safeHref("  //evil.com")).toBe("#");
+    });
+
+    it("mantém /single-slash path relativo normal", () => {
+      expect(safeHref("/v/abc")).toBe("/v/abc");
+    });
+
+    it("BLOQUEIA javascript:alert#fake-anchor (fragment after protocol)", () => {
+      expect(safeHref("javascript:alert(1)#fake")).toBe("#");
+    });
+
+    it("preserva https com queryString", () => {
+      expect(safeHref("https://x.com/p?a=1&b=2")).toBe("https://x.com/p?a=1&b=2");
+    });
+  });
 });

@@ -25,8 +25,13 @@ export function safeHref(href) {
   const trimmed = href.trim();
   if (!trimmed) return "#";
 
-  // Anchors internos (#section) e relativos (/path) são seguros — não têm
-  // protocol que possa ser explorado.
+  // Anchors internos (#section) e relativos (/path) são seguros.
+  // ATENÇÃO (R8-1): "//host" NÃO é path relativo — é protocol-relative.
+  // Browser interpreta `//evil.com` como `https://evil.com`. Bloquear
+  // explicitamente antes do startsWith("/") genérico.
+  if (trimmed.startsWith("//")) {
+    return "#";
+  }
   if (trimmed.startsWith("#") || trimmed.startsWith("/")) {
     return trimmed;
   }
