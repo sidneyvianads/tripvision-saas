@@ -233,34 +233,37 @@ async function handlePreapproval(id) {
         const pct = Number(af.comissao_percent ?? 5);
         const valorComissao = Math.round(amount * pct) / 100;
         const mes = mesReferencia();
-        const existentes = await sb(
-          `comissoes?afiliado_id=eq.${afiliado_id}&assinatura_id=eq.${assinaturaId}&mes_referencia=eq.${mes}&select=id`,
+        // INSERT idempotente via UNIQUE (afiliado_id, assinatura_id, mes_referencia).
+        // Antes era SELECT-then-INSERT — não-atômico, race entre webhooks
+        // simultâneos do MP gerava comissão duplicada paga. Agora se já existe
+        // pra esse trio, ON CONFLICT DO NOTHING garante 0 efeito + retorna [].
+        // Prefer: resolution=ignore-duplicates é a sintaxe do PostgREST.
+        const userRowsForSnap = await sb(
+          `users?id=eq.${user_id}&select=email`,
           { method: "GET", headers: { Prefer: "" } }
         );
-        if (Array.isArray(existentes) && existentes.length === 0) {
-          // Snapshot do user + plano/ciclo pra preservar audit trail mesmo
-          // se o user deletar a conta no futuro (assinatura_id vira NULL
-          // via FK ON DELETE SET NULL — sem snapshot, perderia o vínculo).
-          const userRowsForSnap = await sb(
-            `users?id=eq.${user_id}&select=email`,
-            { method: "GET", headers: { Prefer: "" } }
-          );
-          const userEmailSnap = Array.isArray(userRowsForSnap) ? userRowsForSnap[0]?.email : null;
-          await sb(`comissoes`, {
-            method: "POST",
-            body: JSON.stringify({
-              afiliado_id,
-              assinatura_id: assinaturaId,
-              valor_assinatura: amount,
-              percentual: pct,
-              valor_comissao: valorComissao,
-              mes_referencia: mes,
-              status: "pendente",
-              user_email_snapshot: userEmailSnap ?? null,
-              plano_snapshot: plano,
-              ciclo_snapshot: ciclo,
-            }),
-          });
+        const userEmailSnap = Array.isArray(userRowsForSnap) ? userRowsForSnap[0]?.email : null;
+        const inserted = await sb(`comissoes?on_conflict=afiliado_id,assinatura_id,mes_referencia`, {
+          method: "POST",
+          headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+          body: JSON.stringify({
+            afiliado_id,
+            assinatura_id: assinaturaId,
+            valor_assinatura: amount,
+            percentual: pct,
+            valor_comissao: valorComissao,
+            mes_referencia: mes,
+            status: "pendente",
+            user_email_snapshot: userEmailSnap ?? null,
+            plano_snapshot: plano,
+            ciclo_snapshot: ciclo,
+          }),
+        });
+        // PATCH em afiliados SÓ se realmente criou a row (não foi duplicata
+        // ignorada). PostgREST com return=representation devolve [] em
+        // conflito ignorado → length 0.
+        const wasInsertedFresh = Array.isArray(inserted) && inserted.length > 0;
+        if (wasInsertedFresh) {
           await sb(`afiliados?id=eq.${afiliado_id}`, {
             method: "PATCH",
             body: JSON.stringify({
