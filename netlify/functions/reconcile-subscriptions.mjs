@@ -47,6 +47,35 @@ async function sb(path, init = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+// R8-6: pergunta ao MP se houve PAYMENT aprovado nos últimos N dias.
+// Preapproval pode estar "authorized" mas MP falha em capturar (cartão
+// expirado / chargeback). Sem essa checagem, cron estendia plano grátis
+// pra users que não tinham mais como pagar.
+//
+// Endpoint MP: /v1/payments/search?preapproval_id=X&status=approved
+// Retorna paginated. Olhamos só o resultado mais recente (sort default
+// = date_created DESC).
+async function temCobrancaAprovadaRecente(preapprovalId, days = 35) {
+  return await withRetry(async () => {
+    const url = `https://api.mercadopago.com/v1/payments/search?preapproval_id=${encodeURIComponent(preapprovalId)}&status=approved&sort=date_created&criteria=desc&limit=1`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${MP_TOKEN}` },
+    });
+    if (!res.ok) {
+      // Se MP API falhar, fail-OPEN (estende mesmo assim) — não derrubar
+      // user pagante por bug nosso. Log pra investigar depois.
+      const t = await res.text();
+      console.warn(`[reconcile] MP payments search ${res.status}: ${t.slice(0, 100)} — assumindo cobrança OK pra não derrubar user`);
+      return true;
+    }
+    const data = await res.json();
+    const last = data?.results?.[0];
+    if (!last?.date_approved) return false;
+    const approvedTs = new Date(last.date_approved).getTime();
+    return approvedTs > Date.now() - days * 24 * 60 * 60 * 1000;
+  }, "mp-payments-search", 2, 500);
+}
+
 async function fetchPreapproval(id) {
   return await withRetry(async () => {
     const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
@@ -85,34 +114,44 @@ async function reconcileOne(sub, stats) {
       console.log(`[reconcile] ${sub.id}: ${sub.status} → ${mpStatusLocal} (MP=${mpStatus})`);
     }
 
-    // ─── EXTENSÃO (R6-2) — implementa o que o comment do arquivo prometia ──
-    // Se MP diz "authorized" e nosso plano_expires_at está perto do fim,
-    // estende. Caso comum: webhook de renovação se perdeu (MP rate-limited
-    // nosso notification_url, 5xx do Supabase entre, etc) e o user pagante
-    // perde acesso silenciosamente. Cron tem o mesmo poder de ativar que
-    // o webhook, então estende sem esperar o webhook chegar.
+    // ─── EXTENSÃO (R6-2 + R8-6) — só se houve cobrança recente ─────────
+    // Webhook de renovação pode se perder (MP rate-limit, Supabase 5xx).
+    // Cron extende pra não rebaixar user pagante por silêncio do webhook.
+    // MAS (R8-6): preapproval fica "authorized" mesmo quando MP falha em
+    // capturar pagamento (cartão expirado). Janela: D+25 cartão expira →
+    // D+28 cron extende +30d → user pega 30d grátis antes do MP marcar
+    // paused. Pra evitar: validar que houve PAGAMENTO aprovado recente
+    // via MP /v1/payments/search?preapproval_id=...
     if (mpStatusLocal === "active" && sub.current_period_end) {
       const endTs = new Date(sub.current_period_end).getTime();
-      // Janela de "perto de expirar" = 3 dias. Não estendemos sempre porque
-      // o webhook normal já faz isso em condições saudáveis — só intervimos
-      // quando há sinal de webhook perdido.
+      // Janela "perto de expirar" = 3 dias.
       if (endTs < Date.now() + 3 * ONE_DAY_MS) {
-        const cicloDays = sub.ciclo === "anual" ? 365 : 30;
-        const newEnd = new Date(Date.now() + cicloDays * ONE_DAY_MS).toISOString();
-        await sb(`users?id=eq.${sub.user_id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ plano_expires_at: newEnd }),
-        });
-        await sb(`assinaturas?id=eq.${sub.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            current_period_start: new Date().toISOString(),
-            current_period_end: newEnd,
-            updated_at: new Date().toISOString(),
-          }),
-        });
-        stats.extended = (stats.extended ?? 0) + 1;
-        console.log(`[reconcile] user ${sub.user_id} estendido +${cicloDays}d (webhook de renovação provavelmente perdido)`);
+        // R8-6: confirma cobrança recente antes de estender. Janela
+        // de 35d cobre mensal sem ruído.
+        const cobrancaRecente = await temCobrancaAprovadaRecente(sub.mp_preapproval_id, 35);
+        if (!cobrancaRecente) {
+          console.log(`[reconcile] user ${sub.user_id} NÃO estendido — sem cobrança aprovada nos últimos 35d (cartão expirado / chargeback / etc)`);
+          captureMessage("reconcile: extensão pulada sem cobrança recente", "warning", {
+            sub_id: sub.id, user_id: sub.user_id, preapproval: sub.mp_preapproval_id,
+          });
+        } else {
+          const cicloDays = sub.ciclo === "anual" ? 365 : 30;
+          const newEnd = new Date(Date.now() + cicloDays * ONE_DAY_MS).toISOString();
+          await sb(`users?id=eq.${sub.user_id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ plano_expires_at: newEnd }),
+          });
+          await sb(`assinaturas?id=eq.${sub.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              current_period_start: new Date().toISOString(),
+              current_period_end: newEnd,
+              updated_at: new Date().toISOString(),
+            }),
+          });
+          stats.extended = (stats.extended ?? 0) + 1;
+          console.log(`[reconcile] user ${sub.user_id} estendido +${cicloDays}d (cobrança confirmada)`);
+        }
       }
     }
 
