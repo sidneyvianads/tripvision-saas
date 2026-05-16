@@ -59,6 +59,8 @@ async function fetchPreapproval(id) {
 
 // Processa uma sub: GET MP + diff status local + heurística rebaixamento.
 // Isolada pra rodar em paralelo via Promise.allSettled.
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 async function reconcileOne(sub, stats) {
   try {
     const pa = await fetchPreapproval(sub.mp_preapproval_id);
@@ -80,27 +82,54 @@ async function reconcileOne(sub, stats) {
       console.log(`[reconcile] ${sub.id}: ${sub.status} → ${mpStatusLocal} (MP=${mpStatus})`);
     }
 
-    // Heurística de rebaixamento por ciclo:
-    // - Mensal: rebaixa se period_end > NOW + 30d (trial+1mês ativado e cancelado dentro do trial).
-    // - Anual: rebaixa só se period_end > NOW + 380d (trial+1ano e cancelou ANTES de pagar).
-    //   Sem isso, anual cancelado no mês 11 roubaria 60 dias pagos.
-    if (mpStatusLocal === "canceled" && sub.current_period_end) {
+    // ─── EXTENSÃO (R6-2) — implementa o que o comment do arquivo prometia ──
+    // Se MP diz "authorized" e nosso plano_expires_at está perto do fim,
+    // estende. Caso comum: webhook de renovação se perdeu (MP rate-limited
+    // nosso notification_url, 5xx do Supabase entre, etc) e o user pagante
+    // perde acesso silenciosamente. Cron tem o mesmo poder de ativar que
+    // o webhook, então estende sem esperar o webhook chegar.
+    if (mpStatusLocal === "active" && sub.current_period_end) {
       const endTs = new Date(sub.current_period_end).getTime();
-      const cutoffMs = (sub.ciclo === "anual" ? 380 : 30) * 24 * 60 * 60 * 1000;
-      if (endTs > Date.now() + cutoffMs) {
-        // Rebaixa AMBOS plano_expires_at E trial_ends_at. Antes só
-        // plano_expires_at → UI mostrava "Trial" pra user cancelado
-        // e métricas de trial contavam errado.
+      // Janela de "perto de expirar" = 3 dias. Não estendemos sempre porque
+      // o webhook normal já faz isso em condições saudáveis — só intervimos
+      // quando há sinal de webhook perdido.
+      if (endTs < Date.now() + 3 * ONE_DAY_MS) {
+        const cicloDays = sub.ciclo === "anual" ? 365 : 30;
+        const newEnd = new Date(Date.now() + cicloDays * ONE_DAY_MS).toISOString();
+        await sb(`users?id=eq.${sub.user_id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ plano_expires_at: newEnd }),
+        });
+        await sb(`assinaturas?id=eq.${sub.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            current_period_start: new Date().toISOString(),
+            current_period_end: newEnd,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+        stats.extended = (stats.extended ?? 0) + 1;
+        console.log(`[reconcile] user ${sub.user_id} estendido +${cicloDays}d (webhook de renovação provavelmente perdido)`);
+      }
+    }
+
+    // ─── REBAIXAMENTO (R6-6) — só ANUAL ─────────────────────────────────
+    // Antes rebaixava mensal também (cutoff 30d) → user cancelava em D+5
+    // e perdia 25 dias pagos. Indústria-padrão (Netflix/Spotify) honra o
+    // fim do período já pago. Pra mensal deixamos plano_expires_at
+    // expirar naturalmente. Anual cancelado ANTES de pagar (cutoff 380d
+    // = trial+1ano) continua sendo rebaixado pra evitar 365 dias de
+    // acesso "grátis" por trial-then-cancel.
+    if (mpStatusLocal === "canceled" && sub.current_period_end && sub.ciclo === "anual") {
+      const endTs = new Date(sub.current_period_end).getTime();
+      if (endTs > Date.now() + 380 * ONE_DAY_MS) {
         const now = new Date().toISOString();
         await sb(`users?id=eq.${sub.user_id}`, {
           method: "PATCH",
-          body: JSON.stringify({
-            plano_expires_at: now,
-            trial_ends_at: now,
-          }),
+          body: JSON.stringify({ plano_expires_at: now, trial_ends_at: now }),
         });
         stats.downgraded++;
-        console.log(`[reconcile] user ${sub.user_id} rebaixado (MP=${mpStatus}, ciclo=${sub.ciclo}, period_end=${sub.current_period_end})`);
+        console.log(`[reconcile] user ${sub.user_id} rebaixado (anual trial cancelado antes de pagar)`);
       }
     }
   } catch (err) {
@@ -117,7 +146,7 @@ export default async () => {
     return new Response("OK (no MP token)");
   }
 
-  const stats = { checked: 0, updated: 0, downgraded: 0, errors: 0 };
+  const stats = { checked: 0, updated: 0, downgraded: 0, extended: 0, errors: 0 };
   const BATCH = 20;
   const TIMEBUDGET_MS = 22_000; // deixa 4s de margem antes do timeout 26s
   const t0 = Date.now();
