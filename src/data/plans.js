@@ -153,12 +153,18 @@ export function isOwner(plano) {
 }
 
 // Verifica se o usuário tem acesso pago efetivo (considera plano_expires_at).
-// Owner nunca expira. Free/pending nunca tem acesso.
+// - owner: nunca expira (acesso interno)
+// - free/pending/expired: nunca tem acesso
+// - pro/grupo SEM plano_expires_at: EXPIRED (R8-5 — antes tratava como
+//   ativo, abrindo bypass se admin fizesse UPDATE manual de plano sem
+//   setar data). Webhook MP sempre seta expires; ausência indica
+//   anomalia ou intervenção manual sem backfill.
+// - pro/grupo COM plano_expires_at futuro: ativo.
 export function hasActiveAccess(user) {
   if (!user) return false;
   if (user.plano === "owner") return true;
   if (EXPIRED_STATES.has(user.plano)) return false;
-  if (!user.plano_expires_at) return true; // sem data = trate como ativo
+  if (!user.plano_expires_at) return false; // R8-5: NULL = expired pra não-owners
   return new Date(user.plano_expires_at).getTime() > Date.now();
 }
 
