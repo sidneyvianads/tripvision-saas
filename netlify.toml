@@ -45,3 +45,26 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# ───── Security headers (R7-7) ─────────────────────────────────────────
+# Defense-in-depth: mesmo com XSS sanitization (R7-5), reduz superfície.
+# CSP strict-ish ficou pra próximo (precisa whitelist de Supabase realtime
+# WSS + MP scripts + Google Fonts + Anthropic — risco de quebrar prod
+# sem testar).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Clickjacking: app não pode ser embedado em iframe.
+    X-Frame-Options = "DENY"
+    # MIME-sniffing: força browser a respeitar Content-Type.
+    X-Content-Type-Options = "nosniff"
+    # Referrer: não vaza path/query pra terceiros (links externos pra
+    # hotéis, IG de afiliados, etc).
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    # Permissions: bloqueia features sensíveis. geolocation=(self) permite
+    # nosso código (futuro "minha localização" no Diário); camera/mic
+    # zerados.
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self), payment=(self)"
+    # HSTS: força HTTPS por 1 ano. Netlify já redireciona http→https,
+    # isto endurece pra browsers respeitarem mesmo offline.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
