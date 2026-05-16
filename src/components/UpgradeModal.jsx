@@ -63,16 +63,22 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
     try {
       // Reaplica o cupom do afiliado original do usuário (se existir + ainda ativo).
       const cupom = refAfiliado?.cupom ?? null;
+      // Authorization obrigatório (R4-H2 — endpoint extrai user do JWT).
+      // Antes deste fix o UpgradeModal era o único caller sem Bearer; chamada
+      // retornava 401 → upgrade pago quebrado em produção desde a R4.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setErr("Sessão expirada — faça login de novo.");
+        setBusy(null);
+        return;
+      }
       const res = await fetch("/api/create-subscription", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plano,
-          ciclo,
-          userId: user?.id,
-          userEmail: user?.email,
-          cupom,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ plano, ciclo, cupom }),
       });
       const data = await res.json();
       if (res.status === 503 && data?.placeholder) {
