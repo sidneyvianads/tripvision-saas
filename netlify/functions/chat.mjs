@@ -15,6 +15,7 @@ import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
+import { withRetry } from "./_lib/retry.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY || "";
@@ -148,19 +149,7 @@ function buildContext({ trip, roteiro }) {
 // ────────────────────────── ERROR HANDLING ──────────────────────────
 
 const FRIENDLY_ERROR = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
-
-async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    try { return await fn(); }
-    catch (err) {
-      lastErr = err;
-      console.error(`[JEI/chat] ${label} tentativa ${i + 1}/${attempts} falhou:`, err?.message ?? err);
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-  throw lastErr;
-}
+// withRetry vem de _lib/retry.mjs (compartilhado).
 
 // Constrói messages com cache breakpoint na penúltima do histórico.
 // Mesma lógica do plan.mjs — duplicado por enquanto até extrair pra _lib.

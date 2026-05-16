@@ -19,6 +19,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
 import { trackPaymentCompleted } from "./_lib/analytics.mjs";
+import { withRetry } from "./_lib/retry.mjs";
 
 const TRIAL_DAYS = 7;
 
@@ -34,24 +35,26 @@ const SUPABASE_KEY =
 async function sb(path, init = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("Supabase env vars ausentes.");
   const url = SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/" + path;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...(init.headers || {}),
-    },
-  });
-  const text = await res.text();
-  let json = null;
-  try { json = text ? JSON.parse(text) : null; } catch {}
-  if (!res.ok) {
-    console.error("[webhook-mp] supabase error:", res.status, text);
-    throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
-  }
-  return json;
+  return await withRetry(async () => {
+    const res = await fetch(url, {
+      ...init,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        ...(init.headers || {}),
+      },
+    });
+    const text = await res.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch {}
+    if (!res.ok) {
+      console.error("[webhook-mp] supabase error:", res.status, text);
+      throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return json;
+  }, "supabase", 2, 500);
 }
 
 // Valida x-signature do MP. Manifesto: id:<data.id>;request-id:<x-request-id>;ts:<ts>;
@@ -115,14 +118,16 @@ function mesReferencia(d = new Date()) {
 }
 
 async function fetchPreapproval(id) {
-  const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
-    headers: { Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}` },
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`MP preapproval fetch ${res.status}: ${t.slice(0, 200)}`);
-  }
-  return res.json();
+  return await withRetry(async () => {
+    const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
+      headers: { Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}` },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`MP preapproval fetch ${res.status}: ${t.slice(0, 200)}`);
+    }
+    return res.json();
+  }, "mp-preapproval", 2, 500);
 }
 
 function addDays(date, days) {

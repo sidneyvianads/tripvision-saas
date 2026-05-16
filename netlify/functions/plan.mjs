@@ -23,6 +23,7 @@ import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
+import { withRetry } from "./_lib/retry.mjs";
 
 // Rate limits do /api/plan. /api/plan é o endpoint caro (LLM + web search),
 // então protegemos contra burst. Stub Upstash: no-op até env ser setado.
@@ -333,21 +334,7 @@ const countMonthlyUserMessages = (uid) => callRpc("count_ia_user_messages_in_mon
 const FRIENDLY_ERROR = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
 
 // Retry helper — tenta `fn` até `attempts` vezes, com `delayMs` de espera
-// entre tentativas. Loga cada falha pro Netlify Functions logs. Última
-// falha propaga pro caller.
-async function withRetry(fn, label, attempts = 2, delayMs = 1000) {
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      console.error(`[JEI] ${label} tentativa ${i + 1}/${attempts} falhou:`, err?.message ?? err);
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-  throw lastErr;
-}
+// withRetry agora vem de _lib/retry.mjs (compartilhado entre 6 endpoints).
 
 // ────────────────────────── SSE HELPERS ──────────────────────────
 

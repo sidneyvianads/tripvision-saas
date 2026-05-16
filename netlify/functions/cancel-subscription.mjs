@@ -7,6 +7,8 @@
 // O user_id é extraído do token (NÃO do body) — impede que qualquer um
 // cancele a assinatura de outro chutando user_id no body.
 
+import { withRetry } from "./_lib/retry.mjs";
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || SUPABASE_KEY;
@@ -88,24 +90,28 @@ export default async (req) => {
   }
   const preapprovalId = assinatura.mp_preapproval_id;
 
-  // 2) Cancela no Mercado Pago (se token configurado)
+  // 2) Cancela no Mercado Pago (se token configurado) com retry — blip
+  // transitório (5xx, network) não derruba o cancel: a função segue
+  // marcando local e o webhook reconcilia depois.
   if (process.env.MERCADOPAGO_ACCESS_TOKEN && preapprovalId) {
     try {
-      const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
-        },
-        body: JSON.stringify({ status: "cancelled" }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("[cancel-sub] MP error:", res.status, errText);
-        // Não falha — segue marcando local. MP webhook reconcilia depois.
-      }
+      await withRetry(async () => {
+        const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+          },
+          body: JSON.stringify({ status: "cancelled" }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`MP cancel ${res.status}: ${errText.slice(0, 100)}`);
+        }
+      }, "mp-cancel", 2, 500);
     } catch (err) {
-      console.error("[cancel-sub] MP fetch failed:", err);
+      console.error("[cancel-sub] MP fetch failed após retries:", err);
+      // Não falha o handler — segue marcando local.
     }
   } else if (!preapprovalId) {
     console.warn("[cancel-sub] assinatura sem mp_preapproval_id — só atualiza local.");

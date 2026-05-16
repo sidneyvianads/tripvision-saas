@@ -25,6 +25,7 @@
 // cheio depois do primeiro mês, usar PUT /preapproval/{id} com novo amount.
 
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
+import { withRetry } from "./_lib/retry.mjs";
 
 const SITE_BASE = "https://viajjei.com.br";
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
@@ -202,15 +203,25 @@ export default async (req) => {
 
     console.log("[MP] Preapproval request to MP:", JSON.stringify(preapprovalBody));
 
-    const res = await fetch("https://api.mercadopago.com/preapproval", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify(preapprovalBody),
-    });
-    const data = await res.json();
+    // withRetry: blip transitório (MP 502/503/timeout) era erro pro user
+    // ter que clicar "tentar de novo". Agora retry interno de 2 tentativas.
+    const { res, data } = await withRetry(async () => {
+      const r = await fetch("https://api.mercadopago.com/preapproval", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+        },
+        body: JSON.stringify(preapprovalBody),
+      });
+      const d = await r.json();
+      // Só fail-and-retry em 5xx ou network errors (4xx do MP são validação,
+      // não vai mudar com retry). Throw genérico aciona próximo attempt.
+      if (r.status >= 500) {
+        throw new Error(`MP preapproval ${r.status}: ${JSON.stringify(d).slice(0, 200)}`);
+      }
+      return { res: r, data: d };
+    }, "mp-create-preapproval", 2, 500);
     console.log("[MP] Preapproval response", res.status, ":", JSON.stringify(data));
 
     if (!res.ok) {

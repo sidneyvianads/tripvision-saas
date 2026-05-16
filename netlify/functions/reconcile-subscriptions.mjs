@@ -23,6 +23,7 @@
 // Pra ativar: GA no Netlify (Functions → Scheduled). Free tier inclui.
 
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
+import { withRetry } from "./_lib/retry.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
@@ -47,14 +48,16 @@ async function sb(path, init = {}) {
 }
 
 async function fetchPreapproval(id) {
-  const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
-    headers: { Authorization: `Bearer ${MP_TOKEN}` },
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`MP ${res.status}: ${t.slice(0, 100)}`);
-  }
-  return res.json();
+  return await withRetry(async () => {
+    const res = await fetch(`https://api.mercadopago.com/preapproval/${id}`, {
+      headers: { Authorization: `Bearer ${MP_TOKEN}` },
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`MP ${res.status}: ${t.slice(0, 100)}`);
+    }
+    return res.json();
+  }, "mp-preapproval", 2, 500);
 }
 
 // Processa uma sub: GET MP + diff status local + heurística rebaixamento.
