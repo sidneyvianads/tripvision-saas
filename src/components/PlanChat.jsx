@@ -15,6 +15,7 @@ import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner, hasActiveAccess } from "../data/plans";
 import { supabase } from "../lib/supabase";
 import { trackMessageSent, trackPlanStarted } from "../lib/analytics";
+import { safeHref } from "../lib/safeHref";
 
 const SUGESTOES = [
   "Sugere hotel",
@@ -144,13 +145,17 @@ const LINK_STYLES = {
 };
 
 function RichLink({ href, children }) {
+  // R7-5: sanitiza href contra javascript:/data:/vbscript: pra defesa
+  // em profundidade contra prompt injection no Claude. allowlist =
+  // http(s), mailto, tel, anchors, paths relativos.
+  const safe = safeHref(href);
   const text = flatChildrenText(children);
-  const type = detectLinkType(text, href ?? "");
+  const type = detectLinkType(text, safe);
   const style = LINK_STYLES[type];
   const isTagged = type !== "default";
   return (
     <a
-      href={href}
+      href={safe}
       target="_blank"
       rel="noopener noreferrer"
       className={`font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition ${isTagged ? "" : ""}`}

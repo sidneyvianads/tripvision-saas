@@ -3,6 +3,7 @@ import { Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Avatar from "./Avatar";
 import { supabase } from "../lib/supabase";
+import { safeHref } from "../lib/safeHref";
 
 // Markdown leve pra bolha do assistente. Links coloridos por tipo:
 // 📸 Instagram = rosa, 🌐 Site = azul, 📍 Mapa = verde.
@@ -26,11 +27,15 @@ const LINK_STYLES = {
   default:   { color: "#F97316" },
 };
 function RichLink({ href, children }) {
+  // R7-5: sanitiza href (allowlist http/https/mailto/tel). Defesa em
+  // profundidade contra prompt injection — system prompt do Jei já tem
+  // guarda-costas, mas LLM não é prova: defesa em camadas.
+  const safe = safeHref(href);
   const text = flatChildrenText(children);
-  const type = detectLinkType(text, href ?? "");
+  const type = detectLinkType(text, safe);
   return (
     <a
-      href={href}
+      href={safe}
       target="_blank"
       rel="noopener noreferrer"
       className="font-display font-extrabold underline decoration-2 underline-offset-2 break-words hover:opacity-80 transition"
