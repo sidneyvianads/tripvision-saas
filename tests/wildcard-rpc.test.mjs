@@ -57,3 +57,19 @@ describe.skipIf(!HAS_SUPABASE)("get_afiliado_panel RPC (smoke real)", () => {
     expect(data).toBeNull();
   });
 });
+
+// R7-2 smoke real: anon não tem GRANT SELECT em users — TODA leitura
+// retorna 42501. Isso protege especificamente senha_hash + reset_code +
+// stripe_customer_id (legado), mas também o resto. Pra co-membros
+// (authenticated), só as 12 colunas inócuas são acessíveis — testar
+// requer login real, fora do escopo deste smoke.
+describe.skipIf(!HAS_SUPABASE)("users column-grant (R7-2 smoke real)", () => {
+  for (const col of ["senha_hash", "reset_code", "stripe_customer_id", "mp_preapproval_id"]) {
+    it(`${col} bloqueado pra anon (42501)`, async () => {
+      const supa = createClient(URL, ANON);
+      const { error } = await supa.from("users").select(col).limit(1);
+      expect(error).toBeTruthy();
+      expect(error.code).toBe("42501");
+    });
+  }
+});
