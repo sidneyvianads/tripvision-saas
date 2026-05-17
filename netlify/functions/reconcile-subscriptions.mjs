@@ -47,14 +47,20 @@ async function sb(path, init = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-// R8-6: pergunta ao MP se houve PAYMENT aprovado nos últimos N dias.
-// Preapproval pode estar "authorized" mas MP falha em capturar (cartão
-// expirado / chargeback). Sem essa checagem, cron estendia plano grátis
-// pra users que não tinham mais como pagar.
+// R8-6 + R9-5: pergunta ao MP se houve PAYMENT aprovado nos últimos
+// N dias. Preapproval pode estar "authorized" mas MP falha em capturar
+// (cartão expirado / chargeback). Sem essa checagem, cron extendia
+// plano grátis pra users sem pagar.
 //
-// Endpoint MP: /v1/payments/search?preapproval_id=X&status=approved
-// Retorna paginated. Olhamos só o resultado mais recente (sort default
-// = date_created DESC).
+// Fail-mode (R9-5):
+// - 5xx / network / timeout: TRANSIENT → fail-OPEN (estende mesmo,
+//   pra não derrubar pagante por blip)
+// - 4xx (401/403/404): PERMANENTE → fail-CLOSED (não estende +
+//   Sentry alert, sinaliza config errada)
+//
+// Antes (R8-6) tratava tudo igual fail-open. Se MP_ACCESS_TOKEN
+// rotacionar e env Netlify ficar stale → 401 em todas requests →
+// fail-open extende 200 subs sem validação. Bug.
 async function temCobrancaAprovadaRecente(preapprovalId, days = 35) {
   return await withRetry(async () => {
     const url = `https://api.mercadopago.com/v1/payments/search?preapproval_id=${encodeURIComponent(preapprovalId)}&status=approved&sort=date_created&criteria=desc&limit=1`;
@@ -62,10 +68,18 @@ async function temCobrancaAprovadaRecente(preapprovalId, days = 35) {
       headers: { Authorization: `Bearer ${MP_TOKEN}` },
     });
     if (!res.ok) {
-      // Se MP API falhar, fail-OPEN (estende mesmo assim) — não derrubar
-      // user pagante por bug nosso. Log pra investigar depois.
       const t = await res.text();
-      console.warn(`[reconcile] MP payments search ${res.status}: ${t.slice(0, 100)} — assumindo cobrança OK pra não derrubar user`);
+      if (res.status >= 400 && res.status < 500) {
+        // 4xx = config error (token inválido/expirado, preapproval inexistente).
+        // fail-CLOSED: NÃO estende. Sentry alert pra Sidney corrigir.
+        console.error(`[reconcile] MP 4xx ${res.status}: ${t.slice(0, 200)} — fail-CLOSED, NÃO estendendo`);
+        captureMessage(`reconcile: MP ${res.status} payments_search`, "error", {
+          preapproval: preapprovalId, body: t.slice(0, 200),
+        });
+        return false;
+      }
+      // 5xx ou outro: transient. fail-OPEN.
+      console.warn(`[reconcile] MP ${res.status}: ${t.slice(0, 100)} — fail-OPEN (transient)`);
       return true;
     }
     const data = await res.json();
@@ -128,7 +142,12 @@ async function reconcileOne(sub, stats) {
       if (endTs < Date.now() + 3 * ONE_DAY_MS) {
         // R8-6: confirma cobrança recente antes de estender. Janela
         // de 35d cobre mensal sem ruído.
-        const cobrancaRecente = await temCobrancaAprovadaRecente(sub.mp_preapproval_id, 35);
+        // R9-4: janela por ciclo. Mensal cobra todo mês → 35d cobre 1
+        // ciclo + buffer. Anual cobra a cada 365d → 380d cobre 1 ciclo
+        // + buffer. Sem essa distinção (R8-6 hardcoded 35d), anual
+        // NUNCA estendia (last approved sempre > 35d).
+        const janelaCobrancaDays = sub.ciclo === "anual" ? 380 : 35;
+        const cobrancaRecente = await temCobrancaAprovadaRecente(sub.mp_preapproval_id, janelaCobrancaDays);
         if (!cobrancaRecente) {
           console.log(`[reconcile] user ${sub.user_id} NÃO estendido — sem cobrança aprovada nos últimos 35d (cartão expirado / chargeback / etc)`);
           captureMessage("reconcile: extensão pulada sem cobrança recente", "warning", {
