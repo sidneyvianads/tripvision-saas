@@ -32,7 +32,11 @@ export default function TripView() {
   const { user, signOut } = useAuth();
   const { trip, isAdmin, loading, error, reload: reloadTrip } = useTrip(slug, user?.id);
   const [params, setParams] = useSearchParams();
-  const initialTab = params.get("tab") || "roteiro";
+  // R10-6: allowlist contra TAB_TITLES. Antes, ?tab=<script> ou ?tab=foo
+  // renderizava header vazio + conteúdo branco (nenhum `tab === "x"`
+  // bate). Link malicioso compartilhado causava UX-DoS.
+  const rawTab = params.get("tab");
+  const initialTab = rawTab && TAB_TITLES[rawTab] ? rawTab : "roteiro";
   const [tab, setTab] = useState(initialTab);
   const { count: unreadChat, markSeen } = useUnreadCount(trip?.id, user?.id);
 
