@@ -46,11 +46,8 @@
   to = "/index.html"
   status = 200
 
-# ───── Security headers (R7-7) ─────────────────────────────────────────
+# ───── Security headers (R7-7 + R12-6) ─────────────────────────────────
 # Defense-in-depth: mesmo com XSS sanitization (R7-5), reduz superfície.
-# CSP strict-ish ficou pra próximo (precisa whitelist de Supabase realtime
-# WSS + MP scripts + Google Fonts + Anthropic — risco de quebrar prod
-# sem testar).
 [[headers]]
   for = "/*"
   [headers.values]
@@ -68,3 +65,13 @@
     # HSTS: força HTTPS por 1 ano. Netlify já redireciona http→https,
     # isto endurece pra browsers respeitarem mesmo offline.
     Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    # R12-6: CSP só com connect-src — não restringe scripts/styles/imgs
+    # (sem default-src, outros recurso-types ficam open). Lista travada:
+    # 'self' cobre /api/* e edge functions; supabase https + wss
+    # (realtime); fonts.googleapis pro CSS do Google Fonts; posthog se
+    # ativado; sentry ingest se ativado. MP/Anthropic NÃO entram porque
+    # são server-side (Netlify Functions chamam, frontend não).
+    # Se CSP bloquear algo em prod, o browser loga "Refused to connect
+    # to ... because it violates CSP" — desativar este header é o
+    # rollback rápido.
+    Content-Security-Policy = "connect-src 'self' https://mucwvugadqksassosixn.supabase.co wss://mucwvugadqksassosixn.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com https://us.i.posthog.com https://*.ingest.sentry.io"
