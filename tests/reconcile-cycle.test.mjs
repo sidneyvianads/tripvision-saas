@@ -32,13 +32,13 @@ describe("reconcile janela por ciclo + fail-mode (R9-4 + R9-5)", () => {
     expect(days).toBeGreaterThanOrEqual(365);
   });
 
-  it("R9-5: distingue 4xx (fail-CLOSED) de 5xx (fail-OPEN)", () => {
+  it("R9-5 + R10-5: distingue 4xx permanente (fail-CLOSED) de 5xx/429 (fail-OPEN)", () => {
     // Bloco temCobrancaAprovadaRecente deve checar res.status >= 400 && < 500
-    expect(src).toMatch(/res\.status\s*>=\s*400\s*&&\s*res\.status\s*<\s*500/);
+    // E excluir 429 (rate-limit transient).
+    expect(src).toMatch(/res\.status\s*>=\s*400\s*&&\s*res\.status\s*<\s*500\s*&&\s*res\.status\s*!==\s*429/);
   });
 
   it("R9-5: 4xx chama captureMessage com level 'error'", () => {
-    // No path 4xx, queremos Sentry alert (não só warning silencioso).
     const segment = src.match(/res\.status\s*>=\s*400[\s\S]{0,500}/);
     expect(segment).toBeTruthy();
     expect(segment[0]).toMatch(/captureMessage[\s\S]{0,80}["']error["']/);

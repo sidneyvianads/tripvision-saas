@@ -69,17 +69,20 @@ async function temCobrancaAprovadaRecente(preapprovalId, days = 35) {
     });
     if (!res.ok) {
       const t = await res.text();
-      if (res.status >= 400 && res.status < 500) {
-        // 4xx = config error (token inválido/expirado, preapproval inexistente).
-        // fail-CLOSED: NÃO estende. Sentry alert pra Sidney corrigir.
+      // R10-5: 429 (rate-limit) é TRANSIENT — MP retorna quando estamos
+      // fazendo muitas chamadas. Reconcile não deve rebaixar pagante
+      // por isso. fail-OPEN.
+      // 4xx restante (401/403 token, 404 preapproval inexistente, 400
+      // request mal-formado): PERMANENTE → fail-CLOSED + Sentry alert.
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
         console.error(`[reconcile] MP 4xx ${res.status}: ${t.slice(0, 200)} — fail-CLOSED, NÃO estendendo`);
         captureMessage(`reconcile: MP ${res.status} payments_search`, "error", {
           preapproval: preapprovalId, body: t.slice(0, 200),
         });
         return false;
       }
-      // 5xx ou outro: transient. fail-OPEN.
-      console.warn(`[reconcile] MP ${res.status}: ${t.slice(0, 100)} — fail-OPEN (transient)`);
+      // 5xx, 429 ou network: transient. fail-OPEN.
+      console.warn(`[reconcile] MP ${res.status}: ${t.slice(0, 100)} — fail-OPEN (transient${res.status === 429 ? ', rate-limit' : ''})`);
       return true;
     }
     const data = await res.json();
