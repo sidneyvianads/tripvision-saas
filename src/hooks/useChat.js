@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 export function useUnreadCount(viagemId, userId) {
@@ -66,6 +66,22 @@ export function useChat(viagemId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // R12-1: refs pra ler messages e bufferar reactions órfãs.
+  // - messagesRef: leitura síncrona no callback do realtime SEM setter aninhado
+  //   (R11-2 introduziu setMessages(prev => { setReactionsByMsg(); return prev; })
+  //   que dobra em StrictMode dev).
+  // - pendingReactionsRef: buffer pra reactions que chegam ANTES do INSERT do
+  //   message correspondente (postgres realtime não garante ordem entre
+  //   tabelas). Quando o message chega, drenamos as órfãs pra ele.
+  const messagesRef = useRef([]);
+  const pendingReactionsRef = useRef([]);
+
+  // Mantém messagesRef em sync com state. Effect sem deps roda a cada
+  // render — pattern canônico pra refs de leitura síncrona.
+  useEffect(() => {
+    messagesRef.current = messages;
+  });
+
   useEffect(() => {
     if (!viagemId) return;
     let active = true;
@@ -100,24 +116,40 @@ export function useChat(viagemId) {
     }
     loadInitial();
 
-    // R11-2: consolidar messages + reactions em UM channel (`chat-${viagemId}`)
-    // — antes eram 2 channels (50% mais conexões realtime sem necessidade).
+    // R11-2 + R12-1: 1 channel consolidado, leitura via refs (sem setter aninhado).
     //
-    // Reactions ainda não tem filter no nível do postgres_changes (a tabela
-    // não tem viagem_id direto, só message_id → viagem). RLS no servidor
-    // já bloqueia payload de viagens alheias, mas o broadcast metadata
-    // chega no client. Filter client-side via `setMessages.some(id === msg_id)`
-    // garante que só atualizamos reactions de msgs que conhecemos —
-    // descarta o ruído de outras viagens.
+    // R12-1: postgres realtime NÃO garante ordem de INSERT entre tabelas.
+    // Reaction pode chegar ANTES do message correspondente. Pré-R12, reaction
+    // era descartada silenciosamente (filtro `prevMsgs.some`). Agora: se a
+    // msg ainda não está no state, bufferamos em pendingReactionsRef e
+    // drenamos quando o INSERT da msg chegar.
     const chatChannel = supabase
       .channel(`chat-${viagemId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `viagem_id=eq.${viagemId}` },
         (payload) => {
-          setMessages((prev) =>
-            prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
+          // Drena buffer de reactions órfãs cuja msg acabou de chegar.
+          const orphans = pendingReactionsRef.current.filter(
+            (r) => r.message_id === payload.new.id
           );
+          if (orphans.length) {
+            pendingReactionsRef.current = pendingReactionsRef.current.filter(
+              (r) => r.message_id !== payload.new.id
+            );
+            setReactionsByMsg((prev) => {
+              const arr = prev[payload.new.id] ?? [];
+              const merged = [...arr];
+              for (const r of orphans) {
+                if (!merged.some((x) => x.id === r.id)) merged.push(r);
+              }
+              return { ...prev, [payload.new.id]: merged };
+            });
+          }
         }
       )
       .on(
@@ -125,18 +157,22 @@ export function useChat(viagemId) {
         { event: "INSERT", schema: "public", table: "reactions" },
         (payload) => {
           const r = payload.new;
-          // Filter client-side: só aceita reactions cuja msg está no nosso state
-          // (= viagem corrente). RLS no servidor já filtra payload por
-          // membership, isso é defensa de UX.
-          setMessages((prevMsgs) => {
-            const isOurMsg = prevMsgs.some((m) => m.id === r.message_id);
-            if (!isOurMsg) return prevMsgs;
-            setReactionsByMsg((prev) => {
-              const arr = prev[r.message_id] ?? [];
-              if (arr.some((x) => x.id === r.id)) return prev;
-              return { ...prev, [r.message_id]: [...arr, r] };
-            });
-            return prevMsgs;
+          // Lê messages via ref (sync, sem setter aninhado anti-pattern).
+          const isOurMsg = messagesRef.current.some((m) => m.id === r.message_id);
+          if (!isOurMsg) {
+            // Reaction órfã: msg pode ainda não ter chegado OU é de viagem alheia.
+            // Bufferamos COM cap pra evitar leak ilimitado. RLS já filtra
+            // payload de outras viagens no servidor, então normalmente o
+            // buffer só pega o caso "msg chega depois" (race real-time).
+            if (pendingReactionsRef.current.length < 100) {
+              pendingReactionsRef.current.push(r);
+            }
+            return;
+          }
+          setReactionsByMsg((prev) => {
+            const arr = prev[r.message_id] ?? [];
+            if (arr.some((x) => x.id === r.id)) return prev;
+            return { ...prev, [r.message_id]: [...arr, r] };
           });
         }
       )
@@ -146,6 +182,10 @@ export function useChat(viagemId) {
         (payload) => {
           const old = payload.old;
           if (!old?.id) return;
+          // Limpa também do buffer de órfãs (se ainda não foi aplicada).
+          pendingReactionsRef.current = pendingReactionsRef.current.filter(
+            (r) => r.id !== old.id
+          );
           setReactionsByMsg((prev) => {
             const next = { ...prev };
             for (const mid of Object.keys(next)) {
