@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { captureCupomFromUrl } from "./lib/cupom";
 import { captureOrigemFromUrl } from "./lib/origem";
@@ -8,21 +8,23 @@ import Landing from "./pages/Landing";
 import Welcome from "./pages/Welcome";
 import MyTrips from "./pages/MyTrips";
 import OfflineBanner from "./components/OfflineBanner";
+import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 // Rotas pesadas → split em chunks separados
-const NewTrip = lazy(() => import("./pages/NewTrip"));
-const TripView = lazy(() => import("./pages/TripView"));
-const AdminTrip = lazy(() => import("./pages/AdminTrip"));
-const ChooseFlow = lazy(() => import("./pages/ChooseFlow"));
-const PrecosPage = lazy(() => import("./pages/PrecosPage"));
-const LegalPages = lazy(() => import("./pages/LegalPages"));
-const AssinaturaSucesso = lazy(() => import("./pages/AssinaturaSucesso"));
-const Account = lazy(() => import("./pages/Account"));
-const AdminAfiliados = lazy(() => import("./pages/AdminAfiliados"));
-const AfiliadoPainel = lazy(() => import("./pages/AfiliadoPainel"));
+// R10-7: lazyWithRetry trata ChunkLoadError em deploy novo (force reload).
+const NewTrip = lazyWithRetry(() => import("./pages/NewTrip"));
+const TripView = lazyWithRetry(() => import("./pages/TripView"));
+const AdminTrip = lazyWithRetry(() => import("./pages/AdminTrip"));
+const ChooseFlow = lazyWithRetry(() => import("./pages/ChooseFlow"));
+const PrecosPage = lazyWithRetry(() => import("./pages/PrecosPage"));
+const LegalPages = lazyWithRetry(() => import("./pages/LegalPages"));
+const AssinaturaSucesso = lazyWithRetry(() => import("./pages/AssinaturaSucesso"));
+const Account = lazyWithRetry(() => import("./pages/Account"));
+const AdminAfiliados = lazyWithRetry(() => import("./pages/AdminAfiliados"));
+const AfiliadoPainel = lazyWithRetry(() => import("./pages/AfiliadoPainel"));
 
-const TermosPage = lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.TermosPage })));
-const PrivacidadePage = lazy(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacidadePage })));
+const TermosPage = lazyWithRetry(() => import("./pages/LegalPages").then((m) => ({ default: m.TermosPage })));
+const PrivacidadePage = lazyWithRetry(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacidadePage })));
 
 export default function App() {
   const { user, isRecovering } = useAuth();
