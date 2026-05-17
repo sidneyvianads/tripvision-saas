@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-function diff(target) {
-  const v = Math.max(0, target - Date.now());
+function diff(target, now) {
+  const v = Math.max(0, target - now);
   const days = Math.floor(v / 86400000);
   const hours = Math.floor((v / 3600000) % 24);
   const minutes = Math.floor((v / 60000) % 60);
@@ -9,9 +9,16 @@ function diff(target) {
 }
 
 export default function Countdown({ start, end }) {
-  const [, setTick] = useState(0);
+  // R13-1: `now` é state em vez de Date.now() inline durante render.
+  // React 19 concurrent rendering pode descartar e reexecutar um render
+  // (transitions, Suspense suspended-then-resumed); chamar uma função
+  // impura como Date.now() faz o output diferir entre a tentativa
+  // descartada e a final → diffing inconsistente, possíveis layout
+  // shifts ou hydration mismatches. O tick já existia pra forçar
+  // re-render — agora ele também é o ÚNICO ponto que lê o clock.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
 
@@ -19,7 +26,6 @@ export default function Countdown({ start, end }) {
 
   const startMs = new Date(start + "T00:00:00").getTime();
   const endMs = end ? new Date(end + "T23:59:59").getTime() : startMs + 86400000;
-  const now = Date.now();
 
   if (now > endMs) {
     return (
@@ -34,7 +40,7 @@ export default function Countdown({ start, end }) {
   }
 
   if (now >= startMs) {
-    const { days } = diff(endMs);
+    const { days } = diff(endMs, now);
     return (
       <div
         className="p-5 mx-4 mt-4 animate-fade-up rounded-2xl text-white"
@@ -47,7 +53,7 @@ export default function Countdown({ start, end }) {
     );
   }
 
-  const { days, hours, minutes } = diff(startMs);
+  const { days, hours, minutes } = diff(startMs, now);
   return (
     <div
       className="p-5 mx-4 mt-4 animate-fade-up overflow-hidden relative rounded-2xl text-white"

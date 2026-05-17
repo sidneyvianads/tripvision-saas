@@ -281,6 +281,12 @@ function UsuariosTab() {
   const [filter, setFilter] = useState("todos"); // todos | organico | afiliado | instagram | google
   const [afiliadoFilter, setAfiliadoFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  // R13-1: mountedAt fica estável entre renders (lazy useState init roda só
+  // uma vez). userStatus chamava Date.now() inline → impuro em React 19
+  // concurrent. Granularidade de plano/trial é dias, então mountedAt é
+  // tão bom quanto "agora" — admin recarrega a aba quando precisar de
+  // atualização.
+  const [mountedAt] = useState(() => Date.now());
 
   useEffect(() => {
     (async () => {
@@ -319,9 +325,9 @@ function UsuariosTab() {
     if (u.plano === "owner") return { label: "Owner", color: "bg-amber-100 text-amber-800" };
     if (!["pro", "grupo"].includes(u.plano)) return { label: "Sem plano", color: "bg-gray-100 text-gray-600" };
     const exp = u.plano_expires_at ? new Date(u.plano_expires_at).getTime() : null;
-    if (exp && exp < Date.now()) return { label: "Expirado", color: "bg-red-100 text-red-700" };
+    if (exp && exp < mountedAt) return { label: "Expirado", color: "bg-red-100 text-red-700" };
     const trial = u.trial_ends_at ? new Date(u.trial_ends_at).getTime() : null;
-    if (trial && trial > Date.now()) return { label: "Trial", color: "bg-emerald-100 text-emerald-700" };
+    if (trial && trial > mountedAt) return { label: "Trial", color: "bg-emerald-100 text-emerald-700" };
     return { label: "Ativo", color: "bg-blue-100 text-blue-700" };
   };
 

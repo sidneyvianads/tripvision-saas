@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronDown, AlertTriangle, MapPin, Phone } from "lucide-react";
 import ActivityItem from "./ActivityItem";
 
@@ -8,6 +9,11 @@ const formatBR = (iso) => {
 };
 
 export default function DayCard({ day, expanded, onToggle, isToday, color }) {
+  // R13-1: mountedAt fica estável entre renders (lazy useState init roda só
+  // uma vez). Antes era Date.now() inline no JSX → impuro em React 19
+  // concurrent rendering. Pra "clima em breve" não faz diferença se o
+  // valor é o de mount ou o de agora — granularidade é dias, não ms.
+  const [mountedAt] = useState(() => Date.now());
   return (
     <article
       className="card overflow-hidden transition-shadow"
@@ -46,7 +52,7 @@ export default function DayCard({ day, expanded, onToggle, isToday, color }) {
               {day.atividades?.length ?? 0} {(day.atividades?.length ?? 0) === 1 ? "atividade" : "atividades"}
             </span>
             {day.data && (() => {
-              const ms = new Date(day.data + "T00:00:00").getTime() - Date.now();
+              const ms = new Date(day.data + "T00:00:00").getTime() - mountedAt;
               const dias = Math.round(ms / 86400000);
               if (dias > 0 && dias <= 7) {
                 return <span className="text-[11px] text-[#0EA5E9]">🌤️ Clima em breve</span>;
