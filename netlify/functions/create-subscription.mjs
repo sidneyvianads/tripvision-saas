@@ -27,7 +27,19 @@
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
 import { withRetry } from "./_lib/retry.mjs";
 
-const SITE_BASE = "https://viajjei.com.br";
+// R11-1: SITE_BASE precisa ser env-aware pra preview deploys.
+// Antes hardcoded "https://viajjei.com.br" → preview deploys
+// (deploy-preview-N--site.netlify.app) montavam back_url e
+// notification_url apontando pra produção. PR fazia create-subscription
+// e o webhook MP caía na função PROD, contaminando dados reais.
+//
+// Netlify injeta automaticamente:
+//   - URL: domínio canônico do deploy atual (preview ou prod)
+//   - DEPLOY_PRIME_URL: similar, com fallback pra URL
+// Em local dev, sem essas vars, cai no fallback hardcoded.
+const SITE_BASE = process.env.URL
+  || process.env.DEPLOY_PRIME_URL
+  || "https://viajjei.com.br";
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || SUPABASE_KEY;
