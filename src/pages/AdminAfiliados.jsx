@@ -412,7 +412,9 @@ function ComissoesTab() {
 
   const togglePago = async (com) => {
     const next = com.status === "pago" ? "pendente" : "pago";
-    const { error } = await supabase.from("comissoes").update({ status: next }).eq("id", com.id);
+    // R10-3: RPC SECURITY DEFINER (guard is_platform_owner). UPDATE direto
+    // na tabela bate em permission denied desde R9-3 REVOKE writes.
+    const { error } = await supabase.rpc("admin_set_comissao_status", { p_id: com.id, p_status: next });
     if (error) { alert("Erro: " + error.message); return; }
     setComissoes((prev) => prev.map((c) => c.id === com.id ? { ...c, status: next } : c));
   };
