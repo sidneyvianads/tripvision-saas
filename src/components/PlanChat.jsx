@@ -231,7 +231,11 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
     role: "assistant",
     content: buildWelcomeMessage(trip),
     _welcome: true,
-  }), [trip?.id]);
+  // R13-3: trip completo nas deps. buildWelcomeMessage lê cidades,
+  // data_inicio/fim, descricao, viaje_segura, etc — se o id ficasse
+  // estável mas algum campo mudasse (parent atualizou trip), o welcome
+  // ficava com o conteúdo antigo (stale closure).
+  }), [trip]);
 
   const renderedMessages = messages.length === 0 ? [welcome] : messages;
 

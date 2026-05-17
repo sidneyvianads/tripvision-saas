@@ -32,7 +32,10 @@ function ShareModalInner({ canvasRef, shareUrl, shareText, trip, onClose, copied
       margin: 1,
       color: { dark: "#1F2937", light: "#FFFFFF" },
     }).catch((e) => console.error("[ShareModal] QR error:", e));
-  }, [shareUrl]);
+  // R13-3: canvasRef incluso pra silenciar exhaustive-deps. Ref é estável
+  // (objeto identity nunca muda), então adicionar não causa re-execução
+  // extra do effect — só satisfaz o lint.
+  }, [shareUrl, canvasRef]);
 
   const copyText = async () => {
     try {
