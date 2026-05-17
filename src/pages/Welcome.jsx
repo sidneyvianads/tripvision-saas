@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift, AtSign } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -498,6 +498,21 @@ function InfluencerStep({ selected, onSelect, onContinue, onBack }) {
   // Cupom da URL (?cupom=X) — usado pra pré-selecionar
   const initialCupom = useMemo(() => (selected?.cupom ?? getStoredCupom() ?? "").toUpperCase(), [selected]);
 
+  // R11-4: refs capturam props atuais (selected/onSelect/onContinue)
+  // sem prender o closure do effect com valores stale. Antes, o effect
+  // tinha `[]` deps + `if (!selected && initialCupom)` — o `selected`
+  // era do mount. Se o user clicasse em outro afiliado durante o load
+  // da lista, o auto-select de cupom URL chegava DEPOIS e sobrescrevia
+  // a escolha manual.
+  const selectedRef = useRef(selected);
+  const onSelectRef = useRef(onSelect);
+  const onContinueRef = useRef(onContinue);
+  useEffect(() => {
+    selectedRef.current = selected;
+    onSelectRef.current = onSelect;
+    onContinueRef.current = onContinue;
+  });
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -518,14 +533,15 @@ function InfluencerStep({ selected, onSelect, onContinue, onBack }) {
 
       // Lista vazia → não tem o que mostrar nessa etapa, pula direto pro plano
       if (list.length === 0) {
-        onContinue();
+        onContinueRef.current?.();
         return;
       }
 
-      // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater)
-      if (!selected && initialCupom) {
+      // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater).
+      // Lê selected MAIS RECENTE via ref pra não sobrescrever escolha manual.
+      if (!selectedRef.current && initialCupom) {
         const match = list.find((a) => a.cupom?.toUpperCase() === initialCupom);
-        if (match) onSelect(match);
+        if (match) onSelectRef.current?.(match);
       }
     })();
     return () => { active = false; };
