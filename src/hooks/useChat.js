@@ -100,8 +100,17 @@ export function useChat(viagemId) {
     }
     loadInitial();
 
-    const msgChannel = supabase
-      .channel(`messages-${viagemId}`)
+    // R11-2: consolidar messages + reactions em UM channel (`chat-${viagemId}`)
+    // — antes eram 2 channels (50% mais conexões realtime sem necessidade).
+    //
+    // Reactions ainda não tem filter no nível do postgres_changes (a tabela
+    // não tem viagem_id direto, só message_id → viagem). RLS no servidor
+    // já bloqueia payload de viagens alheias, mas o broadcast metadata
+    // chega no client. Filter client-side via `setMessages.some(id === msg_id)`
+    // garante que só atualizamos reactions de msgs que conhecemos —
+    // descarta o ruído de outras viagens.
+    const chatChannel = supabase
+      .channel(`chat-${viagemId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `viagem_id=eq.${viagemId}` },
@@ -111,19 +120,23 @@ export function useChat(viagemId) {
           );
         }
       )
-      .subscribe();
-
-    const rxChannel = supabase
-      .channel(`reactions-${viagemId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "reactions" },
         (payload) => {
           const r = payload.new;
-          setReactionsByMsg((prev) => {
-            const arr = prev[r.message_id] ?? [];
-            if (arr.some((x) => x.id === r.id)) return prev;
-            return { ...prev, [r.message_id]: [...arr, r] };
+          // Filter client-side: só aceita reactions cuja msg está no nosso state
+          // (= viagem corrente). RLS no servidor já filtra payload por
+          // membership, isso é defensa de UX.
+          setMessages((prevMsgs) => {
+            const isOurMsg = prevMsgs.some((m) => m.id === r.message_id);
+            if (!isOurMsg) return prevMsgs;
+            setReactionsByMsg((prev) => {
+              const arr = prev[r.message_id] ?? [];
+              if (arr.some((x) => x.id === r.id)) return prev;
+              return { ...prev, [r.message_id]: [...arr, r] };
+            });
+            return prevMsgs;
           });
         }
       )
@@ -147,8 +160,7 @@ export function useChat(viagemId) {
 
     return () => {
       active = false;
-      supabase.removeChannel(msgChannel);
-      supabase.removeChannel(rxChannel);
+      supabase.removeChannel(chatChannel);
     };
   }, [viagemId]);
 
