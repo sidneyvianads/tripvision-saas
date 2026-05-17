@@ -18,7 +18,14 @@ import { captureException, captureMessage } from "./_lib/sentry.mjs";
 import { withRetry } from "./_lib/retry.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY || "";
+// R9-1: SOMENTE ANON_KEY. Antes tinha fallback pra SUPABASE_SERVICE_KEY
+// — se VITE_SUPABASE_ANON_KEY faltasse em prod, o SERVICE_KEY viraria
+// a credencial usada em `Authorization: Bearer` no fetchUserPlan(),
+// BYPASSANDO RLS na tabela users (atacante pedia plano de qualquer
+// userId). As outras 5 functions têm fallback inverso (SERVICE || ANON)
+// porque elas LEGITIMAMENTE usam service-role pra escrita; chat.mjs
+// só lê plano via REST + RLS, então NUNCA precisa de SERVICE.
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
 
 const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
 const NO_ACCESS_PLANS = new Set(["free", "pending", "expired", null, undefined]);
