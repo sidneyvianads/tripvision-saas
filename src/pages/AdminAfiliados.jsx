@@ -95,23 +95,22 @@ function AfiliadosTab() {
   useEffect(() => { reload(); }, []);
 
   const save = async (form) => {
-    const payload = {
-      nome: form.nome.trim(),
-      email: form.email.trim().toLowerCase(),
-      instagram: form.instagram?.trim() || null,
-      cupom: form.cupom.trim().toUpperCase(),
-      foto_url: form.foto_url?.trim() || null,
-      comissao_percent: Number(form.comissao_percent ?? 5),
-      desconto_percent: Number(form.desconto_percent ?? 0),
-      ativo: !!form.ativo,
-    };
-    if (form.id) {
-      const { error } = await supabase.from("afiliados").update(payload).eq("id", form.id);
-      if (error) { alert("Erro: " + error.message); return; }
-    } else {
-      const { error } = await supabase.from("afiliados").insert(payload);
-      if (error) { alert("Erro: " + error.message); return; }
-    }
+    // R9-3: RPC admin_upsert_afiliado SECURITY DEFINER (guard
+    // is_platform_owner). REVOKE table-level INSERT/UPDATE em afiliados
+    // significa que o client direto via supabase.from("afiliados").insert
+    // bate em "permission denied". RPC é o único caminho de write.
+    const { error } = await supabase.rpc("admin_upsert_afiliado", {
+      p_id: form.id ?? null,
+      p_nome: form.nome.trim(),
+      p_email: form.email.trim().toLowerCase(),
+      p_instagram: form.instagram?.trim() || null,
+      p_cupom: form.cupom.trim().toUpperCase(),
+      p_foto_url: form.foto_url?.trim() || null,
+      p_comissao_percent: Number(form.comissao_percent ?? 5),
+      p_desconto_percent: Number(form.desconto_percent ?? 0),
+      p_ativo: !!form.ativo,
+    });
+    if (error) { alert("Erro: " + error.message); return; }
     setEditing(null);
     await reload();
   };
