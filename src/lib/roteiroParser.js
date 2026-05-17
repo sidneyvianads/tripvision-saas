@@ -424,21 +424,42 @@ export async function applyRoteiroUpdates(viagemId, updates) {
           // 1) snapshot pré-replace (se o dia já existe). Salva tudo
           //    que precisamos pra restaurar via undo — incluindo viagem_id,
           //    senão a recriação no undo falha.
+          //
+          // R9-6: ABORTAR antes do DELETE se o snapshot vier incompleto.
+          // O fix R8-4 fazia rollback restaurando do snapshot — mas se o
+          // SELECT do prevDia falhasse silenciosamente (data:null sem
+          // error), prevSnapshot.dia ficava null e a condição de
+          // rollback retornava false → DELETE acontecia mesmo, data loss
+          // residual. Agora: se o select falha, NÃO deleta — retorna
+          // erro pro caller refazer.
           let prevSnapshot = null;
           const existingDiaId = await getDiaId(viagemId, dn);
           if (existingDiaId) {
-            const { data: prevDia } = await supabase
+            const { data: prevDia, error: prevDiaErr } = await supabase
               .from("roteiro_dias")
               .select("dia_numero,data,weekday,titulo,cidade,hotel,hotel_telefone,hotel_endereco,alerta,cover_emoji")
               .eq("id", existingDiaId)
               .maybeSingle();
-            const { data: prevAts } = await supabase
+            const { data: prevAts, error: prevAtsErr } = await supabase
               .from("roteiro_atividades")
               .select("horario,titulo,descricao,tipo,preco,status,endereco,telefone,maps_url,ordem")
               .eq("dia_id", existingDiaId)
               .order("ordem");
+            // R9-6: se qualquer SELECT falhou, abortar SEM deletar.
+            // Antes: prevDia=null silenciosamente → snapshot incompleto →
+            // rollback skipado → DELETE deletava sem recuperação.
+            if (prevDiaErr || prevAtsErr || !prevDia) {
+              results.push({
+                action: "replace_day",
+                dia_numero: dn,
+                success: false,
+                error: "Não consegui ler o dia antigo pra fazer snapshot — operação abortada antes do delete (sem perda de dados).",
+                aborted_pre_delete: true,
+              });
+              break;
+            }
             prevSnapshot = {
-              dia: prevDia ? { ...prevDia, viagem_id: viagemId } : null,
+              dia: { ...prevDia, viagem_id: viagemId },
               atividades: prevAts ?? [],
             };
             await supabase.from("roteiro_dias").delete().eq("id", existingDiaId);
