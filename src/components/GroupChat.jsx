@@ -113,7 +113,21 @@ function GroupChatInner({ viagemId, user }) {
   };
   const cancelLongPress = () => clearTimeout(longPressTimer.current);
 
-  let lastDay = null;
+  // R13-2: precomputa o flag de separador por id de mensagem ANTES do
+  // .map(). Antes era `let lastDay = null` no escopo do componente e
+  // mutado dentro do .map() — viola react-hooks/immutability porque
+  // React 19 pode descartar/replay um render e a mutação persistia
+  // entre as tentativas. useMemo escopa lastDay localmente.
+  const sepByMsgId = useMemo(() => {
+    const map = {};
+    let lastDay = null;
+    for (const m of messages) {
+      const day = dayKey(m.created_at);
+      map[m.id] = day !== lastDay;
+      lastDay = day;
+    }
+    return map;
+  }, [messages]);
 
   return (
     <div
@@ -132,9 +146,7 @@ function GroupChatInner({ viagemId, user }) {
           const profile = profilesById[m.user_id];
           const author = mine ? user : (profile ?? { nome: "Viajante", avatar_cor: "#6366F1" });
           const cor = author?.avatar_cor ?? "#6366F1";
-          const day = dayKey(m.created_at);
-          const showSep = day !== lastDay;
-          lastDay = day;
+          const showSep = sepByMsgId[m.id];
 
           if (m.is_system) {
             return (
