@@ -43,7 +43,16 @@ jobs:
     name: tests com Supabase real
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # R12-7: secret-presence check movido pro job-level. Antes o job sempre
+    # rodava (mesmo sem secrets) e o STEP era skipado silenciosamente —
+    # GH Actions mostrava "✓ tests-real (5s)" enganoso. Agora se os secrets
+    # não estiverem configurados, o job NEM APARECE na UI do Actions
+    # (limpo + claro que não rodou).
+    if: |
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && secrets.VITE_SUPABASE_URL != ''
+      && secrets.VITE_SUPABASE_ANON_KEY != ''
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -55,9 +64,6 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Smoke tests com Supabase
-        # Só roda se os secrets estiverem disponíveis — em fork PR
-        # ou primeira config sem secret, este job é skipado silenciosamente.
-        if: env.VITE_SUPABASE_URL != '' && env.VITE_SUPABASE_ANON_KEY != ''
         run: npm test
 
   build:
@@ -76,3 +82,26 @@ jobs:
 
       # Build não pode quebrar — pega type/syntax errors que o test miss.
       - run: npm run build
+
+  lint:
+    # R12-7: lint roda mas NÃO bloqueia merge.
+    # eslint.config.js usa react-hooks v7 com regras estritas tipo
+    # set-state-in-effect que pegam padrões legados no código atual
+    # (50 erros agora). Marcar como blocker travaria todos os PRs até
+    # uma limpeza grande. continue-on-error: true torna a saída
+    # informativa — devs veem o report no PR, dá pra ir reduzindo em
+    # commits subsequentes, mas o sinal vermelho não trava deploy.
+    # Quando o número cair pra zero, flipar continue-on-error pra
+    # false e travar regressões a partir dali.
+    name: lint (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
