@@ -17,7 +17,6 @@ const TripView = lazyWithRetry(() => import("./pages/TripView"));
 const AdminTrip = lazyWithRetry(() => import("./pages/AdminTrip"));
 const ChooseFlow = lazyWithRetry(() => import("./pages/ChooseFlow"));
 const PrecosPage = lazyWithRetry(() => import("./pages/PrecosPage"));
-const LegalPages = lazyWithRetry(() => import("./pages/LegalPages"));
 const AssinaturaSucesso = lazyWithRetry(() => import("./pages/AssinaturaSucesso"));
 const Account = lazyWithRetry(() => import("./pages/Account"));
 const AdminAfiliados = lazyWithRetry(() => import("./pages/AdminAfiliados"));

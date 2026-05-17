@@ -52,9 +52,10 @@ export function captureMessage(msg, level = "info", context) {
 }
 
 // Liga eventos a um user. Chamado depois do login.
-export function setUser(user) {
+// _user com underscore: param será usado quando Sentry for wired (TODO abaixo).
+export function setUser(_user) {
   if (!ENABLED) return;
-  // TODO: Sentry.setUser({ id: user?.id, email: user?.email });
+  // TODO: Sentry.setUser({ id: _user?.id, email: _user?.email });
 }
 
 // Limpa contexto do user. Chamado depois do logout.

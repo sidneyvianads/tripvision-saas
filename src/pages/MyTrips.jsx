@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Loader2, LogOut, ChevronRight, Calendar, Users, MapPin, Sparkles, UserCircle, Search, X } from "lucide-react";
+import { Plus, Trash2, Loader2, LogOut, ChevronRight, Calendar, MapPin, Sparkles, UserCircle, Search, X } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrips } from "../hooks/useTrips";
 import Avatar from "../components/Avatar";
@@ -9,7 +9,7 @@ import PlanBadge from "../components/PlanBadge";
 import ConfirmModal from "../components/ConfirmModal";
 import ScrollToTop from "../components/ScrollToTop";
 import Logo from "../components/Logo";
-import { getLimits, isPaid, hasActiveAccess, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
+import { getLimits, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
 import { describePessoas } from "../lib/roteiroResumo";
 import { getTema, emojiForCidade } from "../data/themes";
 

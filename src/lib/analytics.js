@@ -20,7 +20,10 @@
 //   churn                  — cancelou assinatura (Account → cancel)
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
+// _POSTHOG_HOST com underscore: vai ser usado pelo posthog.init({ api_host:
+// _POSTHOG_HOST }) quando o SDK for wired. Mantém aqui pra documentar a
+// env var esperada e não esquecer o fallback us.i.posthog.com.
+const _POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || "https://us.i.posthog.com";
 const ENABLED = !!POSTHOG_KEY;
 
 let warned = false;

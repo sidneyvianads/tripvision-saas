@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link, Navigate } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Save, Loader2, AlertTriangle, Lock, Sparkles, Copy, Eye } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useTrip } from "../hooks/useTrips";
@@ -55,7 +55,6 @@ export default function AdminTrip() {
 }
 
 function DayList({ trip, onEdit }) {
-  const navigate = useNavigate();
   const { days, loading, reload } = useRoteiro(trip.id);
   const [adding, setAdding] = useState(false);
   const [lastEdit, setLastEdit] = useState(null);

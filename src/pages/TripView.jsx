@@ -11,7 +11,7 @@ import Countdown from "../components/Countdown";
 import DayCard from "../components/DayCard";
 import { supabase } from "../lib/supabase";
 import { FullscreenLoader } from "../App";
-import Skeleton, { TabSkeleton } from "../components/Skeleton";
+import { TabSkeleton } from "../components/Skeleton";
 import ScrollToTop from "../components/ScrollToTop";
 
 const GroupChat = lazy(() => import("../components/GroupChat"));

@@ -237,7 +237,6 @@ function UpgradeCard({ plan, ciclo, onAssinar, busy, accent, highlight, badge })
   if (!price) return null;
   const monthlyEq = monthlyEquivalent(plan.id, ciclo);
   const isAnual = ciclo === "anual";
-  const strike = isAnual ? PRICES[plan.id].mensal.amount * 12 : null;
   const Icon = plan.id === "grupo" ? Star : Sparkles;
   return (
     <div

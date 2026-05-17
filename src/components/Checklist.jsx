@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Plus, Trash2, Loader2, Sparkles, Calendar } from "lucide-react";
+import { Check, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
 import { useChecklist } from "../hooks/useChecklist";
 import { getLimits } from "../data/plans";
 import UpgradeModal from "./UpgradeModal";

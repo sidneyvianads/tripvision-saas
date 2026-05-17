@@ -755,7 +755,7 @@ const UNDO_WINDOW_MS = 30_000;
 //   N dias              → "3 dias montados · 12 atividades"
 //   só updates/removes  → "X atualizações" / "Y remoções"
 //   sem nada            → "Roteiro atualizado" (fallback)
-function buildHeadline(summary, applied) {
+function buildHeadline(summary) {
   const days = summary.days;
   const adds = summary.added.length;
   if (days.length === 1) {
@@ -867,7 +867,7 @@ function UpdateCard({ applied, onGoToRoteiro, onUndo, ts }) {
           (1 dia) ou "3 dias montados · 12 atividades" (vários). */}
       <div className="font-display font-extrabold text-[13px] flex items-baseline gap-1.5 text-white">
         <span>✅</span>
-        <span>{buildHeadline(summary, applied)}</span>
+        <span>{buildHeadline(summary)}</span>
       </div>
 
       <div className="mt-2 space-y-2">

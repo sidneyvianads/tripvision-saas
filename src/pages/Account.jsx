@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles, ExternalLink, AlertCircle, KeyRound, Trash2, Loader2, Bell, XCircle, RefreshCcw, Download, MessageCircleOff } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase, normalizePassword } from "../lib/supabase";
-import { PLANS, planName, planIcon, isPaid, isOwner, hasActiveAccess, isInTrial, trialDaysLeft, needsSubscription } from "../data/plans";
+import { PLANS, planName, planIcon, isOwner, isInTrial, trialDaysLeft, needsSubscription } from "../data/plans";
 import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
@@ -22,7 +22,6 @@ export default function Account() {
   const [params] = useSearchParams();
   const [assinatura, setAssinatura] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(params.get("upgrade") != null);
-  const [loading, setLoading] = useState(true);
 
   // Trocar senha
   const [pwOld, setPwOld] = useState("");
@@ -220,7 +219,6 @@ export default function Account() {
         .maybeSingle();
       if (!active) return;
       setAssinatura(data);
-      setLoading(false);
     })();
     return () => { active = false; };
   }, [user?.id]);
