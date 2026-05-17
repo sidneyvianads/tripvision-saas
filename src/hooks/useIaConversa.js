@@ -10,8 +10,17 @@ export function useIaConversa(viagemId, userId) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!viagemId || !userId) return;
+    // R10-4: setLoading(false) no early return. Antes, se userId chegasse
+    // depois de viagemId (auth race em rota direta /v/:slug), o effect
+    // primeira passagem fazia `return` SEM setLoading(false) → loading
+    // ficava true infinito. Próxima passagem entra no try mas o consumer
+    // pode já ter mostrado "carregando..." pra sempre.
+    if (!viagemId || !userId) {
+      setLoading(false);
+      return;
+    }
     let active = true;
+    setLoading(true);
 
     (async () => {
       const { data, error } = await supabase
