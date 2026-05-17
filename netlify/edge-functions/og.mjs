@@ -8,9 +8,17 @@
 // campos seguros e não depende de nenhuma policy de viagens. ANON_KEY
 // é suficiente.
 
+// R12-3: prefere nomes SEM prefixo VITE_ no Deno edge runtime.
+// O prefixo VITE_ é uma convenção do bundler do frontend (expor pro browser);
+// no Netlify, vars com prefixo VITE_ chegam ao build via build env, mas no
+// runtime das edge functions Deno só vê o que está no escopo "edge functions"
+// ou marcado como "All scopes". Quem configura via UI esquece de marcar e
+// quebra em silêncio (RPC sem credencial → og volta sem meta tags).
+// Os nomes canônicos vêm primeiro; VITE_* fica como fallback compat pra
+// quem ainda só tem as antigas configuradas.
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL") || "";
 // IMPORTANTE: apenas ANON_KEY. SERVICE_KEY no edge = bypass RLS = vazamento.
-const SUPABASE_KEY = Deno.env.get("VITE_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+const SUPABASE_KEY = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("VITE_SUPABASE_ANON_KEY") || "";
 
 function escapeHtml(s) {
   if (s == null) return "";
