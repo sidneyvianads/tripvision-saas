@@ -2,6 +2,44 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { supabase, normalizePassword, normalizeEmail } from "../lib/supabase";
 import { captureException, setUser as setSentryUser, clearUser as clearSentryUser } from "../lib/sentry";
 import { identify, resetAnalytics, trackSignupCompleted } from "../lib/analytics";
+import { clearStoredCupom } from "../lib/cupom";
+import { clearStoredOrigem } from "../lib/origem";
+
+// R12-2: chaves que pertencem ao user da sessão e devem morrer no signOut.
+// Sem isso, User B na mesma máquina herda cupom/origem do User A → afiliado
+// errado no checkout, ou tracking utm cruzado.
+//
+// Inclui também:
+//   - tripvision-saas:plan-usage:v3 (rateLimit do plano Free — counter por user)
+//   - tripvision:roteiro:<viagemId> (cache de IA por viagem)
+//
+// NÃO inclui viajjei.consent_analytics (LGPD/cookie consent é do dispositivo,
+// não da sessão) e nem viajjei.auth (supabase.auth.signOut() já trata).
+const SESSION_SCOPED_KEYS = [
+  "viajjei:cupom",
+  "viajjei:origem",
+  "tripvision-saas:plan-usage:v3",
+];
+const SESSION_SCOPED_PREFIXES = ["tripvision:roteiro:"];
+
+function clearSessionScopedStorage() {
+  if (typeof window === "undefined") return;
+  try {
+    for (const k of SESSION_SCOPED_KEYS) {
+      window.localStorage.removeItem(k);
+    }
+    // Itera Object.keys uma vez pra remover todas as chaves com prefixo.
+    const all = Object.keys(window.localStorage);
+    for (const k of all) {
+      if (SESSION_SCOPED_PREFIXES.some((p) => k.startsWith(p))) {
+        window.localStorage.removeItem(k);
+      }
+    }
+  } catch {
+    // localStorage pode ser inacessível (Safari ITP, modo privado iframe).
+    // Falhar silenciosamente é ok — o pior caso é resíduo no device do user.
+  }
+}
 
 // Auth nativo do Supabase. Sessão é gerenciada inteiramente pela lib
 // (JWT em localStorage com chave "viajjei.auth", refresh automático,
@@ -207,6 +245,12 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    // R12-2: limpa residuais antes de zerar o user. Ordem importa:
+    // chamamos os helpers públicos pros que têm validação interna, e o
+    // sweep direto pros que não exportam clear (plan-usage, roteiro:*).
+    try { clearStoredCupom(); } catch {}
+    try { clearStoredOrigem(); } catch {}
+    clearSessionScopedStorage();
     setUser(null);
   }, []);
 
