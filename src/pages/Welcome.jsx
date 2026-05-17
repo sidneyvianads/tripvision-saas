@@ -15,7 +15,7 @@ const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
 
 export default function Welcome() {
-  const { signIn, signUp, loading, sendPasswordReset, updatePassword, clearRecovering } = useAuth();
+  const { signIn, signUp, loading, sendPasswordReset, updatePassword, clearRecovering, isRecovering } = useAuth();
   const [params] = useSearchParams();
   // mode: 'login' | 'signup' | 'forgot' | 'reset'
   // - login/signup: fluxos normais
@@ -38,18 +38,17 @@ export default function Welcome() {
   // mostramos "verifique seu email" e o user continua o fluxo pelo MP.
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
-  // Detecta retorno do link de reset de senha. Supabase emite o evento
-  // PASSWORD_RECOVERY quando o hash da URL é consumido por detectSessionInUrl.
+  // R11-3: PASSWORD_RECOVERY listener removido daqui (era duplo com o do
+  // useAuth.jsx). O event vinha primeiro pra um dos dois listeners e
+  // havia race condition em qual setava o state primeiro. Agora reagimos
+  // ao flag `isRecovering` derivado do useAuth (fonte única).
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setMode("reset");
-        setErr(null);
-        setInfo("Defina sua nova senha abaixo.");
-      }
-    });
-    return () => sub?.subscription?.unsubscribe?.();
-  }, []);
+    if (isRecovering && mode !== "reset") {
+      setMode("reset");
+      setErr(null);
+      setInfo("Defina sua nova senha abaixo.");
+    }
+  }, [isRecovering, mode]);
 
   // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
