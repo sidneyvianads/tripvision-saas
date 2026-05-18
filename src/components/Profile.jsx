@@ -44,6 +44,7 @@ export default function Profile({ onClose }) {
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="flex justify-center pt-2">
             <PhotoPicker
+              uploadFor={user?.id}
               value={photo}
               onChange={setPhoto}
               fallbackCor={cor}
