@@ -6,7 +6,41 @@ import {
 } from "lucide-react";
 import PricingSection from "../components/PricingSection";
 import Logo from "../components/Logo";
+import JsonLd from "../components/JsonLd";
 import { usePageMeta } from "../lib/usePageMeta";
+
+// R27-3: schema.org JSON-LD pra rich snippets no Google.
+// Organization: identifica Viajjei como entidade (logo, social handles).
+// SoftwareApplication (TravelApplication): preço pra "Pro" aparece em
+// search results como sitelink quando user pesquisar "viajjei preço".
+const ORGANIZATION_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Viajjei",
+  url: "https://viajjei.com.br",
+  logo: "https://viajjei.com.br/logo-viajjei.png",
+  description: "Concierge de viagem com inteligência artificial. Roteiros personalizados em minutos.",
+  sameAs: [
+    "https://www.instagram.com/viajjei.com.br",
+  ],
+};
+
+const SOFTWARE_APP_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Viajjei",
+  applicationCategory: "TravelApplication",
+  operatingSystem: "Web",
+  url: "https://viajjei.com.br",
+  description: "Concierge de viagem com IA. Roteiros personalizados, chat em grupo, checklist e diário.",
+  offers: {
+    "@type": "Offer",
+    price: "14.90",
+    priceCurrency: "BRL",
+    availability: "https://schema.org/InStock",
+    url: "https://viajjei.com.br/precos",
+  },
+};
 
 // ===== HELPERS =====================================================
 
@@ -69,6 +103,7 @@ export default function Landing() {
 
   return (
     <div className="bg-white text-[#0F172A]">
+      <JsonLd data={[ORGANIZATION_SCHEMA, SOFTWARE_APP_SCHEMA]} />
       <Header onSignup={goSignup} onLogin={goLogin} />
       <Hero onSignup={goSignup} />
       <SocialProof />
