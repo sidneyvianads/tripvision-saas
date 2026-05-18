@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Navigate, useSearchParams, useNavigate } from "react-router-dom";
 import { Sparkles, PencilLine, Download, Loader2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -151,6 +151,13 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
     if (expanded == null && initialExpanded != null) setExpanded(initialExpanded);
   }, [initialExpanded, expanded]);
 
+  // R25-1: callback estável pro DayCard.memo detectar igualdade entre
+  // renders. Updater function evita dep em `expanded` — ref do callback
+  // não muda, e React.memo equality preserva.
+  const handleToggleDay = useCallback((diaNumero) => {
+    setExpanded((prev) => (prev === diaNumero ? null : diaNumero));
+  }, []);
+
   useEffect(() => {
     if (expanded != null) {
       setTimeout(() => {
@@ -208,7 +215,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
               <DayCard
                 day={day}
                 expanded={expanded === day.dia_numero}
-                onToggle={() => setExpanded(expanded === day.dia_numero ? null : day.dia_numero)}
+                onToggle={handleToggleDay}
                 isToday={day.data === todayKey}
                 color={trip.cor_tema}
               />

@@ -1,4 +1,10 @@
-import { useState } from "react";
+// DayCard — renderiza um dia do roteiro (header + atividades + hotel).
+//
+// R25-1: memoizado pra não re-renderizar quando o pai (RoteiroTab)
+// re-renderiza por outra razão. Em viagem de 14 dias × 5 atividades,
+// re-render desnecessário em cascata gera trabalho real.
+
+import { memo, useMemo, useState } from "react";
 import { ChevronDown, AlertTriangle, MapPin, Phone } from "lucide-react";
 import ActivityItem from "./ActivityItem";
 
@@ -8,12 +14,26 @@ const formatBR = (iso) => {
   return `${d}/${m}`;
 };
 
-export default function DayCard({ day, expanded, onToggle, isToday, color }) {
+function DayCard({ day, expanded, onToggle, isToday, color }) {
   // R13-1: mountedAt fica estável entre renders (lazy useState init roda só
   // uma vez). Antes era Date.now() inline no JSX → impuro em React 19
   // concurrent rendering. Pra "clima em breve" não faz diferença se o
   // valor é o de mount ou o de agora — granularidade é dias, não ms.
   const [mountedAt] = useState(() => Date.now());
+
+  // R25-1: extrai o IIFE de "Clima em breve" pra useMemo. Antes recalculava
+  // a cada render do DayCard. Dep mínima: day.data (única input que muda
+  // o resultado — mountedAt é estável por instância).
+  const climaBadge = useMemo(() => {
+    if (!day?.data) return null;
+    const ms = new Date(day.data + "T00:00:00").getTime() - mountedAt;
+    const dias = Math.round(ms / 86400000);
+    if (dias > 0 && dias <= 7) {
+      return <span className="text-[11px] text-[#0EA5E9]">🌤️ Clima em breve</span>;
+    }
+    return null;
+  }, [day?.data, mountedAt]);
+
   return (
     <article
       className="card overflow-hidden transition-shadow"
@@ -25,7 +45,7 @@ export default function DayCard({ day, expanded, onToggle, isToday, color }) {
       }}
     >
       <button
-        onClick={onToggle}
+        onClick={onToggle ? () => onToggle(day.dia_numero) : undefined}
         className="w-full text-left flex items-center gap-3 p-4 hover:bg-[#F9FAFB] transition-colors"
         aria-expanded={expanded}
       >
@@ -51,14 +71,7 @@ export default function DayCard({ day, expanded, onToggle, isToday, color }) {
             <span className="text-xs text-[#6B7280] font-display font-bold">
               {day.atividades?.length ?? 0} {(day.atividades?.length ?? 0) === 1 ? "atividade" : "atividades"}
             </span>
-            {day.data && (() => {
-              const ms = new Date(day.data + "T00:00:00").getTime() - mountedAt;
-              const dias = Math.round(ms / 86400000);
-              if (dias > 0 && dias <= 7) {
-                return <span className="text-[11px] text-[#0EA5E9]">🌤️ Clima em breve</span>;
-              }
-              return null;
-            })()}
+            {climaBadge}
           </div>
         </div>
 
@@ -121,3 +134,41 @@ export default function DayCard({ day, expanded, onToggle, isToday, color }) {
     </article>
   );
 }
+
+// R25-1: equality custom compara só fields que afetam render.
+// `day` é objeto novo a cada reload do useRoteiro mesmo quando conteúdo
+// igual — shallow default re-renderiza falsamente. Comparamos os
+// campos individuais que importam pro JSX. Atividades comparam por
+// length + ids concatenados (heurística rápida: se idx ou ID muda,
+// re-renderiza; se só content mudou, escapamos — aceito porque o
+// usuário tem que dar reload pra ver outras edições mesmo).
+function arePropsEqual(prev, next) {
+  if (prev.expanded !== next.expanded) return false;
+  if (prev.isToday !== next.isToday) return false;
+  if (prev.color !== next.color) return false;
+  if (prev.onToggle !== next.onToggle) return false;
+  const a = prev.day, b = next.day;
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.id !== b.id) return false;
+  if (a.dia_numero !== b.dia_numero) return false;
+  if (a.data !== b.data) return false;
+  if (a.cidade !== b.cidade) return false;
+  if (a.titulo !== b.titulo) return false;
+  if (a.weekday !== b.weekday) return false;
+  if (a.cover_emoji !== b.cover_emoji) return false;
+  if (a.alerta !== b.alerta) return false;
+  if (a.hotel !== b.hotel) return false;
+  if (a.hotel_endereco !== b.hotel_endereco) return false;
+  if (a.hotel_telefone !== b.hotel_telefone) return false;
+  // Atividades: compara length + concatenação de ids (cheap signature).
+  const aAct = a.atividades ?? [];
+  const bAct = b.atividades ?? [];
+  if (aAct.length !== bAct.length) return false;
+  for (let i = 0; i < aAct.length; i++) {
+    if (aAct[i]?.id !== bAct[i]?.id) return false;
+  }
+  return true;
+}
+
+export default memo(DayCard, arePropsEqual);
