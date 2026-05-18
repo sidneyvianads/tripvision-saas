@@ -3,40 +3,22 @@ import { Camera, Plus, Loader2, X, Trash2, Image as ImageIcon } from "lucide-rea
 import { supabase } from "../lib/supabase";
 import { friendlyError } from "../lib/errorMessages";
 import { useConfirm } from "../lib/useConfirm";
+import { uploadDiarioPhotos, deleteDiarioPost } from "../lib/diarioUpload";
 import Avatar from "./Avatar";
 
 const MAX_PHOTOS = 5;
-const MAX_DIM = 800;
-const JPEG_QUALITY = 0.6;
 
-// Comprime arquivo de imagem pra base64 JPEG (max 800x800, q=0.6).
-function compressImage(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// R22-3: fotos viraram URLs do Storage. Helper resolve foto pra src
+// independente do formato armazenado:
+//   - string "data:image/..."   → Base64 legacy (até script migração rodar)
+//   - string "https://..."      → URL pública (formato novo, retro-compat)
+//   - { url, legenda? }         → objeto com URL (formato canônico novo)
+//   - { base64, legenda? }      → objeto Base64 legacy (raro mas possível)
+// Sempre retorna string vazia ou URL/dataURL válida.
+function fotoSrc(foto) {
+  if (!foto) return "";
+  if (typeof foto === "string") return foto;
+  return foto.url || foto.base64 || "";
 }
 
 const formatTime = (iso) => {
@@ -128,13 +110,20 @@ export default function Diario({ trip, user }) {
       confirmLabel: "Apagar",
     });
     if (!ok) return;
+    // R22-3: deleta a row primeiro (RLS protege ownership), depois
+    // limpa fotos no Storage (best-effort — órfãs no Storage não
+    // afetam UX, mas idealmente removidas). Posts legacy com Base64
+    // não têm nada no Storage; deleteDiarioPost é silencioso nesse caso.
     const { error } = await supabase.from("diario").delete().eq("id", p.id);
     if (error) {
       console.error("[Diario] delete erro:", error);
       setError(friendlyError(error));
-    } else {
-      setPosts((prev) => prev.filter((x) => x.id !== p.id));
+      return;
     }
+    deleteDiarioPost(trip.id, p.id).catch((e) => {
+      console.warn("[Diario] storage cleanup falhou (post já deletado no DB):", e);
+    });
+    setPosts((prev) => prev.filter((x) => x.id !== p.id));
   };
 
   return (
@@ -194,21 +183,25 @@ export default function Diario({ trip, user }) {
                   )}
                   {fotos.length > 0 && (
                     <div className={`mt-2 grid gap-1 ${fotos.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-                      {fotos.slice(0, 4).map((src, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setLightbox(src)}
-                          className="relative rounded-lg overflow-hidden bg-[#F3F4F6]"
-                        >
-                          <img src={src} alt="" loading="lazy" className="w-full h-full object-cover aspect-square" />
-                          {i === 3 && fotos.length > 4 && (
-                            <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center font-display font-extrabold">
-                              +{fotos.length - 4}
-                            </div>
-                          )}
-                        </button>
-                      ))}
+                      {fotos.slice(0, 4).map((foto, i) => {
+                        const src = fotoSrc(foto);
+                        if (!src) return null;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setLightbox(src)}
+                            className="relative rounded-lg overflow-hidden bg-[#F3F4F6]"
+                          >
+                            <img src={src} alt="" loading="lazy" className="w-full h-full object-cover aspect-square" />
+                            {i === 3 && fotos.length > 4 && (
+                              <div className="absolute inset-0 bg-black/50 text-white flex items-center justify-center font-display font-extrabold">
+                                +{fotos.length - 4}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </article>
@@ -252,34 +245,50 @@ export default function Diario({ trip, user }) {
 
 function Composer({ trip, user, onClose, onSaved }) {
   const [texto, setTexto] = useState("");
-  const [fotos, setFotos] = useState([]); // base64 strings
+  // R22-3: fotos guarda objetos { file?, previewUrl } durante composição.
+  // file = File API (pra subir no save). previewUrl = ObjectURL local
+  // pra mostrar preview imediato. No save:
+  // 1. crypto.randomUUID() gera postId
+  // 2. uploadDiarioPhotos sobe todos os files → URL[]
+  // 3. INSERT em diario { id: postId, fotos: [{ url }, ...] }
+  // 4. Revoke todos os ObjectURLs (cleanup memória)
+  const [fotos, setFotos] = useState([]);
   const [diaNumero, setDiaNumero] = useState(() => suggestedDay(trip));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [processing, setProcessing] = useState(false);
   const inputRef = useRef(null);
 
-  const handlePick = async (e) => {
+  // Cleanup ObjectURLs no unmount pra não vazar memória.
+  useEffect(() => {
+    return () => {
+      fotos.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePick = (e) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-    setProcessing(true);
     setError(null);
-    try {
-      const slots = Math.max(0, MAX_PHOTOS - fotos.length);
-      const toProcess = files.slice(0, slots);
-      const compressed = [];
-      for (const f of toProcess) {
-        try { compressed.push(await compressImage(f)); }
-        catch (err) { console.warn("[Composer] compress falhou:", err); }
-      }
-      setFotos((prev) => [...prev, ...compressed]);
-    } finally {
-      setProcessing(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
+    // R22-3: NÃO comprime no client mais — só preview ObjectURL. Compressão
+    // + upload acontecem no save. Mantém UX rápido ao adicionar foto
+    // (era ~500ms-1s por foto antes; agora <50ms pra criar ObjectURL).
+    const slots = Math.max(0, MAX_PHOTOS - fotos.length);
+    const toAdd = files.slice(0, slots).map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+    setFotos((prev) => [...prev, ...toAdd]);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
-  const removeFoto = (idx) => setFotos((prev) => prev.filter((_, i) => i !== idx));
+  const removeFoto = (idx) => {
+    setFotos((prev) => {
+      const removed = prev[idx];
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
 
   const save = async () => {
     if (!texto.trim() && fotos.length === 0) {
@@ -288,21 +297,42 @@ function Composer({ trip, user, onClose, onSaved }) {
     }
     setSaving(true);
     setError(null);
-    const payload = {
-      viagem_id: trip.id,
-      user_id: user.id,
-      dia_numero: diaNumero ? Number(diaNumero) : null,
-      texto: texto.trim() || null,
-      fotos,
-    };
-    const { error } = await supabase.from("diario").insert(payload);
-    setSaving(false);
-    if (error) {
-      console.error("[Diario] save erro:", error);
-      setError(friendlyError(error));
-      return;
+    try {
+      // R22-3: gera postId UUID no client pra usar como path do Storage
+      // ANTES do INSERT. crypto.randomUUID disponível em todos os browsers
+      // modernos (Chrome 92+, Firefox 95+, Safari 15.4+ — todos cobertos
+      // pelo target Vite/React 19).
+      const postId = crypto.randomUUID();
+
+      // Upa fotos em paralelo. Se qualquer falhar, todas falham — re-throw.
+      const urls = fotos.length
+        ? await uploadDiarioPhotos(fotos.map((f) => f.file), trip.id, postId)
+        : [];
+
+      // Schema novo: array de objetos { url }. Schema legacy era array
+      // de strings Base64 — back-compat no render via fotoSrc().
+      const fotosPayload = urls.map((url) => ({ url }));
+
+      const payload = {
+        id: postId,
+        viagem_id: trip.id,
+        user_id: user.id,
+        dia_numero: diaNumero ? Number(diaNumero) : null,
+        texto: texto.trim() || null,
+        fotos: fotosPayload,
+      };
+      const { error } = await supabase.from("diario").insert(payload);
+      if (error) throw error;
+
+      // Cleanup ObjectURLs antes de fechar.
+      fotos.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
+      onSaved();
+    } catch (e) {
+      console.error("[Diario] save erro:", e);
+      setError(friendlyError(e));
+    } finally {
+      setSaving(false);
     }
-    onSaved();
   };
 
   return (
@@ -330,13 +360,14 @@ function Composer({ trip, user, onClose, onSaved }) {
 
           {fotos.length > 0 && (
             <div className="grid grid-cols-3 gap-2">
-              {fotos.map((src, i) => (
+              {fotos.map((f, i) => (
                 <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-[#F3F4F6]">
-                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <img src={f.previewUrl} alt="" className="w-full h-full object-cover" />
                   <button
                     onClick={() => removeFoto(i)}
                     className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
                     aria-label="Remover foto"
+                    type="button"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -349,10 +380,10 @@ function Composer({ trip, user, onClose, onSaved }) {
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={fotos.length >= MAX_PHOTOS || processing}
+              disabled={fotos.length >= MAX_PHOTOS || saving}
               className="btn-ghost inline-flex items-center gap-1.5 disabled:opacity-50"
             >
-              {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+              <ImageIcon className="w-4 h-4" />
               {fotos.length >= MAX_PHOTOS ? "Máx 5 fotos" : `Adicionar foto (${fotos.length}/${MAX_PHOTOS})`}
             </button>
             <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePick} />
@@ -375,15 +406,15 @@ function Composer({ trip, user, onClose, onSaved }) {
         </div>
 
         <div className="p-3 border-t border-[#E5E7EB] flex gap-2">
-          <button onClick={onClose} className="btn-ghost flex-1" type="button">Cancelar</button>
+          <button onClick={onClose} disabled={saving} className="btn-ghost flex-1 disabled:opacity-50" type="button">Cancelar</button>
           <button
             onClick={save}
             className="btn-primary flex-1 inline-flex items-center justify-center gap-1.5"
-            disabled={saving || processing}
+            disabled={saving}
             type="button"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Publicar
+            {saving ? (fotos.length ? "Enviando…" : "Publicando…") : "Publicar"}
           </button>
         </div>
       </div>
