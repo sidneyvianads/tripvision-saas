@@ -13,6 +13,7 @@ import { getLimits, needsSubscription, isInTrial, trialDaysLeft } from "../data/
 import { describePessoas } from "../lib/roteiroResumo";
 import { getTema, emojiForCidade } from "../data/themes";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -24,6 +25,7 @@ const formatBR = (iso) => {
 export default function MyTrips() {
   const { user, signOut } = useAuth();
   const { trips, loading, error, deleteTrip } = useTrips(user?.id);
+  const { showConfirm, showAlert } = useConfirm();
   const navigate = useNavigate();
   const [busyId, setBusyId] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -49,7 +51,7 @@ export default function MyTrips() {
     try { await deleteTrip(confirmDelete.id); }
     catch (e) {
       console.error("[MyTrips] delete erro:", e);
-      alert("Erro. " + friendlyError(e));
+      await showAlert(friendlyError(e), { title: "Não consegui deletar" });
     }
     finally { setBusyId(null); setConfirmDelete(null); }
   };

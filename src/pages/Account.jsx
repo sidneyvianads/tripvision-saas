@@ -9,6 +9,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
 import { trackChurn } from "../lib/analytics";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -21,6 +22,7 @@ export default function Account() {
   const { user, signOut, updatePassword } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { showConfirm, showAlert } = useConfirm();
   const [assinatura, setAssinatura] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(params.get("upgrade") != null);
 
@@ -166,7 +168,7 @@ export default function Account() {
       navigate("/", { replace: true });
     } catch (err) {
       console.error("[Account] delete account erro:", err);
-      alert("Erro ao deletar conta. " + friendlyError(err));
+      await showAlert(friendlyError(err), { title: "Erro ao deletar conta" });
       setDelBusy(false);
       setConfirmDelete(false);
     }

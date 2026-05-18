@@ -14,6 +14,7 @@ import { FullscreenLoader } from "../App";
 import { TabSkeleton } from "../components/Skeleton";
 import ScrollToTop from "../components/ScrollToTop";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const GroupChat = lazy(() => import("../components/GroupChat"));
 const PlanChat  = lazy(() => import("../components/PlanChat"));
@@ -32,6 +33,7 @@ export default function TripView() {
   const { slug } = useParams();
   const { user, signOut } = useAuth();
   const { trip, role, isAdmin, loading, error, reload: reloadTrip } = useTrip(slug, user?.id);
+  const { showConfirm, showAlert } = useConfirm();
   const [params, setParams] = useSearchParams();
   // R10-6: allowlist contra TAB_TITLES. Antes, ?tab=<script> ou ?tab=foo
   // renderizava header vazio + conteúdo branco (nenhum `tab === "x"`
@@ -53,8 +55,13 @@ export default function TripView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  const handleLogout = () => {
-    if (!confirm("Sair? Sua sessão será encerrada nesse navegador.")) return;
+  const handleLogout = async () => {
+    const ok = await showConfirm({
+      title: "Sair?",
+      message: "Sua sessão será encerrada nesse navegador.",
+      confirmLabel: "Sair",
+    });
+    if (!ok) return;
     signOut();
   };
 
@@ -108,6 +115,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
   const { days, loading } = useRoteiro(trip.id);
   const [exporting, setExporting] = useState(false);
   const todayKey = new Date().toISOString().slice(0, 10);
+  const { showAlert } = useConfirm();
 
   const handleExport = async () => {
     if (exporting) return;
@@ -124,7 +132,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
       await exportRoteiroPdf({ trip, days, contatos: contatos ?? [] });
     } catch (e) {
       console.error("[exportPdf] failed:", e);
-      alert("Não consegui gerar o PDF. " + friendlyError(e));
+      await showAlert(friendlyError(e), { title: "Não consegui gerar o PDF" });
     } finally {
       setExporting(false);
     }

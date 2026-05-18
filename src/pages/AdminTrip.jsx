@@ -11,6 +11,7 @@ import { temaCssVars } from "../lib/applyTema";
 import { getTema } from "../data/themes";
 import UpgradeModal from "../components/UpgradeModal";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 import ActivityItem from "../components/ActivityItem";
 import { FullscreenLoader } from "../App";
 
@@ -59,6 +60,7 @@ function DayList({ trip, onEdit }) {
   const { days, loading, reload } = useRoteiro(trip.id);
   const [adding, setAdding] = useState(false);
   const [lastEdit, setLastEdit] = useState(null);
+  const { showConfirm, showAlert } = useConfirm();
 
   useEffect(() => {
     if (!trip?.id) return;
@@ -84,7 +86,7 @@ function DayList({ trip, onEdit }) {
       onEdit({ ...created, atividades: [] });
     } catch (e) {
       console.error("[AdminTrip] addDay erro:", e);
-      alert("Erro ao adicionar dia. " + friendlyError(e));
+      await showAlert(friendlyError(e), { title: "Erro ao adicionar dia" });
     } finally { setAdding(false); }
   };
 
@@ -94,7 +96,7 @@ function DayList({ trip, onEdit }) {
     try { await deleteDia(d.id); await reload(); }
     catch (err) {
       console.error("[AdminTrip] deleteDay erro:", err);
-      alert("Erro. " + friendlyError(err));
+      await showAlert(friendlyError(err), { title: "Não consegui deletar" });
     }
   };
 
@@ -131,7 +133,7 @@ function DayList({ trip, onEdit }) {
       await reload();
     } catch (err) {
       console.error("[AdminTrip] copyDay erro:", err);
-      alert("Erro ao copiar. " + friendlyError(err));
+      await showAlert(friendlyError(err), { title: "Erro ao copiar" });
     }
   };
 

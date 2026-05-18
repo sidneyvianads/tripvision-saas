@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { isOwner } from "../data/plans";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const fmtBRL = (n) => `R$ ${Number(n ?? 0).toFixed(2).replace(".", ",")}`;
 const fmtMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -77,6 +78,7 @@ function AfiliadosTab() {
   const [afiliados, setAfiliados] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { showAlert } = useConfirm();
 
   const reload = async () => {
     // RPC SECURITY DEFINER — guard interno checa is_platform_owner().
@@ -113,7 +115,7 @@ function AfiliadosTab() {
     });
     if (error) {
       console.error("[AdminAfiliados] upsert erro:", error);
-      alert("Erro. " + friendlyError(error));
+      await showAlert(friendlyError(error), { title: "Não consegui salvar" });
       return;
     }
     setEditing(null);
@@ -406,6 +408,7 @@ function ComissoesTab() {
   const [comissoes, setComissoes] = useState([]);
   const [mes, setMes] = useState(fmtMonth());
   const [loading, setLoading] = useState(true);
+  const { showAlert } = useConfirm();
 
   useEffect(() => {
     if (!mes) return;
@@ -428,7 +431,7 @@ function ComissoesTab() {
     const { error } = await supabase.rpc("admin_set_comissao_status", { p_id: com.id, p_status: next });
     if (error) {
       console.error("[AdminAfiliados] set status erro:", error);
-      alert("Erro. " + friendlyError(error));
+      await showAlert(friendlyError(error), { title: "Não consegui atualizar" });
       return;
     }
     setComissoes((prev) => prev.map((c) => c.id === com.id ? { ...c, status: next } : c));

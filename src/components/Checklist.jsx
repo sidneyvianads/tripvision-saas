@@ -4,6 +4,7 @@ import { useChecklist } from "../hooks/useChecklist";
 import { getLimits } from "../data/plans";
 import UpgradeModal from "./UpgradeModal";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const CATEGORIAS = [
   { value: "antes",       label: "📋 Antes" },
@@ -25,6 +26,19 @@ function diasAteData(prazo) {
 
 export default function Checklist({ viagemId, user, isAdmin }) {
   const { items, loading, error, toggle, addItem, deleteItem } = useChecklist(viagemId);
+  const { showConfirm, showAlert } = useConfirm();
+
+  // R17-3: wrappa deleteItem com confirm via modal. Section/ItemRow
+  // chamam handleDelete e o feedback vem via showConfirm — antes era
+  // window.confirm nativo embutido no onClick.
+  const handleDelete = async (id) => {
+    const ok = await showConfirm({
+      title: "Remover esse item?",
+      variant: "danger",
+      confirmLabel: "Remover",
+    });
+    if (ok) deleteItem(id);
+  };
   const [newTitle, setNewTitle] = useState("");
   const [newCat, setNewCat] = useState("antes");
   const [newPrazo, setNewPrazo] = useState("");
@@ -51,7 +65,7 @@ export default function Checklist({ viagemId, user, isAdmin }) {
       setNewPrazo("");
     } catch (e) {
       console.error("[Checklist] add erro:", e);
-      alert("Erro. " + friendlyError(e));
+      await showAlert(friendlyError(e), { title: "Não consegui adicionar" });
     }
     finally { setAdding(false); }
   };
@@ -119,10 +133,10 @@ export default function Checklist({ viagemId, user, isAdmin }) {
 
       {cats.length > 0
         ? cats.map((cat) => (
-            <Section key={cat} title={catLabel(cat)} list={items.filter((i) => i.categoria === cat)} toggle={toggle} user={user} isAdmin={isAdmin} onDelete={deleteItem} />
+            <Section key={cat} title={catLabel(cat)} list={items.filter((i) => i.categoria === cat)} toggle={toggle} user={user} isAdmin={isAdmin} onDelete={handleDelete} />
           ))
         : items.length > 0 && (
-          <Section title="Itens" list={items} toggle={toggle} user={user} isAdmin={isAdmin} onDelete={deleteItem} />
+          <Section title="Itens" list={items} toggle={toggle} user={user} isAdmin={isAdmin} onDelete={handleDelete} />
         )
       }
     </div>
@@ -183,7 +197,7 @@ function Section({ title, list, toggle, user, isAdmin, onDelete }) {
               </button>
               {isAdmin && (
                 <button
-                  onClick={() => { if (confirm("Remover esse item?")) onDelete(item.id); }}
+                  onClick={() => onDelete(item.id)}
                   className="text-red-400 hover:text-red-600 p-1 shrink-0"
                   aria-label="Remover"
                 >
