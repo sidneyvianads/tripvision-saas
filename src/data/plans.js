@@ -22,7 +22,7 @@ export const PLANS = {
     features: [
       "Até 3 viagens",
       "Jei pesquisa preços reais",
-      "500 conversas por mês com o Jei",
+      "200 conversas por mês com o Jei",
       "Compartilhar com até 5 pessoas",
       "Chat do grupo (atualiza na hora)",
       "Checklist ilimitado",
@@ -38,7 +38,7 @@ export const PLANS = {
     features: [
       "Até 5 viagens",
       "Jei pesquisa preços reais",
-      "2.000 conversas por mês com o Jei",
+      "800 conversas por mês com o Jei",
       "Compartilhar com até 20 pessoas",
       "Chat do grupo (atualiza na hora)",
       "Checklist ilimitado",
@@ -94,7 +94,7 @@ export const LIMITS = {
   pro: {
     viagens: 3,
     iaMsgsDia: null,
-    iaMsgsMes: 500,
+    iaMsgsMes: 200,
     membros: 5,
     checklist: null,
     chat: true,
@@ -105,7 +105,7 @@ export const LIMITS = {
   grupo: {
     viagens: 5,
     iaMsgsDia: null,
-    iaMsgsMes: 2000,
+    iaMsgsMes: 800,
     membros: 20,
     checklist: null,
     chat: true,
