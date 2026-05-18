@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Edit2, Loader2, X, Check, Tag, Mail, AtSign, Percent,
@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 import { isOwner } from "../data/plans";
 import { friendlyError } from "../lib/errorMessages";
 import { useConfirm } from "../lib/useConfirm";
+import { useModalA11y } from "../lib/useModalA11y";
 
 const fmtBRL = (n) => `R$ ${Number(n ?? 0).toFixed(2).replace(".", ",")}`;
 const fmtMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -205,17 +206,25 @@ function AfiliadoForm({ initial, onCancel, onSave }) {
   });
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
   const valid = form.nome.trim() && form.email.trim() && form.cupom.trim();
+  // R18-3: foco inicial no input Nome (primeiro do form, ação principal).
+  const nomeInputRef = useRef(null);
+  const { dialogRef, titleId } = useModalA11y({
+    isOpen: true,
+    onClose: onCancel,
+    initialFocusRef: nomeInputRef,
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onCancel}>
-      <div className="w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl bg-white max-h-[92vh] overflow-y-auto animate-pop" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onCancel} role="presentation">
+      <div ref={dialogRef} className="w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl bg-white max-h-[92vh] overflow-y-auto animate-pop" onClick={(e) => e.stopPropagation()}
+        role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="px-5 pt-5 flex items-center gap-2">
-          <div className="font-display font-extrabold text-[#0F172A] flex-1">{initial ? "Editar afiliado" : "Novo afiliado"}</div>
-          <button onClick={onCancel} className="p-1 rounded-full hover:bg-[#F8FAFC]"><X className="w-4 h-4" /></button>
+          <h2 id={titleId} className="font-display font-extrabold text-[#0F172A] flex-1 text-base m-0">{initial ? "Editar afiliado" : "Novo afiliado"}</h2>
+          <button onClick={onCancel} className="p-1 rounded-full hover:bg-[#F8FAFC]" aria-label="Fechar"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-3">
           <Field icon={Mail}>
-            <input className="input" placeholder="Nome*" value={form.nome} onChange={(e) => setF("nome", e.target.value)} maxLength={80} />
+            <input ref={nomeInputRef} className="input" placeholder="Nome*" value={form.nome} onChange={(e) => setF("nome", e.target.value)} maxLength={80} />
           </Field>
           <Field icon={Mail}>
             <input className="input" placeholder="Email*" type="email" value={form.email} onChange={(e) => setF("email", e.target.value)} maxLength={120} />

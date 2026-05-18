@@ -3,12 +3,13 @@
 // (RLS bloqueia listagem de convites alheios — só vê os que tem o email
 // dele OU é criador).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Loader2, Shield, UserPlus, Mail, Trash2, Check, Copy } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { friendlyError } from "../lib/errorMessages";
 import Avatar from "./Avatar";
 import { listPendingInvites, revokeInvite } from "../lib/invites";
+import { useModalA11y } from "../lib/useModalA11y";
 
 const formatDate = (iso) => {
   try { return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }); }
@@ -26,6 +27,14 @@ export default function People({ viagemId, isAdmin, onOpenInvite, onClose }) {
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // R18-3: foco inicial no botão Convidar (ação principal pra admins).
+  // Pra não-admin (botão escondido), hook cai pro primeiro focável (X close).
+  const inviteBtnRef = useRef(null);
+  const { dialogRef, titleId } = useModalA11y({
+    isOpen: true,
+    onClose,
+    initialFocusRef: isAdmin ? inviteBtnRef : null,
+  });
   const [linkCopiedId, setLinkCopiedId] = useState(null);
 
   const load = useCallback(async () => {
@@ -69,16 +78,20 @@ export default function People({ viagemId, isAdmin, onOpenInvite, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onClose} role="presentation">
       <div
+        ref={dialogRef}
         className="w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl max-h-[85vh] overflow-hidden flex flex-col animate-pop"
         style={{ background: "linear-gradient(180deg, #E8F0FE 0%, #FFFFFF 100%)" }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="gradient-primary text-white px-4 py-3 flex items-center gap-2">
-          <div className="text-xl">❄️</div>
+          <div className="text-xl" aria-hidden="true">❄️</div>
           <div className="flex-1">
-            <div className="font-display font-extrabold leading-tight">Quem vai</div>
+            <h2 id={titleId} className="font-display font-extrabold leading-tight text-base m-0">Quem vai</h2>
             <div className="text-[#7CB9E8] text-xs font-display font-bold">
               {loading ? "carregando…" : `${members.length} ${members.length === 1 ? "viajante" : "viajantes"}`}
               {pending.length > 0 && ` · ${pending.length} pendente${pending.length === 1 ? "" : "s"}`}
@@ -86,6 +99,7 @@ export default function People({ viagemId, isAdmin, onOpenInvite, onClose }) {
           </div>
           {isAdmin && (
             <button
+              ref={inviteBtnRef}
               onClick={onOpenInvite}
               type="button"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-xs font-display font-bold"

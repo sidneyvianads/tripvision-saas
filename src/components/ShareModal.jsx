@@ -12,6 +12,7 @@ import QRCode from "qrcode";
 import { useAuth } from "../hooks/useAuth";
 import { createInvite, listPendingInvites, revokeInvite, getInviteCapacity } from "../lib/invites";
 import { friendlyError } from "../lib/errorMessages";
+import { useModalA11y } from "../lib/useModalA11y";
 
 export default function ShareModal({ open, onClose, trip, initialTab }) {
   const canvasRef = useRef(null);
@@ -40,16 +41,29 @@ function ShareModalInner({ canvasRef, shareUrl, shareText, trip, onClose, copied
   const { user } = useAuth();
   // tab: 'link' | 'email'
   const [tab, setTab] = useState(initialTab === "email" ? "email" : "link");
+  // R18-3: ref pra input email quando abrimos direto na aba de convite.
+  // Hook foca esse ref na primeira renderização (ou fall-back pro primeiro
+  // focável, que é o X close, quando inicial é "link").
+  const emailInputRef = useRef(null);
+  const { dialogRef, titleId } = useModalA11y({
+    isOpen: true, // ShareModal só renderiza quando open=true (early return acima)
+    onClose,
+    initialFocusRef: initialTab === "email" ? emailInputRef : null,
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 animate-fade-up" onClick={onClose} role="presentation">
       <div
+        ref={dialogRef}
         className="w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl overflow-hidden flex flex-col animate-pop bg-white max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="text-white px-4 py-3 flex items-center gap-2" style={{ background: "var(--tv-gradient)" }}>
           <Share2 className="w-5 h-5" />
-          <div className="font-display font-extrabold flex-1">Compartilhar viagem</div>
+          <h2 id={titleId} className="font-display font-extrabold flex-1 text-base m-0">Compartilhar viagem</h2>
           <button onClick={onClose} className="rounded-full bg-white/20 hover:bg-white/30 p-1.5" aria-label="Fechar">
             <X className="w-4 h-4" />
           </button>
@@ -72,7 +86,7 @@ function ShareModalInner({ canvasRef, shareUrl, shareText, trip, onClose, copied
             />
           )}
           {tab === "email" && (
-            <EmailPanel trip={trip} user={user} />
+            <EmailPanel trip={trip} user={user} emailInputRef={emailInputRef} />
           )}
         </div>
       </div>
@@ -171,7 +185,7 @@ function LinkPanel({ canvasRef, shareUrl, shareText, trip, copied, setCopied }) 
   );
 }
 
-function EmailPanel({ trip, user }) {
+function EmailPanel({ trip, user, emailInputRef }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("membro");
   const [sending, setSending] = useState(false);
@@ -292,6 +306,7 @@ function EmailPanel({ trip, user }) {
       <form onSubmit={submit} className="space-y-2">
         <div className="grid grid-cols-3 gap-2">
           <input
+            ref={emailInputRef}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
