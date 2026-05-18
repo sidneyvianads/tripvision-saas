@@ -52,31 +52,20 @@ describe("R17-1 — ConfirmModal v2: variants + a11y", () => {
     expect(src).toMatch(/aria-labelledby=\{titleId\}/);
   });
 
-  it("a11y: useId pra título único (anti-colisão)", () => {
-    expect(src).toMatch(/import\s*\{[^}]*\buseId\b/);
-    expect(src).toMatch(/titleId\s*=\s*useId\(\)/);
-  });
-
-  it("a11y: ESC dispara onClose", () => {
-    expect(src).toMatch(/e\.key === "Escape"/);
-    expect(src).toMatch(/onClose\?\.\(\)/);
-  });
-
-  it("a11y: focus trap em TAB (cycle entre botões)", () => {
-    expect(src).toMatch(/e\.key === "Tab"/);
-    expect(src).toMatch(/e\.shiftKey/);
-    // Cycle: shift+tab no first → vai pro last, tab no last → vai pro first.
-    expect(src).toMatch(/document\.activeElement === first/);
-    expect(src).toMatch(/document\.activeElement === last/);
+  it("a11y: delega ESC/Tab/restore-focus pro hook useModalA11y", () => {
+    // R18-2: imperativa de ESC, focus trap e restore foi extraída pro
+    // hook compartilhado. ConfirmModal só importa o hook e aplica os
+    // attrs/refs no JSX. Testes do hook em si vivem em R18-S.
+    expect(src).toMatch(/import\s*\{\s*useModalA11y\s*\}\s*from\s*["']\.\.\/lib\/useModalA11y["']/);
+    expect(src).toMatch(/useModalA11y\(\{/);
+    expect(src).toMatch(/\{\s*dialogRef\s*,\s*titleId\s*\}\s*=\s*useModalA11y/);
   });
 
   it("a11y: foco inicial em cancel (não-destrutivo) ou no único botão em info", () => {
-    expect(src).toMatch(/isInfo \? confirmBtnRef\.current : cancelBtnRef\.current/);
-  });
-
-  it("a11y: restaura foco no elemento que abriu ao fechar", () => {
-    expect(src).toMatch(/prevFocusRef\.current\s*=\s*[^;]*activeElement/);
-    expect(src).toMatch(/prev\.focus\(\)/);
+    // Passado pro hook via initialFocusRef. Logic local porque depende
+    // de variant.
+    expect(src).toMatch(/isInfo\s*\?\s*confirmBtnRef\s*:\s*cancelBtnRef/);
+    expect(src).toMatch(/initialFocusRef/);
   });
 
   it("variant 'danger' aplica classe vermelha no botão confirm", () => {
