@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Loader2, Plus, Phone, MapPin, MessageCircle, Star, Trash2, Pencil, BookUser, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 
 const CATEGORIAS = [
   { value: "hotel",       label: "🏨 Hotel" },
@@ -49,6 +50,7 @@ export default function Contatos({ viagemId, isAdmin, onClose }) {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // null | "new" | object
   const [savingId, setSavingId] = useState(null);
+  const { showConfirm } = useConfirm();
 
   // Contatos vindos do roteiro (read-only, calculados em runtime)
   const [autoContacts, setAutoContacts] = useState([]);
@@ -214,7 +216,12 @@ export default function Contatos({ viagemId, isAdmin, onClose }) {
   };
 
   const deleteContact = async (c) => {
-    if (!confirm(`Remover "${c.nome}"?`)) return;
+    const ok = await showConfirm({
+      title: `Remover "${c.nome}"?`,
+      variant: "danger",
+      confirmLabel: "Remover",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("contatos").delete().eq("id", c.id);
     if (error) {
       console.error("[Contatos] delete erro:", error);

@@ -11,6 +11,7 @@ import {
 } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
 import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rateLimit";
+import { useConfirm } from "../lib/useConfirm";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner, hasActiveAccess } from "../data/plans";
 import { supabase } from "../lib/supabase";
@@ -183,6 +184,7 @@ const MD_COMPONENTS_LIGHT = {
 export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
   const { days, loading: roteiroLoading, reload: reloadRoteiro } = useRoteiro(trip.id);
   const { messages, setMessages, persist, reset, loading: convLoading } = useIaConversa(trip.id, user?.id);
+  const { showConfirm } = useConfirm();
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -470,7 +472,13 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
 
   const handleReset = async () => {
     if (busy) return;
-    if (!confirm("Apagar toda a conversa de planejamento? O roteiro montado fica.")) return;
+    const ok = await showConfirm({
+      title: "Apagar toda a conversa?",
+      message: "O roteiro montado fica intacto. Só a conversa de planejamento com o Jei é apagada.",
+      variant: "danger",
+      confirmLabel: "Apagar conversa",
+    });
+    if (!ok) return;
     await reset();
   };
 

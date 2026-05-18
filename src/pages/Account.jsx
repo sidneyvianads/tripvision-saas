@@ -82,7 +82,13 @@ export default function Account() {
   };
 
   const handleDeleteIaHistory = async () => {
-    if (!confirm("Apagar TODO o histórico de conversas com o Jei? Não dá pra desfazer.")) return;
+    const ok = await showConfirm({
+      title: "Apagar histórico do Jei?",
+      message: "Todas as conversas com o Jei (em todas as viagens) serão apagadas permanentemente. Os roteiros já montados ficam.",
+      variant: "danger",
+      confirmLabel: "Apagar histórico",
+    });
+    if (!ok) return;
     setIaHistoryBusy(true);
     setLgpdMsg(null);
     try {
@@ -407,7 +413,12 @@ export default function Account() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={async () => {
-                if (!confirm("Sair? Sua sessão será encerrada nesse navegador.")) return;
+                const ok = await showConfirm({
+                  title: "Sair?",
+                  message: "Sua sessão será encerrada nesse navegador.",
+                  confirmLabel: "Sair",
+                });
+                if (!ok) return;
                 await signOut();
                 navigate("/");
               }}

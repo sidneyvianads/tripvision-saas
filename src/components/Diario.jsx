@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, Loader2, X, Trash2, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { friendlyError } from "../lib/errorMessages";
+import { useConfirm } from "../lib/useConfirm";
 import Avatar from "./Avatar";
 
 const MAX_PHOTOS = 5;
@@ -55,6 +56,7 @@ export default function Diario({ trip, user }) {
   const [error, setError] = useState(null);
   const [composing, setComposing] = useState(false);
   const [lightbox, setLightbox] = useState(null);
+  const { showConfirm } = useConfirm();
 
   const reload = async () => {
     const { data, error } = await supabase
@@ -120,7 +122,12 @@ export default function Diario({ trip, user }) {
 
   const deletePost = async (p) => {
     if (p.user_id !== user?.id) return;
-    if (!confirm("Apagar esse post do diário?")) return;
+    const ok = await showConfirm({
+      title: "Apagar esse post do diário?",
+      variant: "danger",
+      confirmLabel: "Apagar",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("diario").delete().eq("id", p.id);
     if (error) {
       console.error("[Diario] delete erro:", error);

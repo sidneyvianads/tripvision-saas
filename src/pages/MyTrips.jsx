@@ -39,8 +39,13 @@ export default function MyTrips() {
   const inTrial = isInTrial(user);
   const trialLeft = trialDaysLeft(user);
 
-  const handleLogout = () => {
-    if (!confirm("Sair? Sua sessão será encerrada nesse navegador.")) return;
+  const handleLogout = async () => {
+    const ok = await showConfirm({
+      title: "Sair?",
+      message: "Sua sessão será encerrada nesse navegador.",
+      confirmLabel: "Sair",
+    });
+    if (!ok) return;
     signOut();
     navigate("/");
   };

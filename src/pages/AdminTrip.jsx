@@ -92,7 +92,13 @@ function DayList({ trip, onEdit }) {
 
   const handleDelete = async (d, e) => {
     e.stopPropagation();
-    if (!confirm(`Deletar dia ${d.dia_numero}?`)) return;
+    const ok = await showConfirm({
+      title: `Deletar dia ${d.dia_numero}?`,
+      message: "Tudo desse dia (atividades, hotel, notas) será apagado. Não dá pra desfazer.",
+      variant: "danger",
+      confirmLabel: "Deletar dia",
+    });
+    if (!ok) return;
     try { await deleteDia(d.id); await reload(); }
     catch (err) {
       console.error("[AdminTrip] deleteDay erro:", err);
