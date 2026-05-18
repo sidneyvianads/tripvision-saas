@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { isOwner } from "../data/plans";
+import { friendlyError } from "../lib/errorMessages";
 
 const fmtBRL = (n) => `R$ ${Number(n ?? 0).toFixed(2).replace(".", ",")}`;
 const fmtMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -110,7 +111,11 @@ function AfiliadosTab() {
       p_desconto_percent: Number(form.desconto_percent ?? 0),
       p_ativo: !!form.ativo,
     });
-    if (error) { alert("Erro: " + error.message); return; }
+    if (error) {
+      console.error("[AdminAfiliados] upsert erro:", error);
+      alert("Erro. " + friendlyError(error));
+      return;
+    }
     setEditing(null);
     await reload();
   };
@@ -421,7 +426,11 @@ function ComissoesTab() {
     // R10-3: RPC SECURITY DEFINER (guard is_platform_owner). UPDATE direto
     // na tabela bate em permission denied desde R9-3 REVOKE writes.
     const { error } = await supabase.rpc("admin_set_comissao_status", { p_id: com.id, p_status: next });
-    if (error) { alert("Erro: " + error.message); return; }
+    if (error) {
+      console.error("[AdminAfiliados] set status erro:", error);
+      alert("Erro. " + friendlyError(error));
+      return;
+    }
     setComissoes((prev) => prev.map((c) => c.id === com.id ? { ...c, status: next } : c));
   };
 

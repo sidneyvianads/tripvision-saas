@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { X, Loader2, Shield, UserPlus, Mail, Trash2, Check, Copy } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 import Avatar from "./Avatar";
 import { listPendingInvites, revokeInvite } from "../lib/invites";
 
@@ -39,8 +40,12 @@ export default function People({ viagemId, isAdmin, onOpenInvite, onClose }) {
       // Admin vê todos os convites da viagem.
       listPendingInvites(viagemId),
     ]);
-    if (mRes.error) setError(mRes.error.message);
-    else setMembers(mRes.data ?? []);
+    if (mRes.error) {
+      console.error("[People] load erro:", mRes.error);
+      setError(friendlyError(mRes.error));
+    } else {
+      setMembers(mRes.data ?? []);
+    }
     setPending(pRes);
     setLoading(false);
   }, [viagemId]);

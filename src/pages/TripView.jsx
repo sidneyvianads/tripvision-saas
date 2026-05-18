@@ -13,6 +13,7 @@ import { supabase } from "../lib/supabase";
 import { FullscreenLoader } from "../App";
 import { TabSkeleton } from "../components/Skeleton";
 import ScrollToTop from "../components/ScrollToTop";
+import { friendlyError } from "../lib/errorMessages";
 
 const GroupChat = lazy(() => import("../components/GroupChat"));
 const PlanChat  = lazy(() => import("../components/PlanChat"));
@@ -123,7 +124,7 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
       await exportRoteiroPdf({ trip, days, contatos: contatos ?? [] });
     } catch (e) {
       console.error("[exportPdf] failed:", e);
-      alert("Não consegui gerar o PDF: " + e.message);
+      alert("Não consegui gerar o PDF. " + friendlyError(e));
     } finally {
       setExporting(false);
     }

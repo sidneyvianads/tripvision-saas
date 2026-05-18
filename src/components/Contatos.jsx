@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Loader2, Plus, Phone, MapPin, MessageCircle, Star, Trash2, Pencil, BookUser, Sparkles } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 const CATEGORIAS = [
   { value: "hotel",       label: "🏨 Hotel" },
@@ -63,8 +64,12 @@ export default function Contatos({ viagemId, isAdmin, onClose }) {
         .order("ordem", { ascending: true })
         .order("created_at", { ascending: true });
       if (!active) return;
-      if (error) setError(error.message);
-      else setItems(data ?? []);
+      if (error) {
+        console.error("[Contatos] load erro:", error);
+        setError(friendlyError(error));
+      } else {
+        setItems(data ?? []);
+      }
       setLoading(false);
     })();
     return () => { active = false; };
@@ -188,7 +193,11 @@ export default function Contatos({ viagemId, isAdmin, onClose }) {
       res = await supabase.from("contatos").insert(payload).select().single();
     }
     setSavingId(null);
-    if (res.error) { setError(res.error.message); return; }
+    if (res.error) {
+      console.error("[Contatos] save erro:", res.error);
+      setError(friendlyError(res.error));
+      return;
+    }
     setEditing(null);
     await reload();
   };
@@ -196,15 +205,23 @@ export default function Contatos({ viagemId, isAdmin, onClose }) {
   const toggleFav = async (c) => {
     setItems((prev) => prev.map((x) => x.id === c.id ? { ...x, favorito: !c.favorito } : x));
     const { error } = await supabase.from("contatos").update({ favorito: !c.favorito }).eq("id", c.id);
-    if (error) setError(error.message);
-    else await reload();
+    if (error) {
+      console.error("[Contatos] fav erro:", error);
+      setError(friendlyError(error));
+    } else {
+      await reload();
+    }
   };
 
   const deleteContact = async (c) => {
     if (!confirm(`Remover "${c.nome}"?`)) return;
     const { error } = await supabase.from("contatos").delete().eq("id", c.id);
-    if (error) setError(error.message);
-    else setItems((prev) => prev.filter((x) => x.id !== c.id));
+    if (error) {
+      console.error("[Contatos] delete erro:", error);
+      setError(friendlyError(error));
+    } else {
+      setItems((prev) => prev.filter((x) => x.id !== c.id));
+    }
   };
 
   const hasAutoContacts = autoFiltered.length > 0;

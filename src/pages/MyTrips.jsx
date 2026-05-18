@@ -12,6 +12,7 @@ import Logo from "../components/Logo";
 import { getLimits, needsSubscription, isInTrial, trialDaysLeft } from "../data/plans";
 import { describePessoas } from "../lib/roteiroResumo";
 import { getTema, emojiForCidade } from "../data/themes";
+import { friendlyError } from "../lib/errorMessages";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -46,7 +47,10 @@ export default function MyTrips() {
     if (!confirmDelete) return;
     setBusyId(confirmDelete.id);
     try { await deleteTrip(confirmDelete.id); }
-    catch (e) { alert("Erro: " + e.message); }
+    catch (e) {
+      console.error("[MyTrips] delete erro:", e);
+      alert("Erro. " + friendlyError(e));
+    }
     finally { setBusyId(null); setConfirmDelete(null); }
   };
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 export function useChecklist(viagemId) {
   const [items, setItems] = useState([]);
@@ -17,8 +18,12 @@ export function useChecklist(viagemId) {
         .eq("viagem_id", viagemId)
         .order("ordem", { ascending: true });
       if (!active) return;
-      if (error) setError(error.message);
-      else setItems(data ?? []);
+      if (error) {
+        console.error("[useChecklist] load erro:", error);
+        setError(friendlyError(error));
+      } else {
+        setItems(data ?? []);
+      }
       setLoading(false);
     };
     load();
@@ -59,7 +64,10 @@ export function useChecklist(viagemId) {
     };
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...updates, _by_nome: next ? user.nome : null } : i)));
     const { error } = await supabase.from("checklist").update(updates).eq("id", item.id);
-    if (error) setError(error.message);
+    if (error) {
+      console.error("[useChecklist] toggle erro:", error);
+      setError(friendlyError(error));
+    }
   }, []);
 
   const addItem = useCallback(async ({ titulo, categoria, prazo, responsavel_id }) => {

@@ -10,6 +10,7 @@ import { logEdit, fetchLastEdit } from "../lib/editLog";
 import { temaCssVars } from "../lib/applyTema";
 import { getTema } from "../data/themes";
 import UpgradeModal from "../components/UpgradeModal";
+import { friendlyError } from "../lib/errorMessages";
 import ActivityItem from "../components/ActivityItem";
 import { FullscreenLoader } from "../App";
 
@@ -82,7 +83,8 @@ function DayList({ trip, onEdit }) {
       await reload();
       onEdit({ ...created, atividades: [] });
     } catch (e) {
-      alert("Erro ao adicionar dia: " + e.message);
+      console.error("[AdminTrip] addDay erro:", e);
+      alert("Erro ao adicionar dia. " + friendlyError(e));
     } finally { setAdding(false); }
   };
 
@@ -90,7 +92,10 @@ function DayList({ trip, onEdit }) {
     e.stopPropagation();
     if (!confirm(`Deletar dia ${d.dia_numero}?`)) return;
     try { await deleteDia(d.id); await reload(); }
-    catch (e) { alert("Erro: " + e.message); }
+    catch (err) {
+      console.error("[AdminTrip] deleteDay erro:", err);
+      alert("Erro. " + friendlyError(err));
+    }
   };
 
   const handleCopy = async (d, e) => {
@@ -125,7 +130,8 @@ function DayList({ trip, onEdit }) {
       }
       await reload();
     } catch (err) {
-      alert("Erro ao copiar: " + err.message);
+      console.error("[AdminTrip] copyDay erro:", err);
+      alert("Erro ao copiar. " + friendlyError(err));
     }
   };
 
@@ -274,7 +280,8 @@ function DayEditor({ day: initial, trip, onClose }) {
       } catch {}
       onClose();
     } catch (e) {
-      setErr(e.message);
+      console.error("[AdminTrip] save day erro:", e);
+      setErr(friendlyError(e));
     } finally { setSaving(false); }
   };
 

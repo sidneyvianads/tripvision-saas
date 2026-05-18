@@ -3,6 +3,7 @@ import { X, Save, Loader2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "./PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
+import { friendlyError } from "../lib/errorMessages";
 
 export default function Profile({ onClose }) {
   const { user, updateProfile, loading } = useAuth();
@@ -19,7 +20,10 @@ export default function Profile({ onClose }) {
       await updateProfile({ nome, avatar_url: photo, avatar_cor: cor });
       setDone(true);
       setTimeout(onClose, 600);
-    } catch (e) { setErr(e.message); }
+    } catch (e) {
+      console.error("[Profile] save erro:", e);
+      setErr(friendlyError(e));
+    }
   };
 
   return (

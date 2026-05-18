@@ -160,6 +160,32 @@ describe("friendlyError — NUNCA vaza message original", () => {
   }
 });
 
+describe("friendlyError — passthrough de PT-BR amigável (não degrada UX boa do dev)", () => {
+  it("'Esse e-mail já está cadastrado. Faça login.' passa por (PT amigável)", () => {
+    expect(friendlyError(new Error("Esse e-mail já está cadastrado. Faça login."))).toMatch(/já está cadastrado/);
+  });
+
+  it("'Senha precisa ter no mínimo 6 caracteres.' passa por", () => {
+    expect(friendlyError(new Error("Senha precisa ter no mínimo 6 caracteres."))).toMatch(/Senha precisa/);
+  });
+
+  it("'Informe seu e-mail.' passa por", () => {
+    expect(friendlyError(new Error("Informe seu e-mail."))).toMatch(/Informe seu e-mail/);
+  });
+
+  it("'Falha de rede com Mercado Pago.' NÃO passa por (vendor leak) → MP map", () => {
+    const out = friendlyError(new Error("Falha de rede com Mercado Pago."));
+    expect(out).toMatch(/Mercado Pago/);
+  });
+
+  it("schema-leak com acento ainda cai no fallback (markers técnicos vencem)", () => {
+    expect(friendlyError(new Error("Conta com afiliados constraint inválida"))).toMatch(/Algo deu errado|permissão|inválid/i);
+    // O importante: não deve vazar 'afiliados constraint inválida' tal qual.
+    expect(friendlyError(new Error("violates constraint viagens_pkey — não é permitido")))
+      .not.toMatch(/viagens_pkey|constraint/);
+  });
+});
+
 describe("friendlyErrorWithContext", () => {
   it("prefixa contexto + sanitiza erro", () => {
     const out = friendlyErrorWithContext("Não consegui salvar", new Error("duplicate key value"));

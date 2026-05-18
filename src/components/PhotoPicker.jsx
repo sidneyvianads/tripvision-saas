@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Camera, X, Loader2 } from "lucide-react";
 import { fileToResizedDataUrl } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", fallbackInitial = "?", size = 96, disabled = false }) {
   const inputRef = useRef(null);
@@ -32,7 +33,7 @@ export default function PhotoPicker({ value, onChange, fallbackCor = "#7CB9E8", 
       onChange(dataUrl);
     } catch (err) {
       console.error("[Viajjei] PhotoPicker erro no resize:", err);
-      setErr(`Não consegui processar essa imagem (${err.message ?? "erro desconhecido"}).`);
+      setErr(`Não consegui processar essa imagem. ${friendlyError(err)}`);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";

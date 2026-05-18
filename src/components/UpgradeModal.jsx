@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Sparkles, Loader2, Star, Check, Gift } from "lucide-react";
 import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [busy, setBusy] = useState(null);
@@ -93,7 +94,7 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
       throw new Error("Resposta sem URL de pagamento.");
     } catch (e) {
       console.error("[Upgrade] erro:", e);
-      setErr(e.message ?? String(e));
+      setErr(friendlyError(e));
     } finally {
       setBusy(null);
     }

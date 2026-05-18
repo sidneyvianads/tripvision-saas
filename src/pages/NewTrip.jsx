@@ -6,6 +6,7 @@ import { useTrips } from "../hooks/useTrips";
 import { TEMAS, TEMA_KEYS, suggestTemaByCidades, getTema, emojiForCidade } from "../data/themes";
 import { temaCssVars } from "../lib/applyTema";
 import { needsSubscription } from "../data/plans";
+import { friendlyError } from "../lib/errorMessages";
 
 export default function NewTrip() {
   const { user } = useAuth();
@@ -100,7 +101,8 @@ export default function NewTrip() {
       });
       navigate(`/v/${trip.slug}/start`);
     } catch (e) {
-      setErr(e.message);
+      console.error("[NewTrip] criar viagem erro:", e);
+      setErr(friendlyError(e));
       setBusy(false);
     }
   };

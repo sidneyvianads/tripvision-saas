@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 // Persiste o histórico de planejamento por (viagem, user) na tabela ia_conversas.
 // Usa upsert (UNIQUE viagem_id, user_id) pra simplificar.
@@ -30,7 +31,10 @@ export function useIaConversa(viagemId, userId) {
         .eq("user_id", userId)
         .maybeSingle();
       if (!active) return;
-      if (error) setError(error.message);
+      if (error) {
+        console.error("[useIaConversa] load erro:", error);
+        setError(friendlyError(error));
+      }
       const arr = Array.isArray(data?.messages) ? data.messages : [];
       setMessages(arr);
       setLoading(false);
@@ -53,7 +57,10 @@ export function useIaConversa(viagemId, userId) {
         },
         { onConflict: "viagem_id,user_id" }
       );
-    if (error) setError(error.message);
+    if (error) {
+      console.error("[useIaConversa] persist erro:", error);
+      setError(friendlyError(error));
+    }
   }, [viagemId, userId]);
 
   const reset = useCallback(async () => {

@@ -8,6 +8,7 @@ import UpgradeModal from "../components/UpgradeModal";
 import ConfirmModal from "../components/ConfirmModal";
 import Avatar from "../components/Avatar";
 import { trackChurn } from "../lib/analytics";
+import { friendlyError } from "../lib/errorMessages";
 
 const formatBR = (iso) => {
   if (!iso) return null;
@@ -164,7 +165,8 @@ export default function Account() {
       await signOut();
       navigate("/", { replace: true });
     } catch (err) {
-      alert("Erro ao deletar conta: " + err.message);
+      console.error("[Account] delete account erro:", err);
+      alert("Erro ao deletar conta. " + friendlyError(err));
       setDelBusy(false);
       setConfirmDelete(false);
     }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 
 export function useUnreadCount(viagemId, userId) {
   const [count, setCount] = useState(0);
@@ -94,8 +95,12 @@ export function useChat(viagemId) {
         .order("created_at", { ascending: false })
         .limit(200);
       if (!active) return;
-      if (error) setError(error.message);
-      else setMessages([...(data ?? [])].reverse());
+      if (error) {
+        console.error("[useChat] load erro:", error);
+        setError(friendlyError(error));
+      } else {
+        setMessages([...(data ?? [])].reverse());
+      }
       setLoading(false);
 
       // Load reactions for these messages
@@ -230,7 +235,10 @@ export function useChat(viagemId) {
     const payload = { viagem_id: viagemId, user_id: userId, content: content.trim() };
     if (replyTo) payload.reply_to = replyTo;
     const { error } = await supabase.from("messages").insert(payload);
-    if (error) setError(error.message);
+    if (error) {
+      console.error("[useChat] sendMessage erro:", error);
+      setError(friendlyError(error));
+    }
   }, [viagemId]);
 
   const toggleReaction = useCallback(async (messageId, userId, emoji) => {
@@ -244,14 +252,21 @@ export function useChat(viagemId) {
         [messageId]: (prev[messageId] ?? []).filter((r) => r.id !== existing.id),
       }));
       const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
-      if (error) setError(error.message);
+      if (error) {
+        console.error("[useChat] reaction delete erro:", error);
+        setError(friendlyError(error));
+      }
     } else {
       const { data, error } = await supabase
         .from("reactions")
         .insert({ message_id: messageId, user_id: userId, emoji })
         .select("id, message_id, user_id, emoji")
         .single();
-      if (error) { setError(error.message); return; }
+      if (error) {
+        console.error("[useChat] reaction insert erro:", error);
+        setError(friendlyError(error));
+        return;
+      }
       if (data) {
         setReactionsByMsg((prev) => {
           const arr2 = prev[messageId] ?? [];

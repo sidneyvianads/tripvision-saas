@@ -11,6 +11,7 @@ import { X, Copy, Check, Download, Share2, Mail, Link as LinkIcon, Trash2, Alert
 import QRCode from "qrcode";
 import { useAuth } from "../hooks/useAuth";
 import { createInvite, listPendingInvites, revokeInvite, getInviteCapacity } from "../lib/invites";
+import { friendlyError } from "../lib/errorMessages";
 
 export default function ShareModal({ open, onClose, trip, initialTab }) {
   const canvasRef = useRef(null);
@@ -235,7 +236,8 @@ function EmailPanel({ trip, user }) {
       setEmail("");
       await reload();
     } catch (e) {
-      setErr(e.message);
+      console.error("[ShareModal] invite erro:", e);
+      setErr(friendlyError(e));
     } finally {
       setSending(false);
     }

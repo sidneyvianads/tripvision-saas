@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Plus, Loader2, X, Trash2, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { friendlyError } from "../lib/errorMessages";
 import Avatar from "./Avatar";
 
 const MAX_PHOTOS = 5;
@@ -62,8 +63,12 @@ export default function Diario({ trip, user }) {
       .eq("viagem_id", trip.id)
       .order("created_at", { ascending: false })
       .limit(200);
-    if (error) setError(error.message);
-    else setPosts(data ?? []);
+    if (error) {
+      console.error("[Diario] load erro:", error);
+      setError(friendlyError(error));
+    } else {
+      setPosts(data ?? []);
+    }
     setLoading(false);
   };
 
@@ -117,8 +122,12 @@ export default function Diario({ trip, user }) {
     if (p.user_id !== user?.id) return;
     if (!confirm("Apagar esse post do diário?")) return;
     const { error } = await supabase.from("diario").delete().eq("id", p.id);
-    if (error) setError(error.message);
-    else setPosts((prev) => prev.filter((x) => x.id !== p.id));
+    if (error) {
+      console.error("[Diario] delete erro:", error);
+      setError(friendlyError(error));
+    } else {
+      setPosts((prev) => prev.filter((x) => x.id !== p.id));
+    }
   };
 
   return (
@@ -281,7 +290,11 @@ function Composer({ trip, user, onClose, onSaved }) {
     };
     const { error } = await supabase.from("diario").insert(payload);
     setSaving(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      console.error("[Diario] save erro:", error);
+      setError(friendlyError(error));
+      return;
+    }
     onSaved();
   };
 

@@ -91,6 +91,17 @@ const MESSAGE_PATTERNS = [
 
 const FALLBACK = "Algo deu errado. Tenta de novo em alguns segundos.";
 
+// Detectores de "mensagem TÉCNICA que não deve passar pro user".
+// Se a string contém qualquer um destes, friendlyError NÃO faz
+// passthrough (cai pro fallback). Cobre nomes de schema, palavras-chave
+// SQL, formatos de código PG, prefixos de error de bibliotecas.
+const TECHNICAL_MARKERS = /\b(constraint|relation|column|table|schema|pgrst|sqlstate|violates|duplicate key|foreign key|primary key|unique|check constraint|not.null|row.level security|permission denied|jwt|bearer|stack trace|undefined is not|cannot read property|typeerror|referenceerror|syntaxerror|networkerror|failed to fetch|abort|timeout|fetch|xhr|cors|net::)\b|(_pkey|_fkey|_idx|_check)|\b\d{5}\b|\bPGRST\d+\b/i;
+
+// Detectores de "mensagem já em PT-BR amigável" — pelo menos um destes
+// precisa bater pro passthrough acontecer. Inclui caracteres acentuados
+// específicos do PT + palavras-gancho comuns nos throws PT-BR do código.
+const FRIENDLY_PT_MARKERS = /[áàâãéêíóôõúç]|\b(faça|tente|tenta|informe|confira|preencha|escolha|verifique|aguarde|atualize|cadastre|aceite|aceit[eai]|cancel|inválid|incorret|m[íi]nim|m[áa]xim|senha|e-?mail|nome|conta|sess[ãa]o|caracter)/i;
+
 /**
  * Sanitiza qualquer erro pra UI. Sempre retorna string em português.
  *
@@ -140,6 +151,16 @@ export function friendlyError(err) {
     // 5) Algumas auth errors vêm como { error: "invalid_credentials" }
     if (typeof err.error === "string" && PG_CODE_MAP[err.error]) {
       return PG_CODE_MAP[err.error];
+    }
+
+    // 6) Passthrough: mensagem que JÁ está em PT-BR amigável (pré-formatada
+    // por throws no useAuth, ex: "Esse e-mail já está cadastrado. Faça
+    // login."). Detectado pela ausência de markers técnicos + presença de
+    // markers PT. Evita degradar UX boa que o dev escreveu na mão.
+    if (msg && typeof msg === "string" && msg.length < 200) {
+      if (!TECHNICAL_MARKERS.test(msg) && FRIENDLY_PT_MARKERS.test(msg)) {
+        return msg;
+      }
     }
   }
 

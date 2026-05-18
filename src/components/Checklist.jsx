@@ -3,6 +3,7 @@ import { Check, Plus, Trash2, Loader2, Sparkles } from "lucide-react";
 import { useChecklist } from "../hooks/useChecklist";
 import { getLimits } from "../data/plans";
 import UpgradeModal from "./UpgradeModal";
+import { friendlyError } from "../lib/errorMessages";
 
 const CATEGORIAS = [
   { value: "antes",       label: "📋 Antes" },
@@ -48,7 +49,10 @@ export default function Checklist({ viagemId, user, isAdmin }) {
       await addItem({ titulo: newTitle, categoria: newCat, prazo: newPrazo || null });
       setNewTitle("");
       setNewPrazo("");
-    } catch (e) { alert("Erro: " + e.message); }
+    } catch (e) {
+      console.error("[Checklist] add erro:", e);
+      alert("Erro. " + friendlyError(e));
+    }
     finally { setAdding(false); }
   };
 

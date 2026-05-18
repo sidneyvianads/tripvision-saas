@@ -10,6 +10,7 @@ import { getStoredCupom, setStoredCupom, clearStoredCupom } from "../lib/cupom";
 import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
 import { supabase } from "../lib/supabase";
 import { trackPaymentStarted } from "../lib/analytics";
+import { friendlyError } from "../lib/errorMessages";
 
 const REDIRECT_DELAY_MS = 1800;
 const TOTAL_STEPS = 3;
@@ -94,7 +95,8 @@ export default function Welcome() {
     try {
       await signIn(email, senha);
     } catch (e) {
-      setErr(e.message);
+      console.error("[Welcome] login erro:", e);
+      setErr(friendlyError(e));
     }
   };
 
@@ -106,7 +108,8 @@ export default function Welcome() {
       await sendPasswordReset(email);
       setInfo("Email enviado! Confira sua caixa (e o spam). O link abre o Viajjei e te deixa criar uma senha nova.");
     } catch (e) {
-      setErr(e.message);
+      console.error("[Welcome] forgot erro:", e);
+      setErr(friendlyError(e));
     }
   };
 
@@ -127,7 +130,8 @@ export default function Welcome() {
       // acontecer. Sem isso, o user ficaria preso no Welcome.
       clearRecovering();
     } catch (e) {
-      setErr(e.message);
+      console.error("[Welcome] reset password erro:", e);
+      setErr(friendlyError(e));
     }
   };
 
@@ -206,11 +210,12 @@ export default function Welcome() {
         throw new Error("Resposta sem URL de pagamento.");
       } catch (e) {
         console.error("[Welcome] checkout failed:", e);
-        setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora (${e.message}). Faça login e tente o upgrade pelo painel.`);
+        setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora. ${friendlyError(e)} Faça login e tente o upgrade pelo painel.`);
         setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
       }
     } catch (e) {
-      setErr(e.message);
+      console.error("[Welcome] signup erro:", e);
+      setErr(friendlyError(e));
     }
   };
 
@@ -534,7 +539,8 @@ function InfluencerStep({ selected, onSelect, onContinue, onBack }) {
         .order("nome");
       if (!active) return;
       if (err) {
-        setError(err.message);
+        console.error("[Welcome] afiliados load erro:", err);
+        setError(friendlyError(err));
         setLoading(false);
         return;
       }
