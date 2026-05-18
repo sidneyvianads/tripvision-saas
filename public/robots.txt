@@ -1,0 +1,35 @@
+# robots.txt — Viajjei
+# Vite copia /public/ direto pra raiz no build; arquivo acessível em
+# https://viajjei.com.br/robots.txt
+#
+# Estratégia:
+# - Allow public marketing pages (landing, precos, legais)
+# - Disallow rotas autenticadas (admin, /v/, conta, etc) — não-acessíveis
+#   sem auth, mas bloqueio evita Google tentar e gastar crawl budget.
+# - Allow /afiliado/:cupom (público — descoberta via links Instagram).
+
+User-agent: *
+Allow: /
+
+# Auth flow (nada útil pra indexar)
+Disallow: /welcome
+Disallow: /aceitar-convite
+
+# Rotas protegidas (gating server-side já bloqueia, mas reforça)
+Disallow: /v/new
+Disallow: /v/
+Disallow: /conta
+Disallow: /assinatura/
+
+# Admin panels — owner-only, jamais indexar
+Disallow: /admin
+Disallow: /admin/
+
+# Query-strings de tracking — evita conteúdo duplicado em search
+Disallow: /*?utm_*
+Disallow: /*?ref=*
+Disallow: /*?invite=*
+Disallow: /*?cupom=*
+
+# Sitemap
+Sitemap: https://viajjei.com.br/sitemap.xml
