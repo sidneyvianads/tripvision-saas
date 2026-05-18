@@ -25,6 +25,8 @@ Produto do **Grupo Multvision**.
 | IA fallbacks | OpenAI GPT-4o-mini → Google Gemini 2.5 Flash |
 | Pagamento | Mercado Pago (preapproval + webhook HMAC) |
 | Email transacional | Resend (stub se ausente) |
+| Storage | Supabase Storage (buckets `avatars`, `diario`) |
+| Export PDF | pdf-lib (vetorial, texto selecionável) |
 | Backend | Netlify Functions (Node 20) + Edge Functions (Deno) |
 | Observabilidade | Sentry (stub) + PostHog (stub) |
 | Rate limit | Upstash Redis REST (stub se ausente) |
@@ -114,15 +116,18 @@ src/
     storage.js           clearSessionScopedStorage no signOut
     safeHref.js          dompurify de href pra prevenir XSS
     roteiroParser.js     parser do JSON do Jei pro DB
-    rateLimit.js         client-side soft limit (server tem o RPC hard)
+    exportPdf.js         export roteiro pra PDF vetorial via pdf-lib (R24)
+    avatarUpload.js      upload de avatar pro Storage (R21)
+    diarioUpload.js      upload de fotos do diário pro Storage (R22)
+    useIaUsage.js        contador IA server-first com cache 60s (R20)
     sentry.js / analytics.js   wrappers com stub mode
   data/                plans.js, themes.js, types.js — fonte da verdade
 netlify/
-  functions/           11 endpoints serverless (Node 20)
+  functions/           12 endpoints serverless (Node 20)
   edge-functions/      og.mjs (meta tags dinâmicas em /v/:slug)
 supabase/
-  migrations/          22 arquivos versionados (DDL, RPCs, RLS policies)
-tests/                 17 arquivos vitest smoke tests
+  migrations/          27 arquivos versionados (DDL, RPCs, RLS policies)
+tests/                 25 arquivos vitest smoke tests
 docs/
   ADR/                 decisões arquiteturais
   RUNBOOK.md           incidentes comuns + comandos
