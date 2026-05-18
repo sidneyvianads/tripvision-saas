@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 import { AuthProvider } from "./hooks/useAuth";
+import { ConfirmProvider } from "./lib/useConfirm";
 import OfflineBanner from "./components/OfflineBanner";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { initSentry, captureException } from "./lib/sentry";
@@ -49,8 +50,10 @@ createRoot(document.getElementById("root")).render(
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <OfflineBanner />
-          <App />
+          <ConfirmProvider>
+            <OfflineBanner />
+            <App />
+          </ConfirmProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
