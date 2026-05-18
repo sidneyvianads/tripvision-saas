@@ -13,6 +13,7 @@ import { useConfirm } from "../lib/useConfirm";
 import { useModalA11y } from "../lib/useModalA11y";
 import { useDebounce } from "../lib/useDebounce";
 import Pagination from "../components/Pagination";
+import { downloadCsv } from "../lib/csvExport";
 
 const fmtBRL = (n) => `R$ ${Number(n ?? 0).toFixed(2).replace(".", ",")}`;
 const fmtMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -125,6 +126,38 @@ function AfiliadosTab() {
   // depois de filtrar por algo que tem poucos resultados.
   useEffect(() => { setPage(1); }, [debouncedSearch, filterAtivo]);
 
+  // R19-6: CSV com TODOS os afiliados que batem com os filtros atuais.
+  // page_size=10000 cobre qualquer scale realista (Sidney tem ~5 hoje).
+  const exportCsv = async () => {
+    const { data, error } = await supabase.rpc("admin_afiliados_list_v2", {
+      p_page: 1,
+      p_page_size: 10000,
+      p_search: debouncedSearch || null,
+      p_filter_ativo: filterAtivo,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (error) {
+      console.error("[AdminAfiliados] CSV afiliados erro:", error);
+      await showAlert(friendlyError(error), { title: "Não consegui exportar" });
+      return;
+    }
+    const all = data?.rows ?? [];
+    const rows = [
+      ["Nome", "Email", "Instagram", "Cupom", "Comissão %", "Desconto %", "Ativo", "Indicados", "Receita R$", "Criado em"],
+      ...all.map((a) => [
+        a.nome, a.email, a.instagram ?? "", a.cupom,
+        Number(a.comissao_percent).toFixed(0),
+        Number(a.desconto_percent ?? 0).toFixed(0),
+        a.ativo ? "sim" : "não",
+        a.total_indicados,
+        Number(a.total_receita ?? 0).toFixed(2).replace(".", ","),
+        a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "",
+      ]),
+    ];
+    downloadCsv(`afiliados-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
   const save = async (form) => {
     // R9-3: RPC admin_upsert_afiliado SECURITY DEFINER (guard
     // is_platform_owner). REVOKE table-level INSERT/UPDATE em afiliados
@@ -176,6 +209,9 @@ function AfiliadosTab() {
             <option value="ativo">Ativos</option>
             <option value="inativo">Inativos</option>
           </select>
+          <button onClick={exportCsv} className="btn-ghost !py-1.5 !px-3 text-sm inline-flex items-center gap-1" title="Exportar todos os afiliados que batem com filtros">
+            <Download className="w-3.5 h-3.5" /> CSV
+          </button>
           <button onClick={() => setEditing("new")} className="btn-primary inline-flex items-center gap-1.5 !py-2 text-sm">
             <Plus className="w-4 h-4" /> Novo
           </button>
@@ -365,6 +401,7 @@ function UsuariosTab() {
   const [filterPlano, setFilterPlano] = useState("todos");
   const [afiliadoFilter, setAfiliadoFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const { showAlert } = useConfirm();
   // R13-1: mountedAt fica estável entre renders (lazy useState init roda só
   // uma vez). userStatus chamava Date.now() inline → impuro em React 19
   // concurrent. Granularidade de plano/trial é dias, então mountedAt é
@@ -415,6 +452,43 @@ function UsuariosTab() {
   }, [reload]);
 
   useEffect(() => { setPage(1); }, [debouncedSearch, filterPlano, filterOrigem, afiliadoFilter]);
+
+  // R19-6: CSV com TODOS os users que batem com filtros atuais.
+  const exportCsv = async () => {
+    const { data, error } = await supabase.rpc("admin_users_list", {
+      p_page: 1,
+      p_page_size: 10000,
+      p_search: debouncedSearch || null,
+      p_filter_plano: filterPlano,
+      p_filter_origem: filterOrigem,
+      p_filter_afiliado: afiliadoFilter || null,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (error) {
+      console.error("[AdminAfiliados] CSV users erro:", error);
+      await showAlert(friendlyError(error), { title: "Não consegui exportar" });
+      return;
+    }
+    const all = data?.rows ?? [];
+    const rows = [
+      ["Nome", "Email", "Plano", "Plano expira em", "Trial até", "Origem", "Cupom afiliado", "Cadastro"],
+      ...all.map((u) => {
+        const af = u.afiliado_id ? afiliadoMap.get(u.afiliado_id) : null;
+        return [
+          u.nome ?? "",
+          u.email ?? "",
+          u.plano ?? "",
+          u.plano_expires_at ? new Date(u.plano_expires_at).toLocaleDateString("pt-BR") : "",
+          u.trial_ends_at ? new Date(u.trial_ends_at).toLocaleDateString("pt-BR") : "",
+          u.origem ?? "organico",
+          af?.cupom ?? "",
+          u.created_at ? new Date(u.created_at).toLocaleDateString("pt-BR") : "",
+        ];
+      }),
+    ];
+    downloadCsv(`usuarios-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
 
   const afiliadoMap = useMemo(() => {
     const m = new Map();
@@ -467,6 +541,9 @@ function UsuariosTab() {
             <option key={a.id} value={a.id}>{a.nome} · {a.cupom}</option>
           ))}
         </select>
+        <button onClick={exportCsv} className="btn-ghost !py-1.5 !px-3 text-sm inline-flex items-center gap-1" title="Exportar todos os usuários que batem com filtros">
+          <Download className="w-3.5 h-3.5" /> CSV
+        </button>
       </div>
 
       {loading && users.length === 0 ? (
@@ -625,12 +702,7 @@ function ComissoesTab() {
         c.status,
       ]),
     ];
-    const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `comissoes-${mes || "todos"}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(`comissoes-${mes || "todos"}.csv`, rows);
   };
 
   // R19-5: removidos os Stats inline (totalDevido/totalPago) — eles
