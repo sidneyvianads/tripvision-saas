@@ -10,7 +10,7 @@ import {
   parseViagemUpdate, applyViagemUpdate, summarizeViagemPatch,
 } from "../lib/roteiroParser";
 import { buildRoteiroResumo, buildWelcomeMessage } from "../lib/roteiroResumo";
-import { getPlanUsage, bumpPlanUsage, setPlanUsageFromServer } from "../lib/rateLimit";
+import { useIaUsage } from "../hooks/useIaUsage";
 import { useConfirm } from "../lib/useConfirm";
 import { ACTIVITY_TYPES } from "../data/types";
 import { isPaid, isOwner, hasActiveAccess } from "../data/plans";
@@ -189,37 +189,17 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState(0);
-  const [usage, setUsage] = useState(() => getPlanUsage(user?.id, user?.plano));
+  // R20-3: server-first via hook. Cache 60s. Resolve sync entre abas,
+  // limpeza de LS e divergência optimistic-vs-server.
+  const usage = useIaUsage(user);
 
   const hasAccess = hasActiveAccess(user);
-  const proBlocked = hasAccess && usage.remaining <= 0;
+  const proBlocked = hasAccess && !usage.isUnlimited && usage.remaining <= 0;
   const blocked = !hasAccess || proBlocked;
 
   useEffect(() => {
-    if (import.meta.env.DEV) console.log("[PlanChat] hasAccess:", hasAccess, "user.plano:", user?.plano, "blocked:", blocked);
-  }, [hasAccess, user?.plano, blocked]);
-
-  // Sincroniza contador mensal com o BANCO (fonte da verdade) ao montar.
-  useEffect(() => {
-    if (!user?.id || isOwner(user?.plano) || !hasAccess) return;
-    let active = true;
-    (async () => {
-      try {
-        const { data, error } = await supabase.rpc("count_ia_user_messages_in_month", { uid: user.id });
-        if (!active) return;
-        if (error) {
-          console.warn("[PlanChat] count rpc error:", error);
-          return;
-        }
-        const serverCount = typeof data === "number" ? data : 0;
-        setPlanUsageFromServer(user.id, user.plano, serverCount);
-        setUsage(getPlanUsage(user.id, user.plano));
-      } catch (e) {
-        console.warn("[PlanChat] sync failed:", e);
-      }
-    })();
-    return () => { active = false; };
-  }, [user?.id, user?.plano, hasAccess]);
+    if (import.meta.env.DEV) console.log("[PlanChat] hasAccess:", hasAccess, "user.plano:", user?.plano, "blocked:", blocked, "used/limit:", usage.used, "/", usage.limit);
+  }, [hasAccess, user?.plano, blocked, usage.used, usage.limit]);
   const [err, setErr] = useState(null);
   const [streamingText, setStreamingText] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -269,13 +249,12 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       return;
     }
 
-    // Pro/Grupo: contador mensal local (server-side gate é definitivo no /api/plan)
-    if (isPaid(user.plano)) {
-      const u = getPlanUsage(user.id, user.plano);
-      if (u.remaining <= 0) {
-        setErr(`Você usou ${u.used}/${u.limit} conversas com o Jei este mês. Renova no dia 1.`);
-        return;
-      }
+    // Pro/Grupo: contador mensal via hook (server-first com cache 60s).
+    // Server gate em /api/plan é o definitivo, mas esse bloqueio aqui evita
+    // round-trip desnecessário quando já sabemos que vai falhar.
+    if (isPaid(user.plano) && !usage.isUnlimited && usage.remaining <= 0) {
+      setErr(`Você usou ${usage.used}/${usage.limit} conversas com o Jei este mês. Renova no dia 1.`);
+      return;
     }
 
     setErr(null);
@@ -412,9 +391,12 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
       await persist(after);
       setStreamingText("");
       setLastUserText(null);
-      // Pro: bump contador diário antigo. Free já foi bumpado ANTES do envio (hard gate).
-      if (isPaid(user.plano)) {
-        setUsage(bumpPlanUsage(user.id, user.plano));
+      // Pro/Grupo: bump optimistic (cache local +1) + reconcile com server.
+      // refresh() agenda RPC count_ia_user_messages_in_month; UI ajusta
+      // o valor exato quando volta. Se falhar (rede), cache stale fica.
+      if (isPaid(user.plano) && !usage.isUnlimited) {
+        usage.optimisticBump();
+        usage.refresh();
       }
     } catch (e) {
       clearTimeout(safetyTimer);
@@ -509,12 +491,17 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
           >
             📋 Resumir
           </button>
-          <span>
-            {isOwner(user?.plano)
+          <span title={usage.stale ? "Contador pode estar desatualizado — sem conexão com o servidor." : ""}>
+            {usage.isUnlimited
               ? "👑 sem limite"
               : !hasAccess
                 ? "Sem assinatura ativa"
-                : `${usage.used}/${usage.limit} conversas este mês`}
+                : (
+                  <>
+                    {usage.used}/{usage.limit} conversas este mês
+                    {usage.stale && <span className="text-amber-500 ml-1" aria-label="desatualizado">•</span>}
+                  </>
+                )}
           </span>
           {messages.length > 0 && !busy && (
             <button onClick={handleReset} className="text-red-500 hover:text-red-700 inline-flex items-center gap-1" title="Apagar conversa">
