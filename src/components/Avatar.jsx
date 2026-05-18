@@ -1,4 +1,17 @@
+// Avatar do usuário: foto + fallback colorido com inicial.
+//
+// R21-2: avatar_url aceita 2 formatos durante a migração:
+//   - "https://..." → URL pública do Supabase Storage (formato novo)
+//   - "data:image/..." → Base64 inline legacy (até o script de migração rodar)
+//
+// img src nativo aceita ambos, então não precisa ramificar — só
+// adicionamos onError pra cair pro fallback quando a URL estiver quebrada
+// (Storage offline, foto deletada mas users.avatar_url ainda referencia).
+
+import { useState } from "react";
+
 export default function Avatar({ user, size = 36, className = "", style = {} }) {
+  const [failed, setFailed] = useState(false);
   const initial = ((user?.nome ?? "?").trim().charAt(0) || "?").toUpperCase();
   const cor = user?.avatar_cor ?? "#7CB9E8";
   const baseStyle = {
@@ -9,12 +22,13 @@ export default function Avatar({ user, size = 36, className = "", style = {} }) 
     ...style,
   };
 
-  if (user?.avatar_url) {
+  if (user?.avatar_url && !failed) {
     return (
       <img
         src={user.avatar_url}
         alt={user?.nome ?? ""}
         loading="lazy"
+        onError={() => setFailed(true)}
         className={`rounded-full object-cover shrink-0 ${className}`}
         style={baseStyle}
         draggable={false}
