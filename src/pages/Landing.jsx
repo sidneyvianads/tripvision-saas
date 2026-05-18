@@ -253,10 +253,17 @@ function PhotoCollage() {
         className="absolute inset-0 rounded-2xl overflow-hidden"
         style={{ boxShadow: "0 20px 60px rgba(15, 23, 42, 0.18)" }}
       >
+        {/* R27-4: LCP candidate. eager + fetchPriority high + decoding sync
+            (preferido sobre async pra hero principal). width/height
+            previne CLS — browser pré-aloca espaço antes do load. */}
         <img
           src={HERO_PHOTOS.noronha}
-          alt="Fernando de Noronha"
+          alt="Praia de Fernando de Noronha, Pernambuco — vista aérea com águas cristalinas"
           loading="eager"
+          fetchpriority="high"
+          decoding="sync"
+          width="1600"
+          height="1070"
           className="w-full h-full object-cover"
         />
       </div>
@@ -265,14 +272,30 @@ function PhotoCollage() {
         className="absolute -top-4 -left-4 w-[42%] aspect-[4/3] rounded-2xl overflow-hidden hidden sm:block"
         style={{ boxShadow: "0 12px 32px rgba(15, 23, 42, 0.22)", border: "4px solid white" }}
       >
-        <img src={HERO_PHOTOS.rio} alt="Rio de Janeiro" loading="eager" className="w-full h-full object-cover" />
+        <img
+          src={HERO_PHOTOS.rio}
+          alt="Pão de Açúcar e Baía de Guanabara no Rio de Janeiro"
+          loading="eager"
+          decoding="async"
+          width="999"
+          height="666"
+          className="w-full h-full object-cover"
+        />
       </div>
       {/* Foto sobreposta — Salvador, canto inferior direito */}
       <div
         className="absolute -bottom-6 -right-4 w-[48%] aspect-[4/3] rounded-2xl overflow-hidden hidden sm:block"
         style={{ boxShadow: "0 12px 32px rgba(15, 23, 42, 0.22)", border: "4px solid white" }}
       >
-        <img src={HERO_PHOTOS.salvador} alt="Salvador" loading="eager" className="w-full h-full object-cover" />
+        <img
+          src={HERO_PHOTOS.salvador}
+          alt="Pelourinho e arquitetura colonial em Salvador, Bahia"
+          loading="eager"
+          decoding="async"
+          width="840"
+          height="470"
+          className="w-full h-full object-cover"
+        />
       </div>
       {/* Pin emoji decorativo */}
       <div
@@ -494,15 +517,17 @@ function Features() {
 
 // ===== POPULAR DESTINATIONS ========================================
 
+// R27-4: Roma removida — foto era 273×185px placeholder corrompido (11KB).
+// Carrossel agora tem 7 destinos. Restantes: alt descritivos + dimensões
+// reais pra anti-CLS + loading lazy (abaixo do fold).
 const DESTINOS = [
-  { nome: "Fernando de Noronha", emoji: "🏝️", url: "/fotos/noronha.jpg"  },
-  { nome: "Rio de Janeiro",      emoji: "🏖️", url: "/fotos/rio.jpg"      },
-  { nome: "Salvador",            emoji: "🎭", url: "/fotos/salvador.jpg" },
-  { nome: "Paris",               emoji: "🗼", url: "/fotos/paris.jpg"    },
-  { nome: "Londres",             emoji: "🇬🇧", url: "/fotos/londres.jpg"  },
-  { nome: "Dubai",               emoji: "🏙️", url: "/fotos/dubai.webp"   },
-  { nome: "Roma",                emoji: "🏛️", url: "/fotos/roma.jpeg"    },
-  { nome: "Polinésia",           emoji: "🌴", url: "/fotos/polinesia.jpeg" },
+  { nome: "Fernando de Noronha", emoji: "🏝️", url: "/fotos/noronha.jpg",     alt: "Praia de Fernando de Noronha com águas cristalinas", w: 1600, h: 1070 },
+  { nome: "Rio de Janeiro",      emoji: "🏖️", url: "/fotos/rio.jpg",         alt: "Pão de Açúcar e Baía de Guanabara no Rio de Janeiro",  w: 999,  h: 666  },
+  { nome: "Salvador",            emoji: "🎭", url: "/fotos/salvador.jpg",    alt: "Pelourinho colonial em Salvador, Bahia",               w: 840,  h: 470  },
+  { nome: "Paris",               emoji: "🗼", url: "/fotos/paris.jpg",       alt: "Torre Eiffel ao entardecer em Paris",                  w: 1200, h: 800  },
+  { nome: "Londres",             emoji: "🇬🇧", url: "/fotos/londres.jpg",     alt: "Big Ben e ônibus vermelho em Londres",                w: 1640, h: 860  },
+  { nome: "Dubai",               emoji: "🏙️", url: "/fotos/dubai.webp",      alt: "Skyline de Dubai com Burj Khalifa ao fundo",           w: 1600, h: 900  },
+  { nome: "Polinésia",           emoji: "🌴", url: "/fotos/polinesia.jpeg",  alt: "Bangalôs sobre as águas turquesa da Polinésia Francesa", w: 1024, h: 684 },
 ];
 
 function PopularDestinations() {
@@ -522,7 +547,15 @@ function PopularDestinations() {
               <div
                 className="relative aspect-[4/5] sm:aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.03] shadow-md hover:shadow-xl"
               >
-                <img src={d.url} alt={d.nome} loading="lazy" className="w-full h-full object-cover" />
+                <img
+                  src={d.url}
+                  alt={d.alt}
+                  loading="lazy"
+                  decoding="async"
+                  width={d.w}
+                  height={d.h}
+                  className="w-full h-full object-cover"
+                />
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{ background: "linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.6) 100%)" }}
