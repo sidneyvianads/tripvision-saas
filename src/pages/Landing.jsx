@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PricingSection from "../components/PricingSection";
 import Logo from "../components/Logo";
+import { usePageMeta } from "../lib/usePageMeta";
 
 // ===== HELPERS =====================================================
 
@@ -57,6 +58,14 @@ export default function Landing() {
   const navigate = useNavigate();
   const goSignup = () => navigate("/welcome?mode=signup");
   const goLogin  = () => navigate("/welcome");
+
+  // R27-2: SEO meta tags por rota. Landing é a página com priority 1.0
+  // no sitemap — title + description aqui são o que aparece no Google.
+  usePageMeta({
+    title: "Viajjei — Concierge de viagem com IA | Roteiros personalizados",
+    description: "Planeje sua viagem em minutos com o Jei, concierge IA do Viajjei. Roteiros personalizados, contatos, checklist e diário em uma só plataforma.",
+    canonical: "https://viajjei.com.br/",
+  });
 
   return (
     <div className="bg-white text-[#0F172A]">

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import Logo from "../components/Logo";
+import { usePageMeta } from "../lib/usePageMeta";
 
 function LegalLayout({ title, children }) {
   return (
@@ -31,6 +32,11 @@ function LegalLayout({ title, children }) {
 }
 
 export function TermosPage() {
+  usePageMeta({
+    title: "Termos de Uso | Viajjei",
+    description: "Termos de uso do Viajjei, concierge de viagem com inteligência artificial.",
+    canonical: "https://viajjei.com.br/termos",
+  });
   return (
     <LegalLayout title="Termos de Uso">
       <p>
@@ -86,6 +92,11 @@ export function TermosPage() {
 }
 
 export function PrivacidadePage() {
+  usePageMeta({
+    title: "Política de Privacidade | Viajjei",
+    description: "Como o Viajjei coleta, usa e protege seus dados. Em conformidade com a LGPD.",
+    canonical: "https://viajjei.com.br/privacidade",
+  });
   return (
     <LegalLayout title="Política de Privacidade">
       <p>

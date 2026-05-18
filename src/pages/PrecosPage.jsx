@@ -3,10 +3,19 @@ import { ArrowLeft } from "lucide-react";
 import PricingSection from "../components/PricingSection";
 import Logo from "../components/Logo";
 import { useAuth } from "../hooks/useAuth";
+import { usePageMeta } from "../lib/usePageMeta";
 
 export default function PrecosPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // R27-2: title/description próprios — Google Search Console pode
+  // indexar /precos como entry point (priority 0.9 no sitemap).
+  usePageMeta({
+    title: "Planos e preços | Viajjei",
+    description: "Conheça os planos Pro (R$14,90/mês) e Grupo (R$29,90/mês) do Viajjei. 7 dias grátis pra testar.",
+    canonical: "https://viajjei.com.br/precos",
+  });
 
   const handleChoose = (plano, ciclo = "mensal") => {
     if (!user) { navigate("/welcome?mode=signup"); return; }
