@@ -18,8 +18,44 @@ export default function Countdown({ start, end }) {
   // re-render — agora ele também é o ÚNICO ponto que lê o clock.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(id);
+    // R25-2: pausa o interval quando tab fica oculto.
+    // Sem isso, browsers (especialmente mobile) deixam o setInterval
+    // rodando em background — drena bateria sem benefício (user não
+    // está vendo). visibilitychange evento garante retomar quando
+    // o user voltar pra aba.
+    // `start` da prop existe no escopo externo — usar nomes diferentes
+    // pros helpers do interval pra não shadowar.
+    let intervalId = null;
+    const tick = () => setNow(Date.now());
+    const startTimer = () => {
+      if (intervalId != null) return;
+      tick(); // sync imediato — se voltou de hidden há horas, contador
+              // estava desatualizado
+      intervalId = setInterval(tick, 60_000);
+    };
+    const stopTimer = () => {
+      if (intervalId != null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const onVisChange = () => {
+      if (typeof document !== "undefined" && document.hidden) stopTimer();
+      else startTimer();
+    };
+
+    // Bootstrap: respeita estado atual (SSR-safe via typeof document).
+    if (typeof document === "undefined" || !document.hidden) startTimer();
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisChange);
+    }
+
+    return () => {
+      stopTimer();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisChange);
+      }
+    };
   }, []);
 
   if (!start) return null;
