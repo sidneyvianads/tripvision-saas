@@ -21,6 +21,9 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [contatosOpen, setContatosOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  // R14-6: aba inicial do ShareModal. People dispara com 'email' pra
+  // abrir direto no convite por email.
+  const [shareTab, setShareTab] = useState("link");
   const [profileOpen, setProfileOpen] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -36,6 +39,15 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
 
   const handleShare = () => {
     if (!canShare) { setShowUpgrade(true); return; }
+    setShareTab("link");
+    setShareOpen(true);
+  };
+
+  // R14-6: People → "Convidar" abre ShareModal direto na aba email.
+  const handleOpenInvite = () => {
+    if (!canShare) { setShowUpgrade(true); return; }
+    setPeopleOpen(false);
+    setShareTab("email");
     setShareOpen(true);
   };
 
@@ -239,10 +251,10 @@ export default function TripLayout({ trip, isAdmin, tabLabel, user, onLogout, ch
         document.body
       )}
 
-      {peopleOpen   && <People   viagemId={trip.id} onClose={() => setPeopleOpen(false)} />}
+      {peopleOpen   && <People   viagemId={trip.id} isAdmin={isAdmin} onOpenInvite={handleOpenInvite} onClose={() => setPeopleOpen(false)} />}
       {contatosOpen && <Contatos viagemId={trip.id} isAdmin={isAdmin} onClose={() => setContatosOpen(false)} />}
       {profileOpen  && <Profile  onClose={() => setProfileOpen(false)} />}
-      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} trip={trip} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} trip={trip} initialTab={shareTab} />
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="compartilhar" user={user} />
     </div>
   );
