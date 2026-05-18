@@ -42,11 +42,21 @@ export function useTrips(userId) {
     cover_emoji, cor_tema, tema,
   }) => {
     if (!userId) throw new Error("Não logado.");
-    let slug;
+    // R28-2: garante slug realmente único antes do INSERT.
+    // Antes: se as 5 tentativas TODAS colidissem, o último slug colidido
+    // ia pra INSERT mesmo e o user via error 23505 (unique violation)
+    // borbulhando como "duplicate key value violates...". Raríssimo
+    // (256^8 espaço, ~1.8e19), mas no day-0 com slug curto era teorico.
+    // Agora: track explícito de free-slot via flag — se nenhuma das 5
+    // for livre, throw com mensagem amigável.
+    let slug = null;
     for (let i = 0; i < 5; i++) {
-      slug = randomSlug(8);
-      const { data: existing } = await supabase.from("viagens").select("id").eq("slug", slug).maybeSingle();
-      if (!existing) break;
+      const candidate = randomSlug(8);
+      const { data: existing } = await supabase.from("viagens").select("id").eq("slug", candidate).maybeSingle();
+      if (!existing) { slug = candidate; break; }
+    }
+    if (!slug) {
+      throw new Error("Não foi possível gerar slug único. Tenta de novo em alguns segundos.");
     }
     const ad = Math.max(0, Number(adultos ?? 0));
     const cr = Math.max(0, Number(criancas ?? 0));
