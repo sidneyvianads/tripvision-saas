@@ -529,23 +529,56 @@ function UsuariosTab() {
 
 function ComissoesTab() {
   const [comissoes, setComissoes] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [mes, setMes] = useState(fmtMonth());
+  const [filterStatus, setFilterStatus] = useState("todos");
+  const [filterAfiliado, setFilterAfiliado] = useState("");
+  const [afiliados, setAfiliados] = useState([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useConfirm();
 
+  // Lookup de afiliados pro dropdown filter — uma vez na mount.
   useEffect(() => {
-    if (!mes) return;
-    setLoading(true);
     (async () => {
-      const { data } = await supabase
-        .from("comissoes")
-        .select("*, afiliado:afiliados(nome,cupom)")
-        .eq("mes_referencia", mes)
-        .order("created_at", { ascending: false });
-      setComissoes(data ?? []);
-      setLoading(false);
+      const { data } = await supabase.from("afiliados").select("id, nome, cupom").order("nome");
+      setAfiliados(data ?? []);
     })();
-  }, [mes]);
+  }, []);
+
+  // R19-5: paginação server-side via admin_comissoes_list.
+  // mes vazio = sem filtro de mês (admin pode ver todas).
+  const reload = useCallback(async (signal) => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("admin_comissoes_list", {
+      p_page: page,
+      p_page_size: pageSize,
+      p_filter_status: filterStatus,
+      p_filter_afiliado: filterAfiliado || null,
+      p_filter_mes: mes || null,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (signal?.aborted) return;
+    if (error) {
+      console.error("[AdminAfiliados] comissoes list erro:", error);
+      setComissoes([]);
+      setTotal(0);
+    } else {
+      setComissoes(data?.rows ?? []);
+      setTotal(data?.total ?? 0);
+    }
+    setLoading(false);
+  }, [page, pageSize, filterStatus, filterAfiliado, mes]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    reload(ctrl.signal);
+    return () => ctrl.abort();
+  }, [reload]);
+
+  useEffect(() => { setPage(1); }, [mes, filterStatus, filterAfiliado]);
 
   const togglePago = async (com) => {
     const next = com.status === "pago" ? "pendente" : "pago";
@@ -560,10 +593,29 @@ function ComissoesTab() {
     setComissoes((prev) => prev.map((c) => c.id === com.id ? { ...c, status: next } : c));
   };
 
-  const exportCsv = () => {
+  // R19-5: exportCsv pega TODOS os registros que batem com os filtros
+  // atuais (page_size grande). Antes pegava só o que estava em comissoes,
+  // que com paginação server-side virou só a página corrente — CSV
+  // ficaria parcial sem o user perceber.
+  const exportCsv = async () => {
+    const { data, error } = await supabase.rpc("admin_comissoes_list", {
+      p_page: 1,
+      p_page_size: 10000,
+      p_filter_status: filterStatus,
+      p_filter_afiliado: filterAfiliado || null,
+      p_filter_mes: mes || null,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (error) {
+      console.error("[AdminAfiliados] CSV export erro:", error);
+      await showAlert(friendlyError(error), { title: "Não consegui exportar" });
+      return;
+    }
+    const all = data?.rows ?? [];
     const rows = [
       ["Afiliado", "Cupom", "Mês", "Valor assinatura", "%", "Comissão", "Status"],
-      ...comissoes.map((c) => [
+      ...all.map((c) => [
         c.afiliado?.nome ?? "?",
         c.afiliado?.cupom ?? "?",
         c.mes_referencia,
@@ -577,31 +629,66 @@ function ComissoesTab() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `comissoes-${mes}.csv`; a.click();
+    a.href = url; a.download = `comissoes-${mes || "todos"}.csv`; a.click();
     URL.revokeObjectURL(url);
   };
 
-  const totalDevido = comissoes.filter((c) => c.status === "pendente").reduce((s, c) => s + Number(c.valor_comissao), 0);
-  const totalPago = comissoes.filter((c) => c.status === "pago").reduce((s, c) => s + Number(c.valor_comissao), 0);
+  // R19-5: removidos os Stats inline (totalDevido/totalPago) — eles
+  // somavam só os registros da PÁGINA atual com paginação server-side,
+  // dando números enganosos. Pra totalização real, exportar CSV (R19-6).
 
   return (
     <section className="card p-5">
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="font-display font-extrabold text-[#0F172A] text-base flex-1">Comissões</div>
-        <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="input !py-1.5 !px-2 text-sm" />
-        <button onClick={exportCsv} className="btn-ghost !py-1.5 !px-3 text-sm">CSV</button>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="input !py-1.5 !px-2 text-sm"
+          aria-label="Filtrar por status"
+        >
+          <option value="todos">Todos status</option>
+          <option value="pendente">Pendente</option>
+          <option value="pago">Pago</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <select
+          value={filterAfiliado}
+          onChange={(e) => setFilterAfiliado(e.target.value)}
+          className="input !py-1.5 !px-2 text-sm"
+          aria-label="Filtrar por afiliado"
+        >
+          <option value="">Todos afiliados</option>
+          {afiliados.map((a) => (
+            <option key={a.id} value={a.id}>{a.nome} · {a.cupom}</option>
+          ))}
+        </select>
+        <input
+          type="month"
+          value={mes}
+          onChange={(e) => setMes(e.target.value)}
+          className="input !py-1.5 !px-2 text-sm"
+          aria-label="Filtrar por mês"
+        />
+        <button
+          onClick={() => setMes("")}
+          className="btn-ghost !py-1.5 !px-2 text-xs"
+          title="Limpar filtro de mês"
+          disabled={!mes}
+        >
+          Todos meses
+        </button>
+        <button onClick={exportCsv} className="btn-ghost !py-1.5 !px-3 text-sm inline-flex items-center gap-1">
+          <Download className="w-3.5 h-3.5" /> CSV
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-        <Stat label="Pendente" value={fmtBRL(totalDevido)} highlight />
-        <Stat label="Pago" value={fmtBRL(totalPago)} />
-        <Stat label="Comissões" value={comissoes.length} />
-      </div>
-
-      {loading ? (
+      {loading && comissoes.length === 0 ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-[#F97316]" /></div>
       ) : comissoes.length === 0 ? (
-        <div className="text-[#64748B] text-sm">Sem comissões em {mes}.</div>
+        <div className="text-[#64748B] text-sm">
+          Sem comissões{mes ? ` em ${mes}` : ""}{filterStatus !== "todos" ? ` (${filterStatus})` : ""}.
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -638,6 +725,17 @@ function ComissoesTab() {
           </table>
         </div>
       )}
+
+      <Pagination
+        currentPage={page}
+        totalCount={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        pageSizeOptions={[25, 50, 100]}
+        variant="full"
+        label="comissões"
+      />
     </section>
   );
 }
