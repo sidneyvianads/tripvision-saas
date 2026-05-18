@@ -3,6 +3,7 @@ import { X, Sparkles, Loader2, Star, Check, Gift } from "lucide-react";
 import { PLANS, PRICES, monthlyEquivalent, TRIAL_DAYS } from "../data/plans";
 import { supabase } from "../lib/supabase";
 import { friendlyError } from "../lib/errorMessages";
+import { useModalA11y } from "../lib/useModalA11y";
 
 export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [busy, setBusy] = useState(null);
@@ -10,6 +11,18 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   const [info, setInfo] = useState(null);
   const [ciclo, setCiclo] = useState("anual");
   const [refAfiliado, setRefAfiliado] = useState(null);
+
+  // R18-4: locked={!!busy} impede ESC + backdrop click durante o redirect
+  // pro Mercado Pago. Fechar mid-payment podia deixar o user num estado
+  // confuso: preapproval já criado, MP em loading, modal sumiu, sem
+  // feedback. Locked mantém o modal até a request voltar (ou erro)
+  // ou redirect efetivo pro init_point.
+  const locked = !!busy;
+  const { dialogRef, titleId } = useModalA11y({
+    isOpen: open,
+    onClose,
+    locked,
+  });
 
   // Pega o afiliado de quem indicou esse user (lookup transparente — sem digitação).
   // O upgrade flow não pode atribuir afiliado novo; só preserva o original do cadastro.
@@ -103,16 +116,21 @@ export default function UpgradeModal({ open, onClose, reason = "ia", user }) {
   return (
     <div
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/70 animate-fade-up"
-      onClick={onClose}
+      onClick={locked ? undefined : onClose}
+      role="presentation"
     >
       <div
+        ref={dialogRef}
         className="w-full sm:max-w-2xl sm:mx-4 rounded-t-3xl sm:rounded-2xl max-h-[92vh] overflow-hidden flex flex-col animate-pop bg-white"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="text-white px-4 py-3 flex items-center gap-2" style={{ background: "var(--tv-gradient, linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%))" }}>
-          <Sparkles className="w-5 h-5 shrink-0" />
-          <div className="font-display font-extrabold flex-1">{heading}</div>
-          <button onClick={onClose} className="p-1 rounded-full bg-white/15 hover:bg-white/25" aria-label="Fechar">
+          <Sparkles className="w-5 h-5 shrink-0" aria-hidden="true" />
+          <h2 id={titleId} className="font-display font-extrabold flex-1 text-base m-0">{heading}</h2>
+          <button onClick={onClose} disabled={locked} className="p-1 rounded-full bg-white/15 hover:bg-white/25 disabled:opacity-50" aria-label="Fechar">
             <X className="w-4 h-4" />
           </button>
         </div>
