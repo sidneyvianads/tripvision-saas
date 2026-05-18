@@ -16,6 +16,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
 import { withRetry } from "./_lib/retry.mjs";
+import { buildMessagesWithCache } from "./_lib/anthropic-shared.mjs";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 // R9-1: SOMENTE ANON_KEY. Antes tinha fallback pra SUPABASE_SERVICE_KEY
@@ -158,23 +159,7 @@ function buildContext({ trip, roteiro }) {
 const FRIENDLY_ERROR = "O Jei está ocupado agora. Tenta de novo em alguns segundos! 😊";
 // withRetry vem de _lib/retry.mjs (compartilhado).
 
-// Constrói messages com cache breakpoint na penúltima do histórico.
-// Mesma lógica do plan.mjs — duplicado por enquanto até extrair pra _lib.
-function buildMessagesWithCache(history, userMessage) {
-  const baseHistory = history.map((m) => ({ role: m.role, content: m.content }));
-  if (baseHistory.length >= 3) {
-    const breakpointIdx = baseHistory.length - 3;
-    baseHistory[breakpointIdx] = {
-      role: baseHistory[breakpointIdx].role,
-      content: [{
-        type: "text",
-        text: baseHistory[breakpointIdx].content,
-        cache_control: { type: "ephemeral" },
-      }],
-    };
-  }
-  return [...baseHistory, { role: "user", content: userMessage }];
-}
+// R28-1: buildMessagesWithCache extraída pra _lib/anthropic-shared.mjs.
 
 // ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
 

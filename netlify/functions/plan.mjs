@@ -24,6 +24,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { rateLimit, getClientIp } from "./_lib/rate-limit.mjs";
 import { captureException, captureMessage } from "./_lib/sentry.mjs";
 import { withRetry } from "./_lib/retry.mjs";
+import { buildMessagesWithCache } from "./_lib/anthropic-shared.mjs";
 
 // Rate limits do /api/plan. /api/plan é o endpoint caro (LLM + web search),
 // então protegemos contra burst. Stub Upstash: no-op até env ser setado.
@@ -364,30 +365,9 @@ const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 };
 
-// Constrói lista de messages com cache breakpoint na PENÚLTIMA msg do
-// histórico. Anthropic permite até 4 cache_control breakpoints; o
-// system já usa 1. As últimas 2 msgs ficam sem cache (mais voláteis,
-// muda a cada turno). Tudo antes vira cache hit ($0.10/M vs $1/M).
-//
-// Como cache_control em content block requer formato array, convertemos
-// só a msg do breakpoint pra { type: "text", text, cache_control }.
-function buildMessagesWithCache(history, userMessage) {
-  const baseHistory = history.map((m) => ({ role: m.role, content: m.content }));
-  // Só vale a pena marcar cache se há histórico suficiente pra economizar
-  // (>=3 msgs significa que há algo "estável" antes das últimas 2).
-  if (baseHistory.length >= 3) {
-    const breakpointIdx = baseHistory.length - 3; // 3a-de-trás-pra-frente
-    baseHistory[breakpointIdx] = {
-      role: baseHistory[breakpointIdx].role,
-      content: [{
-        type: "text",
-        text: baseHistory[breakpointIdx].content,
-        cache_control: { type: "ephemeral" },
-      }],
-    };
-  }
-  return [...baseHistory, { role: "user", content: userMessage }];
-}
+// R28-1: buildMessagesWithCache extraída pra _lib/anthropic-shared.mjs
+// (compartilhada com chat.mjs). Strategy de cache breakpoint na PENÚLTIMA
+// msg do histórico documentada lá.
 
 // ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
 //
