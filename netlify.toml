@@ -22,6 +22,9 @@
 [functions."export-user-data"]
   timeout = 26
 
+[functions."cron-truncate-ia-conversas"]
+  timeout = 26
+
 [[edge_functions]]
   function = "og"
   path = "/v/:slug"
