@@ -62,7 +62,10 @@ export default function TripView() {
       confirmLabel: "Sair",
     });
     if (!ok) return;
-    signOut();
+    // R28-3: await pra não deixar signOut async em background.
+    // Sem await, App.jsx vê user truthy por 1 frame antes do redirect
+    // automático /v/{slug} → /welcome (effectiveUser flip).
+    await signOut();
   };
 
   if (loading) return <FullscreenLoader />;

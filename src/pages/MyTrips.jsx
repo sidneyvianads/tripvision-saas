@@ -46,7 +46,10 @@ export default function MyTrips() {
       confirmLabel: "Sair",
     });
     if (!ok) return;
-    signOut();
+    // R28-3: await antes do navigate. Sem await, signOut continua async
+    // em background — App.jsx ainda vê user truthy por 1 frame e
+    // renderiza estado intermediário (flicker pre-redirect).
+    await signOut();
     navigate("/");
   };
 
