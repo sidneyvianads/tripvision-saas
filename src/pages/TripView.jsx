@@ -30,7 +30,7 @@ const TAB_TITLES = {
 export default function TripView() {
   const { slug } = useParams();
   const { user, signOut } = useAuth();
-  const { trip, isAdmin, loading, error, reload: reloadTrip } = useTrip(slug, user?.id);
+  const { trip, role, isAdmin, loading, error, reload: reloadTrip } = useTrip(slug, user?.id);
   const [params, setParams] = useSearchParams();
   // R10-6: allowlist contra TAB_TITLES. Antes, ?tab=<script> ou ?tab=foo
   // renderizava header vazio + conteúdo branco (nenhum `tab === "x"`
@@ -70,6 +70,14 @@ export default function TripView() {
     );
   }
   if (!trip) return <Navigate to="/" replace />;
+
+  // R14-7: trip existe (RLS deixou ler — viagens são públicas pra meta tags
+  // OG funcionarem), mas user não é membro. Mostra gate em vez de roteiro
+  // privado. Owner sempre é membro (trigger add_owner_as_admin), então
+  // só não-convidados caem aqui.
+  if (!role) {
+    return <NonMemberGate trip={trip} />;
+  }
 
   return (
     <>
@@ -213,6 +221,30 @@ function RoteiroTab({ trip, isAdmin, onPlanejar }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// R14-7: tela de gate pra quem clicou em /v/{slug} sem ser membro.
+// Substitui o auto-INSERT que abria a viagem pra qualquer logado.
+// Mostra preview minimo (nome + cidades + datas se RLS deixou ler) e
+// instrução de pedir convite. Sem botão "entrar" — só admin pode
+// convidar via fluxo R14-5/6.
+function NonMemberGate({ trip }) {
+  const cidades = trip.cidades?.length ? trip.cidades.join(" · ") : null;
+  const datas = trip.data_inicio ? `${trip.data_inicio}${trip.data_fim ? " → " + trip.data_fim : ""}` : null;
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-app p-6">
+      <div className="card max-w-md w-full p-6 text-center">
+        <div className="text-5xl mb-3">{trip.cover_emoji ?? "🔒"}</div>
+        <h1 className="font-display font-extrabold text-2xl text-[#0F172A] mb-1">{trip.nome}</h1>
+        {datas && <div className="text-sm text-[#6B7280] mb-1">{datas}</div>}
+        {cidades && <div className="text-sm text-[#6B7280] mb-4">{cidades}</div>}
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900 my-4">
+          Essa viagem é privada. Peça pro organizador te enviar um convite — vai chegar por email.
+        </div>
+        <a href="/" className="btn-ghost inline-block">Voltar pra minhas viagens</a>
+      </div>
     </div>
   );
 }

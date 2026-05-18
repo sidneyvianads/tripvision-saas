@@ -127,22 +127,19 @@ export function useTrip(slug, userId) {
     setTrip(t);
 
     if (userId) {
+      // R14-7: era auto-INSERT em viagem_membros — qualquer logado virava
+      // membro só de visitar /v/{slug}. Bug crítico de privacidade +
+      // CDC Art. 37 (limite de pessoas anunciado virou ficção). Agora
+      // role só é setada se a membership JÁ existe (criada via
+      // accept_invite ou pelo trigger add_owner_as_admin).
+      // Não-membro vê role=null e TripView mostra tela de gate.
       const { data: m } = await supabase
         .from("viagem_membros")
         .select("role")
         .eq("viagem_id", t.id)
         .eq("user_id", userId)
         .maybeSingle();
-      if (m) {
-        setRole(m.role);
-      } else {
-        const { data: nm } = await supabase
-          .from("viagem_membros")
-          .insert({ viagem_id: t.id, user_id: userId, role: "membro" })
-          .select("role")
-          .single();
-        setRole(nm?.role ?? "membro");
-      }
+      setRole(m?.role ?? null);
     } else {
       setRole(null);
     }
