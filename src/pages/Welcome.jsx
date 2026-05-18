@@ -50,6 +50,17 @@ export default function Welcome() {
     }
   }, [isRecovering, mode]);
 
+  // R14-4: se o user veio de /aceitar-convite?token=X (não-logado, AcceptInvite
+  // redirecionou pra cá com ?invite=X), guarda o token em sessionStorage. App.jsx
+  // observa o flag de "logado + pending_invite" e redireciona pra /aceitar-convite
+  // depois do auth completar. Não chave persistente: sessionStorage morre ao
+  // fechar a aba — evita pegar convite velho ao voltar dias depois.
+  useEffect(() => {
+    const invite = params.get("invite");
+    if (!invite) return;
+    try { window.sessionStorage.setItem("viajjei:pending_invite", invite); } catch {}
+  }, [params]);
+
   // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
 

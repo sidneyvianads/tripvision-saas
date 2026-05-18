@@ -1,5 +1,5 @@
 import { Loader2 } from "lucide-react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Suspense, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { captureCupomFromUrl } from "./lib/cupom";
@@ -21,12 +21,14 @@ const AssinaturaSucesso = lazyWithRetry(() => import("./pages/AssinaturaSucesso"
 const Account = lazyWithRetry(() => import("./pages/Account"));
 const AdminAfiliados = lazyWithRetry(() => import("./pages/AdminAfiliados"));
 const AfiliadoPainel = lazyWithRetry(() => import("./pages/AfiliadoPainel"));
+const AcceptInvite = lazyWithRetry(() => import("./pages/AcceptInvite"));
 
 const TermosPage = lazyWithRetry(() => import("./pages/LegalPages").then((m) => ({ default: m.TermosPage })));
 const PrivacidadePage = lazyWithRetry(() => import("./pages/LegalPages").then((m) => ({ default: m.PrivacidadePage })));
 
 export default function App() {
   const { user, isRecovering } = useAuth();
+  const navigate = useNavigate();
 
   // Durante PASSWORD_RECOVERY o user tem session válida (criada pelo link
   // do email) mas ainda precisa trocar a senha. Se redirecionarmos /welcome
@@ -43,6 +45,21 @@ export default function App() {
     const o = captureOrigemFromUrl();
     if (o) console.log("[Viajjei] origem capturada:", o);
   }, []);
+
+  // R14-4: pendência de invite-token entre /welcome e /aceitar-convite.
+  // AcceptInvite redireciona pra /welcome?invite=TOKEN quando o user não
+  // está logado. Welcome guarda o token em sessionStorage e completa o
+  // signin/signup. Quando user vira não-null, voltamos pra /aceitar-convite
+  // pra finalizar. sessionStorage (não local): morre ao fechar a aba —
+  // evita que um convite cancelado fique pendurado.
+  useEffect(() => {
+    if (!effectiveUser) return;
+    let token;
+    try { token = window.sessionStorage.getItem("viajjei:pending_invite"); } catch {}
+    if (!token) return;
+    try { window.sessionStorage.removeItem("viajjei:pending_invite"); } catch {}
+    navigate(`/aceitar-convite?token=${encodeURIComponent(token)}`, { replace: true });
+  }, [effectiveUser, navigate]);
 
   return (
     <>
@@ -68,6 +85,10 @@ export default function App() {
 
         {/* Painel público de afiliado */}
         <Route path="/afiliado/:cupom" element={<AfiliadoPainel />} />
+
+        {/* R14-4: aceitar convite. AcceptInvite redireciona internamente
+            pra /welcome?invite=token se não-logado. */}
+        <Route path="/aceitar-convite" element={<AcceptInvite />} />
 
         {/* Páginas públicas */}
         <Route path="/precos" element={<PrecosPage />} />
