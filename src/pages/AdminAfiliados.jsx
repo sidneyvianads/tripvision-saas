@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   ArrowLeft, Plus, Edit2, Loader2, X, Check, Tag, Mail, AtSign, Percent,
   ExternalLink, Users as UsersIcon, BarChart3, Receipt, Megaphone, Image as ImageIcon,
+  Search, Download,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
@@ -10,6 +11,8 @@ import { isOwner } from "../data/plans";
 import { friendlyError } from "../lib/errorMessages";
 import { useConfirm } from "../lib/useConfirm";
 import { useModalA11y } from "../lib/useModalA11y";
+import { useDebounce } from "../lib/useDebounce";
+import Pagination from "../components/Pagination";
 
 const fmtBRL = (n) => `R$ ${Number(n ?? 0).toFixed(2).replace(".", ",")}`;
 const fmtMonth = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -77,26 +80,50 @@ export default function AdminAfiliados() {
 
 function AfiliadosTab() {
   const [afiliados, setAfiliados] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [search, setSearch] = useState("");
+  const [filterAtivo, setFilterAtivo] = useState("todos");
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useConfirm();
+  const debouncedSearch = useDebounce(search, 300);
 
-  const reload = async () => {
-    // RPC SECURITY DEFINER — guard interno checa is_platform_owner().
-    // Substitui select("*") direto na tabela (quebrado pós-R3 porque
-    // a coluna `email` foi revogada de authenticated pra proteger
-    // /afiliado/<cupom> público).
-    const { data, error } = await supabase.rpc("admin_afiliados_list");
+  // R19-3: reload usa admin_afiliados_list_v2 com paginação + busca + filtro.
+  // AbortController cancela request anterior se user digitar rápido —
+  // evita race condition (request lenta sobrescreve estado recente).
+  const reload = useCallback(async (signal) => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("admin_afiliados_list_v2", {
+      p_page: page,
+      p_page_size: pageSize,
+      p_search: debouncedSearch || null,
+      p_filter_ativo: filterAtivo,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (signal?.aborted) return;
     if (error) {
       console.error("[AdminAfiliados] reload erro:", error);
       setAfiliados([]);
+      setTotal(0);
     } else {
-      setAfiliados(data ?? []);
+      setAfiliados(data?.rows ?? []);
+      setTotal(data?.total ?? 0);
     }
     setLoading(false);
-  };
+  }, [page, pageSize, debouncedSearch, filterAtivo]);
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    reload(ctrl.signal);
+    return () => ctrl.abort();
+  }, [reload]);
+
+  // Volta pra página 1 sempre que filtros mudam — evitar "página 4 vazia"
+  // depois de filtrar por algo que tem poucos resultados.
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterAtivo]);
 
   const save = async (form) => {
     // R9-3: RPC admin_upsert_afiliado SECURITY DEFINER (guard
@@ -126,17 +153,42 @@ function AfiliadosTab() {
   return (
     <>
       <section className="card p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="font-display font-extrabold text-[#0F172A] text-base flex-1">Afiliados</div>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="font-display font-extrabold text-[#0F172A] text-base flex-1 min-w-[120px]">Afiliados</div>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nome ou cupom"
+              className="input !py-1.5 !pl-7 !pr-2 text-sm w-44"
+              aria-label="Buscar afiliados"
+            />
+          </div>
+          <select
+            value={filterAtivo}
+            onChange={(e) => setFilterAtivo(e.target.value)}
+            className="input !py-1.5 !px-2 text-sm"
+            aria-label="Filtrar por status"
+          >
+            <option value="todos">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
           <button onClick={() => setEditing("new")} className="btn-primary inline-flex items-center gap-1.5 !py-2 text-sm">
             <Plus className="w-4 h-4" /> Novo
           </button>
         </div>
 
-        {loading ? (
+        {loading && afiliados.length === 0 ? (
           <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-[#F97316]" /></div>
         ) : afiliados.length === 0 ? (
-          <div className="text-[#64748B] text-sm">Nenhum afiliado ainda. Clique em "+ Novo" pra começar.</div>
+          <div className="text-[#64748B] text-sm">
+            {debouncedSearch || filterAtivo !== "todos"
+              ? "Nenhum afiliado com esses filtros."
+              : "Nenhum afiliado ainda. Clique em \"+ Novo\" pra começar."}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -186,6 +238,17 @@ function AfiliadosTab() {
             </table>
           </div>
         )}
+
+        <Pagination
+          currentPage={page}
+          totalCount={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[25, 50, 100]}
+          variant="full"
+          label="afiliados"
+        />
       </section>
 
       {editing && (
