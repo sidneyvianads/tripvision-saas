@@ -40,7 +40,10 @@ describe("R13-1 — Date.now() não chamado durante render (Countdown)", () => {
   });
 
   it("setInterval atualiza 'now' (não um tick contador inútil)", () => {
-    expect(src).toMatch(/setInterval\([\s\S]*?setNow\(Date\.now\(\)\)/);
+    // R25-2 refatorou pra `setInterval(tick, 60_000)` onde tick chama
+    // setNow(Date.now()). Match aceita ambos: chamada inline OU via ref
+    // a função tick que faz setNow.
+    expect(src).toMatch(/setInterval\([\s\S]*?setNow\(Date\.now\(\)\)|const tick\s*=\s*\(\)\s*=>\s*setNow\(Date\.now\(\)\)/);
   });
 
   it("diff() recebe 'now' como parâmetro (não chama Date.now internamente)", () => {
