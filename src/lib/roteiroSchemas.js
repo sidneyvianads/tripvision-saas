@@ -28,7 +28,7 @@ const AtividadeInline = z.object({
   telefone: NullableStr.optional(),
   maps_url: NullableStr.optional(),
   ordem: Ordem.optional(),
-}).passthrough();
+}).strip();
 
 const AddDay = z.object({
   action: z.literal("add_day"),
@@ -42,7 +42,7 @@ const AddDay = z.object({
   hotel_endereco: NullableStr.optional(),
   alerta: NullableStr.optional(),
   cover_emoji: NullableStr.optional(),
-}).passthrough();
+}).strip();
 
 const AddActivity = z.object({
   action: z.literal("add_activity"),
@@ -57,14 +57,14 @@ const AddActivity = z.object({
   telefone: NullableStr.optional(),
   maps_url: NullableStr.optional(),
   ordem: Ordem.optional(),
-}).passthrough();
+}).strip();
 
 const UpdateDay = z.object({
   action: z.literal("update_day"),
   dia_numero: DiaNumero,
   field: z.string().min(1),
   value: z.any(),
-}).passthrough();
+}).strip();
 
 const UpdateActivity = z.object({
   action: z.literal("update_activity"),
@@ -72,18 +72,18 @@ const UpdateActivity = z.object({
   ordem: Ordem,
   field: z.string().min(1),
   value: z.any(),
-}).passthrough();
+}).strip();
 
 const RemoveActivity = z.object({
   action: z.literal("remove_activity"),
   dia_numero: DiaNumero,
   ordem: Ordem,
-}).passthrough();
+}).strip();
 
 const RemoveDay = z.object({
   action: z.literal("remove_day"),
   dia_numero: DiaNumero,
-}).passthrough();
+}).strip();
 
 const ReplaceDay = z.object({
   action: z.literal("replace_day"),
@@ -98,7 +98,7 @@ const ReplaceDay = z.object({
   alerta: NullableStr.optional(),
   cover_emoji: NullableStr.optional(),
   atividades: z.array(AtividadeInline).default([]),
-}).passthrough();
+}).strip();
 
 export const RoteiroUpdate = z.discriminatedUnion("action", [
   AddDay, AddActivity, UpdateDay, UpdateActivity, RemoveActivity, RemoveDay, ReplaceDay,
@@ -127,12 +127,12 @@ const ViagemFields = z.object({
   data_fim: z.union([ISODate, z.null()]).optional(),
   cidades: z.array(z.string().trim().min(1)).max(30).optional(),
   descricao: z.string().trim().max(2000).optional(),
-}).passthrough();
+}).strip();
 
 export const ViagemUpdate = z.object({
   action: z.literal("update_viagem"),
   fields: ViagemFields,
-}).passthrough();
+}).strip();
 
 export function validateViagemUpdate(raw) {
   const res = ViagemUpdate.safeParse(raw);
