@@ -356,8 +356,13 @@ function AfiliadoForm({ initial, onCancel, onSave }) {
 
 function UsuariosTab() {
   const [users, setUsers] = useState([]);
+  const [total, setTotal] = useState(0);
   const [afiliados, setAfiliados] = useState([]);
-  const [filter, setFilter] = useState("todos"); // todos | organico | afiliado | instagram | google
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [search, setSearch] = useState("");
+  const [filterOrigem, setFilterOrigem] = useState("todos");
+  const [filterPlano, setFilterPlano] = useState("todos");
   const [afiliadoFilter, setAfiliadoFilter] = useState("");
   const [loading, setLoading] = useState(true);
   // R13-1: mountedAt fica estável entre renders (lazy useState init roda só
@@ -366,39 +371,56 @@ function UsuariosTab() {
   // tão bom quanto "agora" — admin recarrega a aba quando precisar de
   // atualização.
   const [mountedAt] = useState(() => Date.now());
+  const debouncedSearch = useDebounce(search, 300);
 
+  // Lookup de afiliados pra mostrar nome/cupom na tabela. Carrega uma
+  // vez — lista pequena, sem paginação.
   useEffect(() => {
     (async () => {
-      const [{ data: u }, { data: af }] = await Promise.all([
-        supabase
-          .from("users")
-          .select("id, nome, email, plano, plano_expires_at, trial_ends_at, origem, afiliado_id, created_at")
-          .order("created_at", { ascending: false })
-          .limit(500),
-        supabase.from("afiliados").select("id, nome, cupom").order("nome"),
-      ]);
-      setUsers(u ?? []);
-      setAfiliados(af ?? []);
-      setLoading(false);
+      const { data } = await supabase.from("afiliados").select("id, nome, cupom").order("nome");
+      setAfiliados(data ?? []);
     })();
   }, []);
+
+  // R19-4: lista de users server-side com paginação + filtros.
+  // Substitui .limit(500) que truncava silenciosamente acima disso.
+  const reload = useCallback(async (signal) => {
+    setLoading(true);
+    const { data, error } = await supabase.rpc("admin_users_list", {
+      p_page: page,
+      p_page_size: pageSize,
+      p_search: debouncedSearch || null,
+      p_filter_plano: filterPlano,
+      p_filter_origem: filterOrigem,
+      p_filter_afiliado: afiliadoFilter || null,
+      p_sort_col: "created_at",
+      p_sort_dir: "desc",
+    });
+    if (signal?.aborted) return;
+    if (error) {
+      console.error("[AdminAfiliados] users list erro:", error);
+      setUsers([]);
+      setTotal(0);
+    } else {
+      setUsers(data?.rows ?? []);
+      setTotal(data?.total ?? 0);
+    }
+    setLoading(false);
+  }, [page, pageSize, debouncedSearch, filterPlano, filterOrigem, afiliadoFilter]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    reload(ctrl.signal);
+    return () => ctrl.abort();
+  }, [reload]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterPlano, filterOrigem, afiliadoFilter]);
 
   const afiliadoMap = useMemo(() => {
     const m = new Map();
     afiliados.forEach((a) => m.set(a.id, a));
     return m;
   }, [afiliados]);
-
-  const filtered = useMemo(() => {
-    let list = users;
-    if (filter !== "todos") {
-      list = list.filter((u) => (u.origem ?? "organico") === filter);
-    }
-    if (afiliadoFilter) {
-      list = list.filter((u) => u.afiliado_id === afiliadoFilter);
-    }
-    return list;
-  }, [users, filter, afiliadoFilter]);
 
   const userStatus = (u) => {
     if (u.plano === "owner") return { label: "Owner", color: "bg-amber-100 text-amber-800" };
@@ -413,15 +435,33 @@ function UsuariosTab() {
   return (
     <section className="card p-5">
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="font-display font-extrabold text-[#0F172A] text-base flex-1">Usuários ({filtered.length})</div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input !py-1.5 !px-2 text-sm">
+        <div className="font-display font-extrabold text-[#0F172A] text-base flex-1 min-w-[120px]">Usuários</div>
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Nome ou email"
+            className="input !py-1.5 !pl-7 !pr-2 text-sm w-44"
+            aria-label="Buscar usuários"
+          />
+        </div>
+        <select value={filterPlano} onChange={(e) => setFilterPlano(e.target.value)} className="input !py-1.5 !px-2 text-sm" aria-label="Filtrar por plano">
+          <option value="todos">Todos planos</option>
+          <option value="pending">Sem plano</option>
+          <option value="pro">Pro</option>
+          <option value="grupo">Grupo</option>
+          <option value="owner">Owner</option>
+        </select>
+        <select value={filterOrigem} onChange={(e) => setFilterOrigem(e.target.value)} className="input !py-1.5 !px-2 text-sm" aria-label="Filtrar por origem">
           <option value="todos">Todas origens</option>
           <option value="organico">Orgânico</option>
           <option value="afiliado">Afiliado</option>
           <option value="instagram">Instagram</option>
           <option value="google">Google</option>
         </select>
-        <select value={afiliadoFilter} onChange={(e) => setAfiliadoFilter(e.target.value)} className="input !py-1.5 !px-2 text-sm">
+        <select value={afiliadoFilter} onChange={(e) => setAfiliadoFilter(e.target.value)} className="input !py-1.5 !px-2 text-sm" aria-label="Filtrar por afiliado">
           <option value="">Todos afiliados</option>
           {afiliados.map((a) => (
             <option key={a.id} value={a.id}>{a.nome} · {a.cupom}</option>
@@ -429,9 +469,9 @@ function UsuariosTab() {
         </select>
       </div>
 
-      {loading ? (
+      {loading && users.length === 0 ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-[#F97316]" /></div>
-      ) : filtered.length === 0 ? (
+      ) : users.length === 0 ? (
         <div className="text-[#64748B] text-sm">Nenhum usuário com esses filtros.</div>
       ) : (
         <div className="overflow-x-auto">
@@ -447,7 +487,7 @@ function UsuariosTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E2E8F0]">
-              {filtered.map((u) => {
+              {users.map((u) => {
                 const st = userStatus(u);
                 const af = u.afiliado_id ? afiliadoMap.get(u.afiliado_id) : null;
                 return (
@@ -470,6 +510,17 @@ function UsuariosTab() {
           </table>
         </div>
       )}
+
+      <Pagination
+        currentPage={page}
+        totalCount={total}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        pageSizeOptions={[25, 50, 100]}
+        variant="full"
+        label="usuários"
+      />
     </section>
   );
 }
