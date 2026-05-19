@@ -9,7 +9,7 @@
 //          tem preconnect pra Supabase.
 
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -17,7 +17,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const USE_CHAT = resolve(__dirname, "../src/hooks/useChat.js");
 const USE_AUTH = resolve(__dirname, "../src/hooks/useAuth.jsx");
 const STORAGE_LIB = resolve(__dirname, "../src/lib/storage.js");
-const OG_EDGE = resolve(__dirname, "../netlify/edge-functions/og.mjs");
+// R33: og.mjs pode estar renomeado pra .disabled enquanto investigamos
+// um 503 de deploy do Netlify. O conteúdo é o mesmo — só o nome
+// que muda — então a checagem estrutural R12-3 continua válida.
+const OG_EDGE_ACTIVE = resolve(__dirname, "../netlify/edge-functions/og.mjs");
+const OG_EDGE_DISABLED = resolve(__dirname, "../netlify/edge-functions/og.mjs.disabled");
+const OG_EDGE = existsSync(OG_EDGE_ACTIVE) ? OG_EDGE_ACTIVE : OG_EDGE_DISABLED;
 const NETLIFY_TOML = resolve(__dirname, "../netlify.toml");
 const INDEX_HTML = resolve(__dirname, "../index.html");
 
