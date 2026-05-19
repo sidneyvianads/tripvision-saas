@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
 import Logo from "../components/Logo";
 import { getStoredCupom, setStoredCupom, clearStoredCupom } from "../lib/cupom";
@@ -10,11 +9,13 @@ import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
 import { supabase } from "../lib/supabase";
 import { trackPaymentStarted } from "../lib/analytics";
 import { friendlyError } from "../lib/errorMessages";
-import {
-  Field, ErrorBox, InfoBox, StepIndicator, passwordStrength,
-} from "./welcome/_shared";
+import { passwordStrength } from "./welcome/_shared";
 import InfluencerStep from "./welcome/InfluencerStep";
 import PlanPicker from "./welcome/PlanPicker";
+import LoginForm from "./welcome/LoginForm";
+import ForgotPasswordForm from "./welcome/ForgotPasswordForm";
+import ResetPasswordForm from "./welcome/ResetPasswordForm";
+import SignupDadosForm from "./welcome/SignupDadosForm";
 
 const REDIRECT_DELAY_MS = 1800;
 
@@ -138,18 +139,16 @@ export default function Welcome() {
     }
   };
 
-  const senhaForca = passwordStrength(senha);
-  const senhaValida = senhaForca?.valid === true;
-  const senhasIguais = senha && senha === senha2;
-
-  // Etapa 1 → 2
+  // Etapa 1 → 2. Validação defensiva — o botão do form já fica disabled
+  // até nome/email/senha estarem válidos; isso aqui é só salvaguarda.
   const handleSignupNext = (e) => {
     e.preventDefault();
     setErr(null);
     const nomeClean = nome.trim();
     if (!nomeClean) return setErr("Digite seu nome.");
     if (nomeClean.length > 50) return setErr("Nome muito longo (máx 50 caracteres).");
-    if (!senhaValida) return setErr("Senha muito fraca — use no mínimo 6 caracteres com letras e números.");
+    const forca = passwordStrength(senha);
+    if (!forca?.valid) return setErr("Senha muito fraca — use no mínimo 6 caracteres com letras e números.");
     if (senha !== senha2) return setErr("As senhas não conferem.");
     if (!email.trim()) return setErr("Informe seu e-mail.");
     setSignupStep("cupom");
@@ -253,103 +252,29 @@ export default function Welcome() {
         </div>
 
         {mode === "login" ? (
-          <form onSubmit={handleLogin} className="mt-8 space-y-3">
-            <Field icon={Mail} type="email" placeholder="seu@email.com" value={email} onChange={setEmail} autoFocus autoComplete="email" />
-            {justSignedUpEmail && (
-              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800 text-sm flex items-center gap-2 animate-pop">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>Conta criada! Digite sua senha pra entrar.</span>
-              </div>
-            )}
-            <Field icon={KeyRound} type="password" placeholder="senha" value={senha} onChange={setSenha} autoComplete="current-password" />
-
-            <button type="submit" className="btn-primary w-full inline-flex items-center justify-center gap-2" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-              Entrar
-            </button>
-
-            {err && <ErrorBox msg={err} />}
-            {info && <InfoBox msg={info} />}
-
-            <div className="text-center pt-1">
-              <button
-                type="button"
-                onClick={() => { setMode("forgot"); setErr(null); setInfo(null); setSenha(""); }}
-                className="text-xs font-display font-bold text-[#64748B] hover:text-[#2E86C1] hover:underline"
-              >
-                Esqueci a senha
-              </button>
-            </div>
-
-            <p className="text-center text-sm text-[#636E72] pt-2">
-              Não tem conta?{" "}
-              <button
-                type="button"
-                onClick={() => { setMode("signup"); setErr(null); setInfo(null); setJustSignedUpEmail(null); }}
-                className="font-display font-bold text-[#2E86C1] hover:underline"
-              >
-                Cadastre-se
-              </button>
-            </p>
-          </form>
+          <LoginForm
+            email={email} setEmail={setEmail}
+            senha={senha} setSenha={setSenha}
+            loading={loading} err={err} info={info}
+            justSignedUpEmail={justSignedUpEmail}
+            onSubmit={handleLogin}
+            onForgot={() => { setMode("forgot"); setErr(null); setInfo(null); setSenha(""); }}
+            onSignup={() => { setMode("signup"); setErr(null); setInfo(null); setJustSignedUpEmail(null); }}
+          />
         ) : mode === "forgot" ? (
-          <form onSubmit={handleForgot} className="mt-8 space-y-3">
-            <div className="text-center">
-              <h2 className="font-display font-extrabold text-[#1F2937] text-lg">Recuperar senha</h2>
-              <p className="text-[#6B7280] text-xs mt-1">
-                Digite seu email. A gente envia um link pra você criar uma senha nova.
-              </p>
-            </div>
-            <Field icon={Mail} type="email" placeholder="seu@email.com" value={email} onChange={setEmail} autoFocus autoComplete="email" />
-            <button type="submit" className="btn-primary w-full inline-flex items-center justify-center gap-2" disabled={loading}>
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-              Enviar link
-            </button>
-            {err && <ErrorBox msg={err} />}
-            {info && <InfoBox msg={info} />}
-            <p className="text-center text-sm text-[#636E72] pt-2">
-              <button
-                type="button"
-                onClick={() => { setMode("login"); setErr(null); setInfo(null); }}
-                className="font-display font-bold text-[#2E86C1] hover:underline"
-              >
-                ← Voltar pro login
-              </button>
-            </p>
-          </form>
+          <ForgotPasswordForm
+            email={email} setEmail={setEmail}
+            loading={loading} err={err} info={info}
+            onSubmit={handleForgot}
+            onBack={() => { setMode("login"); setErr(null); setInfo(null); }}
+          />
         ) : mode === "reset" ? (
-          <form onSubmit={handleReset} className="mt-8 space-y-3">
-            <div className="text-center">
-              <h2 className="font-display font-extrabold text-[#1F2937] text-lg">Nova senha</h2>
-              <p className="text-[#6B7280] text-xs mt-1">
-                Escolha uma senha forte. Mínimo 6 caracteres com letras e números.
-              </p>
-            </div>
-            <Field icon={KeyRound} type="password" placeholder="nova senha" value={senha} onChange={setSenha} autoFocus autoComplete="new-password" />
-            {senha && senhaForca && (
-              <div className="px-1">
-                <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${senhaForca.pct}%`, background: senhaForca.color }} />
-                </div>
-                <div className="text-[11px] mt-1 font-display font-bold flex items-center gap-1.5" style={{ color: senhaForca.color }}>
-                  <span>{senhaForca.valid ? "✓" : "⚠"}</span>
-                  <span>Força: {senhaForca.label}</span>
-                  {senhaForca.hint && <span className="text-[10px] opacity-80 font-display font-semibold normal-case">— {senhaForca.hint}</span>}
-                </div>
-              </div>
-            )}
-            <Field icon={KeyRound} type="password" placeholder="confirmar nova senha" value={senha2} onChange={setSenha2} autoComplete="new-password" />
-            <button
-              type="submit"
-              className="btn-primary w-full inline-flex items-center justify-center gap-2"
-              disabled={loading || !senhaValida || !senhasIguais}
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-              Atualizar senha
-            </button>
-            {err && <ErrorBox msg={err} />}
-            {info && <InfoBox msg={info} />}
-          </form>
+          <ResetPasswordForm
+            senha={senha} setSenha={setSenha}
+            senha2={senha2} setSenha2={setSenha2}
+            loading={loading} err={err} info={info}
+            onSubmit={handleReset}
+          />
         ) : signupStep === "plano" ? (
           <PlanPicker
             afiliado={afiliado}
@@ -366,90 +291,17 @@ export default function Welcome() {
             onBack={() => { setSignupStep("dados"); setErr(null); }}
           />
         ) : (
-          <form onSubmit={handleSignupNext} className="mt-6 space-y-3">
-            <StepIndicator step={1} />
-
-            <div className="flex justify-center pt-1 pb-2">
-              <PhotoPicker
-                value={photo}
-                onChange={setPhoto}
-                fallbackCor={cor}
-                fallbackInitial={(nome.trim().charAt(0) || "📸").toUpperCase()}
-                size={88}
-                disabled={isBusy}
-              />
-            </div>
-            <Field icon={User} type="text" placeholder="Seu nome" value={nome} onChange={setNome} autoFocus maxLength={40} autoComplete="given-name" disabled={isBusy} />
-            <Field icon={Mail} type="email" placeholder="seu@email.com" value={email} onChange={setEmail} autoComplete="email" disabled={isBusy} />
-            <Field icon={KeyRound} type="password" placeholder="senha (mín. 6)" value={senha} onChange={setSenha} autoComplete="new-password" disabled={isBusy} />
-            {senha && senhaForca && (
-              <div className="px-1">
-                <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${senhaForca.pct}%`, background: senhaForca.color }} />
-                </div>
-                <div className="text-[11px] mt-1 font-display font-bold flex items-center gap-1.5" style={{ color: senhaForca.color }}>
-                  <span>{senhaForca.valid ? "✓" : "⚠"}</span>
-                  <span>Força: {senhaForca.label}</span>
-                  {senhaForca.hint && <span className="text-[10px] opacity-80 font-display font-semibold normal-case">— {senhaForca.hint}</span>}
-                </div>
-              </div>
-            )}
-            <Field icon={KeyRound} type="password" placeholder="confirmar senha" value={senha2} onChange={setSenha2} autoComplete="new-password" disabled={isBusy} />
-
-            <div className="pt-1">
-              <div className="text-xs font-display font-bold text-[#636E72] mb-1.5">Cor do avatar</div>
-              <div className="flex gap-2 flex-wrap">
-                {AVATAR_COLORS.map((c) => {
-                  const active = cor === c.color;
-                  return (
-                    <button
-                      type="button"
-                      key={c.color}
-                      onClick={() => setCor(c.color)}
-                      aria-label={c.label}
-                      title={c.label}
-                      disabled={isBusy}
-                      className="w-9 h-9 rounded-full transition-all disabled:opacity-50"
-                      style={{
-                        background: c.color,
-                        outline: active ? `3px solid ${c.color}` : "none",
-                        outlineOffset: 2,
-                        transform: active ? "scale(1.05)" : "scale(1)",
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            {senha && senha2 && !senhasIguais && !success && (
-              <div className="text-[11px] text-red-600 px-1 -mt-1">As senhas não conferem.</div>
-            )}
-
-            <button
-              type="submit"
-              className="btn-primary w-full inline-flex items-center justify-center gap-2 mt-2"
-              disabled={isBusy || !senhaValida || !senhasIguais || !nome.trim() || !email.trim()}
-            >
-              {!senhaValida && senha
-                ? <>Senha muito fraca</>
-                : <>Próximo <ArrowRight className="w-4 h-4" /></>}
-            </button>
-
-            {err && <ErrorBox msg={err} />}
-
-            <p className="text-center text-sm text-[#636E72] pt-2">
-              Já tem conta?{" "}
-              <button
-                type="button"
-                onClick={() => { setMode("login"); setErr(null); }}
-                className="font-display font-bold text-[#2E86C1] hover:underline"
-                disabled={isBusy}
-              >
-                Entrar
-              </button>
-            </p>
-          </form>
+          <SignupDadosForm
+            photo={photo} setPhoto={setPhoto}
+            nome={nome} setNome={setNome}
+            email={email} setEmail={setEmail}
+            senha={senha} setSenha={setSenha}
+            senha2={senha2} setSenha2={setSenha2}
+            cor={cor} setCor={setCor}
+            isBusy={isBusy} err={err} success={success}
+            onSubmit={handleSignupNext}
+            onLogin={() => { setMode("login"); setErr(null); }}
+          />
         )}
 
         <div className="text-center text-xs text-[#6B7280] mt-6 font-display font-bold tracking-wide flex items-center justify-center gap-3">
