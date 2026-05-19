@@ -43,27 +43,38 @@ jobs:
     name: tests com Supabase real
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # R12-7: secret-presence check movido pro job-level. Antes o job sempre
-    # rodava (mesmo sem secrets) e o STEP era skipado silenciosamente —
-    # GH Actions mostrava "✓ tests-real (5s)" enganoso. Agora se os secrets
-    # não estiverem configurados, o job NEM APARECE na UI do Actions
-    # (limpo + claro que não rodou).
-    if: |
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && secrets.VITE_SUPABASE_URL != ''
-      && secrets.VITE_SUPABASE_ANON_KEY != ''
+    # R32: secrets.X NÃO pode ser usado em `if:` no nível do job
+    # (limitação documentada do GitHub Actions — contexts.md). Antes a
+    # R12-7 tentava `secrets.VITE_SUPABASE_URL != ''` aqui e o workflow
+    # ficou inválido, bloqueando merge. Agora a checagem foi pro step
+    # Check secrets que expõe outputs.skip; steps seguintes condicionam
+    # em steps.check.outputs.skip != 'true'. Trade-off: job aparece
+    # como ✓ na UI mesmo quando skip — warning no log explica.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check secrets
+        id: check
+        run: |
+          if [ -z "${VITE_SUPABASE_URL}" ] || [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
+            echo "::warning::Secrets VITE_SUPABASE_URL/ANON_KEY ausentes — pulando tests-real. Configure em Settings → Secrets pra ativar."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - name: Smoke tests com Supabase
+      - if: steps.check.outputs.skip != 'true'
+        run: npm ci
+      - if: steps.check.outputs.skip != 'true'
+        name: Smoke tests com Supabase
         run: npm test
 
   build:
