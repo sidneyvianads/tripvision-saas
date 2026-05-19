@@ -242,15 +242,18 @@ describe("R22-4 — Migration script", () => {
   });
 });
 
+// R32-T: createClient DENTRO de cada it() pra não throwar durante
+// test collection quando HAS_SUPABASE=false (skipIf só pula execução,
+// não a avaliação do body do describe).
 describe.skipIf(!HAS_SUPABASE)("R22-1 smoke real — bucket 'diario' em prod", () => {
-  const supa = createClient(URL_, ANON);
-
   it("getPublicUrl pra path do bucket retorna URL válida", () => {
+    const supa = createClient(URL_, ANON);
     const { data } = supa.storage.from("diario").getPublicUrl("uuid/uuid/0.webp");
     expect(data?.publicUrl).toMatch(/\/storage\/v1\/object\/public\/diario\/uuid\/uuid\/0\.webp/);
   });
 
   it("Anon list raiz NÃO dá erro (RLS público leitura)", async () => {
+    const supa = createClient(URL_, ANON);
     const { error } = await supa.storage.from("diario").list("", { limit: 1 });
     expect(error).toBeFalsy();
   });

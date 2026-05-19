@@ -193,10 +193,12 @@ describe("R23-3 — cron-truncate-ia-conversas function", () => {
   });
 });
 
+// R32-T: createClient DENTRO de cada it() pra não throwar durante
+// test collection quando HAS_SUPABASE=false (skipIf só pula execução,
+// não a avaliação do body do describe).
 describe.skipIf(!HAS_SUPABASE)("R23-1 smoke real — log table accessível", () => {
-  const supa = createClient(URL_, ANON);
-
   it("Anônimo NÃO acessa ia_conversa_log (RLS bloqueia)", async () => {
+    const supa = createClient(URL_, ANON);
     const { data, error } = await supa.from("ia_conversa_log").select("user_id").limit(1);
     // RLS deve filtrar zero rows pra anônimo (user_id = auth.uid() = null)
     expect(error).toBeFalsy();
@@ -204,6 +206,7 @@ describe.skipIf(!HAS_SUPABASE)("R23-1 smoke real — log table accessível", () 
   });
 
   it("Anônimo NÃO chama count_ia_user_messages_in_month (auth required)", async () => {
+    const supa = createClient(URL_, ANON);
     const { error } = await supa.rpc("count_ia_user_messages_in_month", {
       uid: "00000000-0000-0000-0000-000000000000",
     });
@@ -215,6 +218,7 @@ describe.skipIf(!HAS_SUPABASE)("R23-1 smoke real — log table accessível", () 
   });
 
   it("Anônimo NÃO chama admin_ia_conversas_stats", async () => {
+    const supa = createClient(URL_, ANON);
     const { error } = await supa.rpc("admin_ia_conversas_stats");
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/permission denied|jwt|auth/i);

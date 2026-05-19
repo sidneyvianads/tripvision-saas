@@ -179,11 +179,14 @@ describe("Frontend invite UX — ShareModal tabs + AcceptInvite + lib", () => {
   });
 });
 
+// R32-T: createClient DENTRO de cada it() pra não throwar durante
+// test collection quando HAS_SUPABASE=false (skipIf só pula execução,
+// não a avaliação do body do describe).
 describe.skipIf(!HAS_SUPABASE)("RPCs respondem (smoke real anônimo)", () => {
   // Sem JWT, RPC deve retornar erro 'not authenticated' (ou similar).
   // Confirma que a função EXISTE e está GRANTed pra authenticated.
-  const supa = createClient(URL, ANON);
   it("invite_to_trip anônimo → 'not authenticated'", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("invite_to_trip", {
       p_viagem_id: "00000000-0000-0000-0000-000000000000",
       p_email: "x@y.com",
@@ -193,6 +196,7 @@ describe.skipIf(!HAS_SUPABASE)("RPCs respondem (smoke real anônimo)", () => {
     expect(error.message).toMatch(/not authenticated|authentication|jwt|denied/i);
   });
   it("accept_invite anônimo → 'not authenticated'", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("accept_invite", {
       p_token: "00000000-0000-0000-0000-000000000000",
     });
@@ -200,6 +204,7 @@ describe.skipIf(!HAS_SUPABASE)("RPCs respondem (smoke real anônimo)", () => {
     expect(error.message).toMatch(/not authenticated|authentication|jwt|denied/i);
   });
   it("revoke_invite anônimo → 'not authenticated'", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("revoke_invite", {
       p_convite_id: "00000000-0000-0000-0000-000000000000",
     });
