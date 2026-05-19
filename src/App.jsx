@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { Suspense, useEffect } from "react";
 import { useAuth } from "./hooks/useAuth";
+import { PENDING_INVITE_KEY } from "./hooks/useInviteToken";
 import { captureCupomFromUrl } from "./lib/cupom";
 import { captureOrigemFromUrl } from "./lib/origem";
 import Landing from "./pages/Landing";
@@ -55,9 +56,9 @@ export default function App() {
   useEffect(() => {
     if (!effectiveUser) return;
     let token;
-    try { token = window.sessionStorage.getItem("viajjei:pending_invite"); } catch {}
+    try { token = window.sessionStorage.getItem(PENDING_INVITE_KEY); } catch {}
     if (!token) return;
-    try { window.sessionStorage.removeItem("viajjei:pending_invite"); } catch {}
+    try { window.sessionStorage.removeItem(PENDING_INVITE_KEY); } catch {}
     navigate(`/aceitar-convite?token=${encodeURIComponent(token)}`, { replace: true });
   }, [effectiveUser, navigate]);
 

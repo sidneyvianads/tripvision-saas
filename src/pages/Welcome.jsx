@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase";
 import { trackPaymentStarted } from "../lib/analytics";
 import { friendlyError } from "../lib/errorMessages";
 import { passwordStrength } from "./welcome/_shared";
+import { useInviteToken } from "../hooks/useInviteToken";
 import InfluencerStep from "./welcome/InfluencerStep";
 import PlanPicker from "./welcome/PlanPicker";
 import LoginForm from "./welcome/LoginForm";
@@ -55,16 +56,9 @@ export default function Welcome() {
     }
   }, [isRecovering, mode]);
 
-  // R14-4: se o user veio de /aceitar-convite?token=X (não-logado, AcceptInvite
-  // redirecionou pra cá com ?invite=X), guarda o token em sessionStorage. App.jsx
-  // observa o flag de "logado + pending_invite" e redireciona pra /aceitar-convite
-  // depois do auth completar. Não chave persistente: sessionStorage morre ao
-  // fechar a aba — evita pegar convite velho ao voltar dias depois.
-  useEffect(() => {
-    const invite = params.get("invite");
-    if (!invite) return;
-    try { window.sessionStorage.setItem("viajjei:pending_invite", invite); } catch {}
-  }, [params]);
+  // R14-4: ?invite= → sessionStorage. App.jsx redireciona pra /aceitar-convite
+  // depois do login. Detalhes em [[useInviteToken]].
+  useInviteToken();
 
   // Sub-etapa do cadastro: 'dados' (1) → 'cupom' (2) → 'plano' (3)
   const [signupStep, setSignupStep] = useState("dados");
