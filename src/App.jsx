@@ -9,6 +9,7 @@ import Landing from "./pages/Landing";
 import Welcome from "./pages/Welcome";
 import MyTrips from "./pages/MyTrips";
 import OfflineBanner from "./components/OfflineBanner";
+import PaywallGate from "./components/PaywallGate";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 // Rotas pesadas → split em chunks separados
@@ -19,6 +20,7 @@ const AdminTrip = lazyWithRetry(() => import("./pages/AdminTrip"));
 const ChooseFlow = lazyWithRetry(() => import("./pages/ChooseFlow"));
 const PrecosPage = lazyWithRetry(() => import("./pages/PrecosPage"));
 const AssinaturaSucesso = lazyWithRetry(() => import("./pages/AssinaturaSucesso"));
+const AssinaturaPendente = lazyWithRetry(() => import("./pages/AssinaturaPendente"));
 const Account = lazyWithRetry(() => import("./pages/Account"));
 const AdminAfiliados = lazyWithRetry(() => import("./pages/AdminAfiliados"));
 const AfiliadoPainel = lazyWithRetry(() => import("./pages/AfiliadoPainel"));
@@ -67,19 +69,24 @@ export default function App() {
       <OfflineBanner />
       <Suspense fallback={<FullscreenLoader />}>
         <Routes>
-        {/* Landing pública / dashboard logado */}
-        <Route path="/" element={effectiveUser ? <MyTrips /> : <Landing />} />
+        {/* Landing pública / dashboard logado.
+            R31-B: dashboard exige plano ativo via PaywallGate. */}
+        <Route path="/" element={effectiveUser ? <PaywallGate><MyTrips /></PaywallGate> : <Landing />} />
 
         {/* Auth — durante PASSWORD_RECOVERY mantém Welcome (não redireciona) */}
         <Route path="/welcome" element={effectiveUser ? <Navigate to="/" replace /> : <Welcome />} />
 
-        {/* App autenticado */}
-        <Route path="/v/new" element={effectiveUser ? <NewTrip /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug/start" element={effectiveUser ? <ChooseFlow /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug" element={effectiveUser ? <TripView /> : <Navigate to="/welcome" replace />} />
-        <Route path="/v/:slug/admin" element={effectiveUser ? <AdminTrip /> : <Navigate to="/welcome" replace />} />
+        {/* App autenticado — PaywallGate envolve cada rota. Sem plano ativo,
+            redireciona pra /assinatura/pendente. /assinatura/sucesso e
+            /assinatura/pendente NÃO ficam atrás do gate (back_url do MP
+            e a própria tela de paywall precisam ser acessíveis). */}
+        <Route path="/v/new" element={effectiveUser ? <PaywallGate><NewTrip /></PaywallGate> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug/start" element={effectiveUser ? <PaywallGate><ChooseFlow /></PaywallGate> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug" element={effectiveUser ? <PaywallGate><TripView /></PaywallGate> : <Navigate to="/welcome" replace />} />
+        <Route path="/v/:slug/admin" element={effectiveUser ? <PaywallGate><AdminTrip /></PaywallGate> : <Navigate to="/welcome" replace />} />
         <Route path="/conta" element={effectiveUser ? <Account /> : <Navigate to="/welcome" replace />} />
         <Route path="/assinatura/sucesso" element={effectiveUser ? <AssinaturaSucesso /> : <Navigate to="/welcome" replace />} />
+        <Route path="/assinatura/pendente" element={effectiveUser ? <AssinaturaPendente /> : <Navigate to="/welcome" replace />} />
 
         {/* Admin (owner-only — guard interno) */}
         <Route path="/admin/afiliados" element={effectiveUser ? <AdminAfiliados /> : <Navigate to="/welcome" replace />} />
