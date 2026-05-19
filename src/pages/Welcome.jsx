@@ -11,6 +11,7 @@ import { trackPaymentStarted } from "../lib/analytics";
 import { friendlyError } from "../lib/errorMessages";
 import { passwordStrength } from "./welcome/_shared";
 import { useInviteToken } from "../hooks/useInviteToken";
+import { startCheckoutSession } from "../lib/checkout";
 import InfluencerStep from "./welcome/InfluencerStep";
 import PlanPicker from "./welcome/PlanPicker";
 import LoginForm from "./welcome/LoginForm";
@@ -148,70 +149,45 @@ export default function Welcome() {
     setSignupStep("cupom");
   };
 
-  // Etapa 3: cria a conta e redireciona pro Mercado Pago
+  // Etapa 3: cria a conta e redireciona pro Mercado Pago.
   const handleConfirmPlan = async (plano, ciclo = "mensal") => {
     setErr(null);
+    let created;
     try {
       const { origem, afiliado_id } = await resolveOrigemPayload();
-
-      const created = await signUp({
-        nome: nome.trim(),
-        email,
-        senha,
-        avatar_cor: cor,
-        avatar_url: photo,
-        origem,
-        afiliado_id,
+      created = await signUp({
+        nome: nome.trim(), email, senha,
+        avatar_cor: cor, avatar_url: photo,
+        origem, afiliado_id,
       });
-
-      // Se Supabase tem email confirmation ON, sinaliza pra UI ajustar o toast.
-      // O pagamento ainda continua: o webhook MP ativa o plano usando o user_id,
-      // independente do email estar confirmado ou não.
-      if (created.needsConfirmation) {
-        setNeedsConfirmation(true);
-      }
-
-      try {
-        const cupom = getStoredCupom() || null;
-        // Pega session do Supabase (signUp já loga quando email confirmation
-        // está OFF). Em caso de confirmation ON, signUp retorna session=null
-        // e o flow inteiro precisa esperar confirmação — tratado mais acima
-        // via needsConfirmation.
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error("Sessão não disponível — confirme seu email antes de assinar.");
-        }
-        const res = await fetch("/api/create-subscription", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ plano, ciclo, cupom }),
-        });
-        const data = await res.json();
-        if (res.status === 503 && data?.placeholder) {
-          setErr("Pagamento ainda em configuração. Sua conta foi criada — escreva pra sidney@grupomultvision.com pra liberar o acesso manualmente.");
-          setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
-          return;
-        }
-        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-        if (data?.init_point) {
-          clearStoredCupom();
-          clearStoredOrigem();
-          trackPaymentStarted(plano, ciclo, { user_id: created.id, has_cupom: !!cupom });
-          window.location.href = data.init_point;
-          return;
-        }
-        throw new Error("Resposta sem URL de pagamento.");
-      } catch (e) {
-        console.error("[Welcome] checkout failed:", e);
-        setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora. ${friendlyError(e)} Faça login e tente o upgrade pelo painel.`);
-        setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
-      }
+      // Email confirmation ON → signUp não loga; webhook MP ativa o plano
+      // via user_id mesmo sem confirmação.
+      if (created.needsConfirmation) setNeedsConfirmation(true);
     } catch (e) {
       console.error("[Welcome] signup erro:", e);
       setErr(friendlyError(e));
+      return;
+    }
+
+    try {
+      const cupom = getStoredCupom() || null;
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await startCheckoutSession({
+        plano, ciclo, cupom, accessToken: session?.access_token,
+      });
+      if (result.placeholder) {
+        setErr("Pagamento ainda em configuração. Sua conta foi criada — escreva pra sidney@grupomultvision.com pra liberar o acesso manualmente.");
+        setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
+        return;
+      }
+      clearStoredCupom();
+      clearStoredOrigem();
+      trackPaymentStarted(plano, ciclo, { user_id: created.id, has_cupom: !!cupom });
+      window.location.href = result.init_point;
+    } catch (e) {
+      console.error("[Welcome] checkout failed:", e);
+      setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora. ${friendlyError(e)} Faça login e tente o upgrade pelo painel.`);
+      setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
     }
   };
 
