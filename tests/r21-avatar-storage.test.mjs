@@ -227,13 +227,17 @@ describe("R21-4 — Migration script idempotente e seguro", () => {
   });
 });
 
+// R32-T: createClient(URL_, ANON) FICA DENTRO de cada it(). Quando
+// HAS_SUPABASE=false, describe.skipIf pula os its, MAS o body do
+// describe ainda é avaliado durante test collection — se createClient
+// estivesse no body com URL_=undefined, throwava "supabaseUrl is
+// required" e matava a suite inteira no CI sem secrets.
 describe.skipIf(!HAS_SUPABASE)("R21-1 smoke real — bucket avatars existe em prod", () => {
-  const supa = createClient(URL_, ANON);
-
   it("getPublicUrl pra qualquer path no bucket avatars retorna URL válida", () => {
     // Anon não consegue LISTAR buckets mas getPublicUrl é client-side,
     // confirma que a URL é montável. Se bucket não existe, a URL pode
     // até montar mas 404 ao acessar (não testamos aqui — só assinatura).
+    const supa = createClient(URL_, ANON);
     const { data } = supa.storage.from("avatars").getPublicUrl("test/path.png");
     expect(data?.publicUrl).toBeTruthy();
     expect(data.publicUrl).toMatch(/\/storage\/v1\/object\/public\/avatars\/test\/path\.png/);
@@ -241,6 +245,7 @@ describe.skipIf(!HAS_SUPABASE)("R21-1 smoke real — bucket avatars existe em pr
 
   it("Anon SELECT em storage.objects do bucket avatars não dá erro", async () => {
     // RLS deixa ler (público). Lista vazia é OK (nenhuma foto ainda).
+    const supa = createClient(URL_, ANON);
     const { error } = await supa.storage.from("avatars").list("", { limit: 1 });
     expect(error).toBeFalsy();
   });

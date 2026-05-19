@@ -74,6 +74,24 @@ export function InfoBox({ msg }) {
   );
 }
 
+// R29-4: barra de força + label, renderizada idêntico em ResetPasswordForm
+// e SignupDadosForm. Aceita o objeto retornado por passwordStrength().
+export function PasswordStrengthBar({ strength }) {
+  if (!strength) return null;
+  return (
+    <div className="px-1">
+      <div className="h-1 rounded-full bg-[#E5E7EB] overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${strength.pct}%`, background: strength.color }} />
+      </div>
+      <div className="text-[11px] mt-1 font-display font-bold flex items-center gap-1.5" style={{ color: strength.color }}>
+        <span>{strength.valid ? "✓" : "⚠"}</span>
+        <span>Força: {strength.label}</span>
+        {strength.hint && <span className="text-[10px] opacity-80 font-display font-semibold normal-case">— {strength.hint}</span>}
+      </div>
+    </div>
+  );
+}
+
 export function passwordStrength(s) {
   if (!s) return null;
   const hasLength = s.length >= 6;

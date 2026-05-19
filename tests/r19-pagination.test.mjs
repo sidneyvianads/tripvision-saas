@@ -244,22 +244,26 @@ describe("R19-3/4/5 — AdminAfiliados usa RPCs paginadas + AbortController", ()
   });
 });
 
+// R32-T: createClient DENTRO de cada it() pra não throwar durante
+// test collection quando HAS_SUPABASE=false (skipIf só pula execução,
+// não a avaliação do body do describe).
 describe.skipIf(!HAS_SUPABASE)("R19-2 — RPCs respondem (smoke real anônimo)", () => {
-  const supa = createClient(URL, ANON);
-
   it("admin_afiliados_list_v2 anônimo → permission denied", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("admin_afiliados_list_v2", { p_page: 1, p_page_size: 1 });
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/permission denied|not authenticated|jwt/i);
   });
 
   it("admin_users_list anônimo → permission denied", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("admin_users_list", { p_page: 1, p_page_size: 1 });
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/permission denied|not authenticated|jwt/i);
   });
 
   it("admin_comissoes_list anônimo → permission denied", async () => {
+    const supa = createClient(URL, ANON);
     const { error } = await supa.rpc("admin_comissoes_list", { p_page: 1, p_page_size: 1 });
     expect(error).toBeTruthy();
     expect(error.message).toMatch(/permission denied|not authenticated|jwt/i);
