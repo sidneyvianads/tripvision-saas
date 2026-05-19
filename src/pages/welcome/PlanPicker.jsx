@@ -77,7 +77,7 @@ export default function PlanPicker({ afiliado, onChoose, onBack, loading, err })
         badge="MAIS POPULAR"
         bullets={[
           "Até 3 viagens",
-          "500 mensagens por mês",
+          "200 conversas por mês com o Jei",
           "Compartilhar com 5 pessoas",
           "Chat do grupo (atualiza na hora)",
           "Pesquisa preços reais",
@@ -95,7 +95,7 @@ export default function PlanPicker({ afiliado, onChoose, onBack, loading, err })
         desconto={desconto}
         bullets={[
           "Até 5 viagens",
-          "2.000 mensagens por mês",
+          "800 conversas por mês com o Jei",
           "Compartilhar com 20 pessoas",
           "Chat do grupo",
           "Tudo do Pro + escala maior",
