@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AVATAR_COLORS } from "../data/types";
@@ -24,6 +24,7 @@ const REDIRECT_DELAY_MS = 1800;
 export default function Welcome() {
   const { signIn, signUp, loading, sendPasswordReset, updatePassword, clearRecovering, isRecovering } = useAuth();
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   // mode: 'login' | 'signup' | 'forgot' | 'reset'
   // - login/signup: fluxos normais
   // - forgot: form pra pedir reset de senha
@@ -176,8 +177,11 @@ export default function Welcome() {
         plano, ciclo, cupom, accessToken: session?.access_token,
       });
       if (result.placeholder) {
-        setErr("Pagamento ainda em configuração. Sua conta foi criada — escreva pra sidney@grupomultvision.com pra liberar o acesso manualmente.");
-        setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
+        // R31-D: MP não configurado. Conta criada — não tem como começar
+        // o trial. Joga pra /assinatura/pendente que mostra mensagem +
+        // botão pra retentar. NÃO mais setSuccess (que confusamente
+        // jogava o user no app sem MP via App.jsx logado-sem-paywall).
+        navigate("/assinatura/pendente", { replace: true });
         return;
       }
       clearStoredCupom();
@@ -185,9 +189,11 @@ export default function Welcome() {
       trackPaymentStarted(plano, ciclo, { user_id: created.id, has_cupom: !!cupom });
       window.location.href = result.init_point;
     } catch (e) {
+      // R31-D: erro no checkout (timeout MP, 4xx, network). Conta criada
+      // mas user precisa retomar. /assinatura/pendente é o destino certo
+      // — PaywallGate redirecionaria pra cá de qualquer jeito.
       console.error("[Welcome] checkout failed:", e);
-      setErr(`Sua conta foi criada, mas não consegui abrir o pagamento agora. ${friendlyError(e)} Faça login e tente o upgrade pelo painel.`);
-      setSuccess({ email: created.email, nome: created.nome, plano: "pending" });
+      navigate("/assinatura/pendente", { replace: true });
     }
   };
 
