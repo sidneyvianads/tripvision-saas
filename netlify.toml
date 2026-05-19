@@ -25,9 +25,20 @@
 [functions."cron-truncate-ia-conversas"]
   timeout = 26
 
-[[edge_functions]]
-  function = "og"
-  path = "/v/:slug"
+# R33: edge function og.mjs DESABILITADA temporariamente. Netlify
+# functions-origin retornava 503 ao subir o bundle (2 tentativas
+# seguidas), bloqueando o deploy inteiro — incluindo o paywall do R31
+# que precisa entrar em prod. Trade-off: preview de /v/:slug no
+# WhatsApp/Twitter fica sem meta tags personalizadas (cai pra
+# og-default.png + título genérico de index.html). O app em si
+# continua funcionando normal via SPA fallback.
+#
+# Arquivo renomeado pra og.mjs.disabled pra Netlify ignorar no bundle.
+# Quando descobrir a causa do 503, restaurar: git mv + descomentar.
+#
+# [[edge_functions]]
+#   function = "og"
+#   path = "/v/:slug"
 
 # Canonical: força tudo em tripvision-saas.netlify.app pra viajjei.com.br
 [[redirects]]
