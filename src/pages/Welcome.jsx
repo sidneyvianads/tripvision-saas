@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift, AtSign } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mail, KeyRound, User, Sparkles, Check, Star, Gift } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import PhotoPicker from "../components/PhotoPicker";
 import { AVATAR_COLORS } from "../data/types";
@@ -13,8 +13,9 @@ import { trackPaymentStarted } from "../lib/analytics";
 import { friendlyError } from "../lib/errorMessages";
 import {
   Field, ErrorBox, InfoBox, StepIndicator, passwordStrength,
-  colorFromName, initialsFromName, round2, formatPrice,
+  round2, formatPrice,
 } from "./welcome/_shared";
+import InfluencerStep from "./welcome/InfluencerStep";
 
 const REDIRECT_DELAY_MS = 1800;
 
@@ -460,219 +461,6 @@ export default function Welcome() {
           <Link to="/termos" className="hover:text-primary">Termos</Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-// R29-1: StepIndicator, colorFromName, initialsFromName moved to ./welcome/_shared.
-
-function InfluencerStep({ selected, onSelect, onContinue, onBack }) {
-  const [afiliados, setAfiliados] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Cupom da URL (?cupom=X) — usado pra pré-selecionar
-  const initialCupom = useMemo(() => (selected?.cupom ?? getStoredCupom() ?? "").toUpperCase(), [selected]);
-
-  // R11-4: refs capturam props atuais (selected/onSelect/onContinue)
-  // sem prender o closure do effect com valores stale. Antes, o effect
-  // tinha `[]` deps + `if (!selected && initialCupom)` — o `selected`
-  // era do mount. Se o user clicasse em outro afiliado durante o load
-  // da lista, o auto-select de cupom URL chegava DEPOIS e sobrescrevia
-  // a escolha manual.
-  const selectedRef = useRef(selected);
-  const onSelectRef = useRef(onSelect);
-  const onContinueRef = useRef(onContinue);
-  useEffect(() => {
-    selectedRef.current = selected;
-    onSelectRef.current = onSelect;
-    onContinueRef.current = onContinue;
-  });
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data, error: err } = await supabase
-        .from("afiliados")
-        .select("id, nome, instagram, cupom, desconto_percent, foto_url")
-        .eq("ativo", true)
-        .order("nome");
-      if (!active) return;
-      if (err) {
-        console.error("[Welcome] afiliados load erro:", err);
-        setError(friendlyError(err));
-        setLoading(false);
-        return;
-      }
-      const list = data ?? [];
-      setAfiliados(list);
-      setLoading(false);
-
-      // Lista vazia → não tem o que mostrar nessa etapa, pula direto pro plano
-      if (list.length === 0) {
-        onContinueRef.current?.();
-        return;
-      }
-
-      // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater).
-      // Lê selected MAIS RECENTE via ref pra não sobrescrever escolha manual.
-      if (!selectedRef.current && initialCupom) {
-        const match = list.find((a) => a.cupom?.toUpperCase() === initialCupom);
-        if (match) onSelectRef.current?.(match);
-      }
-    })();
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="mt-6 space-y-4 animate-pop">
-      <StepIndicator step={2} />
-
-      <div className="text-center">
-        <div className="text-4xl mb-1">🎟️</div>
-        <h2 className="font-display font-extrabold text-[#1F2937] text-xl">
-          Quem te indicou?
-        </h2>
-        <p className="text-[#6B7280] text-sm mt-1">
-          Escolha o influenciador que falou do Viajjei pra você.
-        </p>
-      </div>
-
-      {/* Banner: pré-selecionado por URL */}
-      {selected && initialCupom && (
-        <div
-          className="rounded-2xl p-3 animate-pop"
-          style={{ background: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)", border: "1.5px solid #6EE7B7" }}
-        >
-          <div className="text-emerald-900 text-[13px] font-display font-bold">
-            ✅ Você foi indicado por <strong>{selected.nome}</strong>! Confirme abaixo ou troque a seleção.
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-[#F97316]" />
-        </div>
-      ) : error ? (
-        <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-red-700 text-sm">
-          Não consegui carregar a lista de influenciadores: {error}
-        </div>
-      ) : (
-        <ul className="space-y-2 max-h-[420px] overflow-y-auto -mr-2 pr-2">
-          {afiliados.map((af) => {
-            const isSelected = selected?.id === af.id;
-            const desconto = Number(af.desconto_percent ?? 0);
-            return (
-              <li key={af.id}>
-                <button
-                  type="button"
-                  onClick={() => onSelect(isSelected ? null : af)}
-                  className="w-full text-left rounded-2xl p-3 flex items-center gap-3 transition active:scale-[0.99]"
-                  style={{
-                    background: "white",
-                    border: isSelected ? "2px solid #F97316" : "1.5px solid #E2E8F0",
-                    boxShadow: isSelected ? "0 8px 24px rgba(249, 115, 22, 0.20)" : "0 1px 3px rgba(15, 23, 42, 0.05)",
-                  }}
-                >
-                  <InfluencerAvatar af={af} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-display font-extrabold text-[#0F172A] truncate">{af.nome}</div>
-                    {af.instagram && (
-                      <div className="text-[12px] text-[#64748B] truncate inline-flex items-center gap-1">
-                        <AtSign className="w-3 h-3" /> {af.instagram.replace(/^@/, "")}
-                      </div>
-                    )}
-                    {desconto > 0 && (
-                      <div className="mt-1">
-                        <span
-                          className="inline-block text-[10px] px-2 py-0.5 rounded-full font-display font-extrabold uppercase tracking-widest"
-                          style={{ background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA" }}
-                        >
-                          {desconto.toFixed(0)}% off no 1º mês
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <span
-                    className="text-[11px] font-display font-extrabold px-3 py-1.5 rounded-full whitespace-nowrap"
-                    style={{
-                      background: isSelected ? "#F97316" : "#F1F5F9",
-                      color: isSelected ? "white" : "#475569",
-                    }}
-                  >
-                    {isSelected ? <span className="inline-flex items-center gap-1"><Check className="w-3 h-3" /> Escolhido</span> : "Escolher"}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {/* Confirmação pós-seleção */}
-      {selected && (
-        <div className="text-center text-[13px] font-display font-bold text-emerald-700">
-          ✅ Indicado por {selected.nome}!
-        </div>
-      )}
-
-      {/* CTAs */}
-      {selected ? (
-        <button
-          type="button"
-          onClick={onContinue}
-          className="btn-primary w-full inline-flex items-center justify-center gap-2"
-          style={{ background: "#F97316" }}
-        >
-          Continuar <ArrowRight className="w-4 h-4" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => { clearStoredCupom(); onContinue(); }}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-display font-extrabold text-sm border-2 transition hover:bg-[#F8FAFC]"
-          style={{ borderColor: "#E2E8F0", color: "#0F172A", background: "white" }}
-        >
-          Ninguém me indicou — Pular <ArrowRight className="w-4 h-4" />
-        </button>
-      )}
-
-      <button
-        type="button"
-        onClick={onBack}
-        className="text-sm text-[#64748B] hover:text-[#0F172A] font-display font-bold w-full text-center pt-1"
-      >
-        ← Voltar
-      </button>
-    </div>
-  );
-}
-
-function InfluencerAvatar({ af }) {
-  const size = 48;
-  if (af.foto_url) {
-    return (
-      <img
-        src={af.foto_url}
-        alt={af.nome}
-        width={size}
-        height={size}
-        loading="lazy"
-        className="rounded-full object-cover shrink-0"
-        style={{ width: size, height: size, background: "#F1F5F9" }}
-        onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }}
-        draggable={false}
-      />
-    );
-  }
-  return (
-    <div
-      className="rounded-full flex items-center justify-center shrink-0 text-white font-display font-extrabold"
-      style={{ width: size, height: size, background: colorFromName(af.nome), fontSize: 18 }}
-    >
-      {initialsFromName(af.nome)}
     </div>
   );
 }
