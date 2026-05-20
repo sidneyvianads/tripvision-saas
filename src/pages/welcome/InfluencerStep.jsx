@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Loader2, AtSign } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { supabase, runPublicQuery } from "../../lib/supabase";
 import { friendlyError } from "../../lib/errorMessages";
 import { getStoredCupom, clearStoredCupom } from "../../lib/cupom";
 import { StepIndicator, colorFromName, initialsFromName } from "./_shared";
@@ -66,12 +66,17 @@ export default function InfluencerStep({ selected, onSelect, onContinue, onBack 
         // .abortSignal não é suportado em todas as versões do supabase-js;
         // o timeoutId acima é o seguro pra UI. AbortController fica como
         // dica pro client cancelar a request se conseguir.
-        const { data, error: err } = await supabase
-          .from("afiliados")
-          .select("id, nome, instagram, cupom, desconto_percent, foto_url")
-          .eq("ativo", true)
-          .order("nome")
-          .abortSignal(ac.signal);
+        // R39: runPublicQuery faz retry uma vez se o erro for de auth
+        // (PGRST301/302/42501). Cobre token revogado no servidor que
+        // o purge eager não detectou — limpa session e tenta como anon.
+        const { data, error: err } = await runPublicQuery(() =>
+          supabase
+            .from("afiliados")
+            .select("id, nome, instagram, cupom, desconto_percent, foto_url")
+            .eq("ativo", true)
+            .order("nome")
+            .abortSignal(ac.signal)
+        );
         if (!active) return;
         clearTimeout(timeoutId);
         if (err) {
