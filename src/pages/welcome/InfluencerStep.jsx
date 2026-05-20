@@ -44,37 +44,73 @@ export default function InfluencerStep({ selected, onSelect, onContinue, onBack 
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      const { data, error: err } = await supabase
-        .from("afiliados")
-        .select("id, nome, instagram, cupom, desconto_percent, foto_url")
-        .eq("ativo", true)
-        .order("nome");
-      if (!active) return;
-      if (err) {
-        console.error("[Welcome] afiliados load erro:", err);
-        setError(friendlyError(err));
+    // R37: timeout defensivo. Em Safari ITP, supabase.from(..).select(..)
+    // pode travar silenciosamente porque o supabase-js tenta ler o JWT do
+    // localStorage antes do request HTTP — se storage trava, a promise
+    // nunca resolve. Sem isso, spinner ficava infinito e o user tinha
+    // que recarregar (perdendo todos os dados do form). Agora: 5s pra
+    // responder, ou destrava com error + botão "Pular" ainda funcional.
+    const TIMEOUT_MS = 5000;
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => {
+      if (active) {
+        console.warn(`[InfluencerStep] afiliados load timeout (${TIMEOUT_MS}ms) — destravando UI com botão Pular`);
+        setError("Lista de influenciadores indisponível agora. Você pode pular esta etapa.");
         setLoading(false);
-        return;
+        ac.abort();
       }
-      const list = data ?? [];
-      setAfiliados(list);
-      setLoading(false);
+    }, TIMEOUT_MS);
 
-      // Lista vazia → não tem o que mostrar nessa etapa, pula direto pro plano
-      if (list.length === 0) {
-        onContinueRef.current?.();
-        return;
-      }
+    (async () => {
+      try {
+        // .abortSignal não é suportado em todas as versões do supabase-js;
+        // o timeoutId acima é o seguro pra UI. AbortController fica como
+        // dica pro client cancelar a request se conseguir.
+        const { data, error: err } = await supabase
+          .from("afiliados")
+          .select("id, nome, instagram, cupom, desconto_percent, foto_url")
+          .eq("ativo", true)
+          .order("nome")
+          .abortSignal(ac.signal);
+        if (!active) return;
+        clearTimeout(timeoutId);
+        if (err) {
+          console.error("[Welcome] afiliados load erro:", err);
+          setError(friendlyError(err));
+          setLoading(false);
+          return;
+        }
+        const list = data ?? [];
+        setAfiliados(list);
+        setLoading(false);
 
-      // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater).
-      // Lê selected MAIS RECENTE via ref pra não sobrescrever escolha manual.
-      if (!selectedRef.current && initialCupom) {
-        const match = list.find((a) => a.cupom?.toUpperCase() === initialCupom);
-        if (match) onSelectRef.current?.(match);
+        // Lista vazia → não tem o que mostrar nessa etapa, pula direto pro plano
+        if (list.length === 0) {
+          onContinueRef.current?.();
+          return;
+        }
+
+        // Pré-seleciona pelo cupom da URL (se algum afiliado da lista bater).
+        // Lê selected MAIS RECENTE via ref pra não sobrescrever escolha manual.
+        if (!selectedRef.current && initialCupom) {
+          const match = list.find((a) => a.cupom?.toUpperCase() === initialCupom);
+          if (match) onSelectRef.current?.(match);
+        }
+      } catch (e) {
+        // R37: throw síncrono do supabase-js (raro mas possível em
+        // browsers com storage corrompido). Destrava UI igual ao timeout.
+        if (!active) return;
+        clearTimeout(timeoutId);
+        console.error("[InfluencerStep] afiliados load exception:", e);
+        setError(friendlyError(e));
+        setLoading(false);
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      ac.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
