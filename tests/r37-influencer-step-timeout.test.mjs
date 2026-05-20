@@ -54,10 +54,10 @@ describe("R37 — InfluencerStep timeout defensivo", () => {
     expect(src).toMatch(/\.abortSignal\(ac\.signal\)/);
   });
 
-  it("try/catch ao redor do supabase call", () => {
-    // Caso supabase-js lance throw síncrono (storage corrompido raro),
-    // o catch destrava UI igual ao timeout.
-    expect(src).toMatch(/try\s*\{[\s\S]+?await supabase[\s\S]+?\} catch \(e\)/);
+  it("try/catch ao redor da query (cobre throw síncrono raro)", () => {
+    // R39: query agora vai por runPublicQuery() em vez de supabase direto.
+    // A regex precisa cobrir os dois (compatibilidade com refactors).
+    expect(src).toMatch(/try\s*\{[\s\S]+?await\s+(supabase|runPublicQuery)[\s\S]+?\} catch \(e\)/);
   });
 
   it("Cleanup do effect cancela timer e abort", () => {
