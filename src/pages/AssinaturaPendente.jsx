@@ -22,6 +22,11 @@ export default function AssinaturaPendente() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  // R35-B: cupom persistido em sessionStorage (R14-4/R31). Se o user veio
+  // do signup com VICTOR10 e caiu aqui depois do checkout falhar, PlanPicker
+  // antes mostrava preço cheio porque afiliado=null. Carregamos o afiliado
+  // pelo cupom pra exibir o desconto correto.
+  const [afiliado, setAfiliado] = useState(null);
 
   // R31-D: se o webhook ativou o plano enquanto o user estava aqui (ex:
   // voltou da janela do MP), libera direto pra "/" em vez de manter ele
@@ -31,6 +36,31 @@ export default function AssinaturaPendente() {
       navigate("/", { replace: true });
     }
   }, [user, navigate]);
+
+  // R35-B: busca o afiliado pelo cupom guardado no signup. Best-effort —
+  // se falhar, PlanPicker renderiza com preço cheio (afiliado=null) e o
+  // checkout valida o cupom no backend, então user não perde o desconto
+  // se houver. UI fica menos clara, mas funcional.
+  useEffect(() => {
+    let active = true;
+    const cupom = getStoredCupom();
+    if (!cupom) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("afiliados")
+        .select("id, nome, cupom, desconto_percent, foto_url")
+        .eq("cupom", cupom.toUpperCase())
+        .eq("ativo", true)
+        .maybeSingle();
+      if (!active) return;
+      if (error) {
+        console.warn("[AssinaturaPendente] afiliado lookup falhou:", error);
+        return;
+      }
+      if (data) setAfiliado(data);
+    })();
+    return () => { active = false; };
+  }, []);
 
   const handleChoose = async (plano, ciclo) => {
     if (!user?.id) return;
@@ -82,7 +112,7 @@ export default function AssinaturaPendente() {
 
         <div className="mt-2">
           <PlanPicker
-            afiliado={null}
+            afiliado={afiliado}
             onChoose={handleChoose}
             onBack={handleLogout}
             loading={busy}
