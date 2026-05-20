@@ -9,6 +9,63 @@ if (!isSupabaseConfigured) {
   console.warn("[Viajjei] VITE_SUPABASE_URL/ANON_KEY ausentes — modo offline.");
 }
 
+// R38: storage wrapper resiliente. Antes passávamos window.localStorage
+// direto pro supabase client. Quando localStorage explode (Safari ITP
+// SecurityError, Chrome com storage corrompido tipo JSON inválido em
+// "viajjei.auth", quota cheia), o supabase-js trava em
+// _emitInitialSession → toda query .from(..).select(..) fica pendurada
+// pra sempre. Sintoma R34/R36/R37: spinner infinito nos forms de signup
+// e na lista de afiliados, em Chrome E Safari.
+//
+// O R37 mitigou no InfluencerStep com timeout de 5s, mas era band-aid:
+// o user via "Lista indisponível" e perdia o cupom. O fix de verdade
+// é envolver storage com try/catch + fallback in-memory.
+//
+// Comportamento:
+//   - getItem que throw OU retorna JSON inválido → in-memory return null
+//   - setItem que throw → silenciosamente engole (session-only nessa aba)
+//   - removeItem que throw → idem
+//
+// Trade-off: se localStorage está bloqueado, a sessão não persiste entre
+// reloads (user precisa logar de novo). Mas o app NÃO TRAVA — comportamento
+// drasticamente melhor que spinner infinito.
+const memoryStore = new Map();
+const resilientStorage = typeof window !== "undefined" ? {
+  getItem(key) {
+    try {
+      const v = window.localStorage.getItem(key);
+      // Sanity check: o supabase-js faz JSON.parse no value. Se está
+      // corrompido (truncado, mistura de strings), o parse throw e
+      // contamina o _emitInitialSession. Pré-validamos aqui — se não
+      // for JSON válido, devolve null (= "sem sessão" pro supabase).
+      if (v != null && key.includes("auth")) {
+        try { JSON.parse(v); }
+        catch {
+          console.warn(`[supabase storage] key="${key}" corrupted, descartando`);
+          try { window.localStorage.removeItem(key); } catch {}
+          return null;
+        }
+      }
+      return v;
+    } catch (e) {
+      console.warn(`[supabase storage] getItem("${key}") falhou, usando memory:`, e?.message);
+      return memoryStore.get(key) ?? null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn(`[supabase storage] setItem("${key}") falhou, salvando em memory:`, e?.message);
+      memoryStore.set(key, value);
+    }
+  },
+  removeItem(key) {
+    try { window.localStorage.removeItem(key); } catch {}
+    memoryStore.delete(key);
+  },
+} : undefined;
+
 // Auth nativo do Supabase: persistSession + autoRefreshToken pra sessão
 // durar com JWT renovado automaticamente. detectSessionInUrl: true ativa
 // o handshake do flow de reset de senha (link no email volta com
@@ -21,7 +78,7 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storage: typeof window !== "undefined" ? window.localStorage : undefined,
+      storage: resilientStorage,
       storageKey: "viajjei.auth",
     },
   }
