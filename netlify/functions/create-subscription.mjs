@@ -88,6 +88,33 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+// R35-A: Mercado Pago /preapproval retorna 500 Internal Server Error
+// (sem mensagem útil) pra emails com plus-addressing tipo
+// "user+tag@gmail.com". Confirmado via curl direto contra api.mp.com/preapproval
+// em 2026-05-20: mesmo payload, único diff `+teste99` no email → 500;
+// sem `+` → 200 OK. Não há erro documentado no MP — é filtro interno.
+//
+// Solução: strip "+...@" antes de enviar pro MP. Email original fica
+// preservado em users.email (Supabase). O cross-check do webhook-mp.mjs
+// compara `pa.payer_email` (que o MP retorna VAZIO de qualquer jeito)
+// vs users.email — então remover o tag aqui não afeta segurança.
+//
+// Casos cobertos:
+//   "sidney+teste@gmail.com"      → "sidney@gmail.com"
+//   "joao.silva@empresa.com.br"    → "joao.silva@empresa.com.br" (passthrough)
+//   ""                              → ""
+//   undefined                       → ""
+export function stripPlusAddressing(email) {
+  if (!email || typeof email !== "string") return "";
+  const at = email.lastIndexOf("@");
+  if (at < 0) return email;
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const plus = local.indexOf("+");
+  if (plus < 0) return email;
+  return local.slice(0, plus) + domain;
+}
+
 async function fetchAfiliadoByCupom(cupom) {
   if (!cupom || !SUPABASE_URL || !SUPABASE_KEY) return null;
   // Normaliza ANTES de ir na URL pra eliminar % e outros wildcards de
@@ -206,7 +233,8 @@ export default async (req) => {
     const preapprovalBody = {
       reason: cfg.reason,
       external_reference: externalRef,
-      payer_email: userEmail,
+      // R35-A: MP rejeita "user+tag@..." com 500. Strip antes de enviar.
+      payer_email: stripPlusAddressing(userEmail),
       back_url: `${SITE_BASE}/assinatura/sucesso`,
       notification_url: `${SITE_BASE}/api/webhook-mp`,
       auto_recurring,
