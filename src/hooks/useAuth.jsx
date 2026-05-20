@@ -16,10 +16,25 @@ const PROFILE_COLS = "id, nome, email, avatar_cor, avatar_url, plano, plano_expi
 
 const AuthContext = createContext(null);
 
+// R36: timeout máximo de hidratação. Safari ITP às vezes faz
+// supabase.auth.getSession() travar silenciosamente (storage policies
+// bloqueando o IndexedDB do supabase-js). Antes disso travava `loading`
+// em true pra sempre → forms de auth ficavam disabled → sintoma R34/R36
+// (cursor not-allowed em signup). Esse safety net garante que mesmo se
+// getSession nunca resolver, `hydrating` vira false e a UI destrava.
+const HYDRATION_TIMEOUT_MS = 5000;
+
 export function AuthProvider({ children }) {
   // session inicia null; o getSession() abaixo hidrata se houver tokens válidos.
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // R36: `loading` reflete APENAS operações ativas (signIn/signUp/updateProfile)
+  // que o usuário disparou. Começa false. Forms travam disabled SÓ enquanto
+  // a operação está em curso, não durante a hidratação inicial silenciosa.
+  const [loading, setLoading] = useState(false);
+  // R36: hidratação inicial separada. UI pode escolher mostrar splash ou
+  // simplesmente ignorar — Welcome usa só `loading`, então o form de signup
+  // fica sempre interativo durante o boot.
+  const [hydrating, setHydrating] = useState(true);
   // isRecovering: setado pelo listener PASSWORD_RECOVERY quando o user clica
   // no link "esqueci a senha". Enquanto true, App.jsx NÃO redireciona /welcome
   // pra / — o Welcome continua renderizado pra o user definir nova senha.
@@ -47,14 +62,34 @@ export function AuthProvider({ children }) {
   // refresh, recovery). Quando muda, recarrega o profile.
   useEffect(() => {
     let active = true;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!active) return;
-      if (session?.user) {
-        const profile = await loadProfile(session.user);
-        if (active) setUser(profile);
+    // R36: safety net pra Safari ITP — se getSession() travar silenciosamente,
+    // hydrating fica false após HYDRATION_TIMEOUT_MS pra não bloquear UI
+    // pra sempre. console.warn pra rastrear nos logs de prod se acontecer.
+    const safetyTimer = setTimeout(() => {
+      if (active) {
+        console.warn(`[useAuth] hydration timeout (${HYDRATION_TIMEOUT_MS}ms) — forçando hydrating=false. Provavelmente Safari ITP ou storage bloqueado.`);
+        setHydrating(false);
       }
-      if (active) setLoading(false);
+    }, HYDRATION_TIMEOUT_MS);
+
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!active) return;
+        if (session?.user) {
+          const profile = await loadProfile(session.user);
+          if (active) setUser(profile);
+        }
+      } catch (err) {
+        // getSession pode throw em browsers com storage bloqueado.
+        // Captura e segue — user fica deslogado, que é o estado correto.
+        console.warn("[useAuth] getSession throw — assumindo sem session:", err?.message);
+      } finally {
+        if (active) {
+          clearTimeout(safetyTimer);
+          setHydrating(false);
+        }
+      }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -86,6 +121,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       active = false;
+      clearTimeout(safetyTimer);
       sub?.subscription?.unsubscribe?.();
     };
   }, [loadProfile]);
@@ -268,8 +304,8 @@ export function AuthProvider({ children }) {
   }, [user?.id]);
 
   const value = useMemo(
-    () => ({ user, loading, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering }),
-    [user, loading, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering]
+    () => ({ user, loading, hydrating, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering }),
+    [user, loading, hydrating, isRecovering, signIn, signUp, signOut, sendPasswordReset, updatePassword, updateProfile, clearRecovering]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
