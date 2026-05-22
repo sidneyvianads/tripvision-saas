@@ -1,18 +1,22 @@
 // /api/plan — motor de planejamento conversacional do Viajjei.
 //
 // CHAIN DE PROVIDERS (tenta na ordem, cai pro próximo se falhar):
-//   1. PRIMARY: Anthropic Claude Haiku 4.5 com web_search_20250305.
+//   1. PRIMARY: Google Gemini 2.5 Flash com googleSearch grounding.
 //      Custo/conta:
-//        - Tokens:  $1/M in,  $5/M out
-//        - Search:  $10 / 1k buscas (3× mais barato que OpenAI/Gemini)
-//      Único modelo que fecha conta no Pro (R$14,90) com margem positiva
-//      mantendo qualidade Claude — segue instruções fortes, streaming
-//      estável, structured output confiável pros tags <roteiro_update>
-//      e <viagem_update>. Histórico: testamos GPT-4o-mini e Gemini Flash
-//      e ambos deram alucinação/cortes de stream em produção.
-//   2. FALLBACK 1: OpenAI GPT-4o-mini via Responses API (web_search_preview).
-//      Web search da OpenAI é caro ($30/1k); só usa se Claude cair.
-//   3. FALLBACK 2: Google Gemini 2.5 Flash com googleSearch.
+//        - Tokens:  $0.30/M in, $2.50/M out (~3× mais barato que Haiku)
+//        - Search:  500 grounding requests/dia grátis no tier free, depois
+//                   $35/1k. Logamos cada grounding pra medir o quanto disso
+//                   o app usa de fato (telemetria R40).
+//      Trocado de Haiku → Gemini em R40 (2026-05-21) por custo. Histórico:
+//      Haiku tinha qualidade superior pra tags e streaming, mas Gemini 2.5
+//      Flash já fechou os gaps em 2025-2026. Validação: tags <roteiro_update>
+//      e <viagem_update> e streaming SSE conferem (testes R40).
+//   2. FALLBACK 1: Anthropic Claude Haiku 4.5 com web_search_20250305.
+//      Custo: $1/M in, $5/M out. Mantido como rede de segurança — se
+//      Gemini cair (rate limit, prompt rejeitado), Haiku assume.
+//   3. FALLBACK 2: OpenAI GPT-4o-mini via Responses API (web_search_preview).
+//      Web search da OpenAI é caro ($30/1k); só usa se Gemini E Claude
+//      caírem.
 //
 // O frontend (PlanChat.jsx) lê SSE em formato Anthropic
 // (data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"…"}}).
@@ -369,11 +373,14 @@ const SSE_HEADERS = {
 // (compartilhada com chat.mjs). Strategy de cache breakpoint na PENÚLTIMA
 // msg do histórico documentada lá.
 
-// ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (primary) ──────────────────────────
+// ────────────────────────── PATH A: ANTHROPIC CLAUDE HAIKU 4.5 (fallback 1) ──────────────────────────
 //
 // Modelo: claude-haiku-4-5 (alias estável). Streaming SSE Anthropic já
 // chega no formato que o front lê — basta retornar upstream.body. Web
 // search via tool web_search_20250305 (max_uses=1 por turno).
+//
+// R40: rebaixado de primary pra fallback 1. Gemini 2.5 Flash assume
+// como primary por custo (~3× mais barato), Haiku fica de backup.
 
 async function streamWithClaude({ system, history, userMessage }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -413,10 +420,12 @@ async function streamWithClaude({ system, history, userMessage }) {
   }, "claude-init", 2, 1000);
 }
 
-// ────────────────────────── PATH B: OPENAI (fallback 1) ──────────────────────────
+// ────────────────────────── PATH B: OPENAI (fallback 2) ──────────────────────────
 //
 // Responses API com web_search_preview. Eventos response.output_text.delta
 // reembrulhados no schema SSE Anthropic.
+//
+// R40: era fallback 1, virou fallback 2 (Gemini é primary agora).
 
 async function streamWithOpenAI({ system, history, userMessage }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -465,7 +474,13 @@ async function streamWithOpenAI({ system, history, userMessage }) {
   return sseStream;
 }
 
-// ────────────────────────── PATH C: GEMINI (fallback 2) ──────────────────────────
+// ────────────────────────── PATH C: GEMINI (primary) ──────────────────────────
+//
+// R40: promovido de fallback 2 pra primary. Modelo: gemini-2.5-flash
+// (alias estável). Tool googleSearch nativo pra grounding. Após o stream
+// terminar, logamos se groundingMetadata aparece (= disparou Google
+// Search) e quantas queries foram, pra medir uso vs free tier
+// (500 grounding requests/dia grátis).
 
 async function streamWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -506,6 +521,24 @@ async function streamWithGemini({ system, history, userMessage }) {
           const piece = chunk?.text?.() ?? "";
           if (piece) controller.enqueue(encoder.encode(sseTextDeltaEvent(piece)));
         }
+        // R40: telemetria de grounding. result.response (resolvido após
+        // o stream completar) tem candidates[0].groundingMetadata se o
+        // modelo disparou googleSearch. Logamos pra medir uso real vs
+        // o free tier de 500 grounding/dia. Falha de leitura aqui é
+        // best-effort — não queremos quebrar o stream por causa de log.
+        try {
+          const finalResp = await result.response;
+          const grounding = finalResp?.candidates?.[0]?.groundingMetadata;
+          if (grounding) {
+            const queries = grounding.webSearchQueries ?? [];
+            const chunks = grounding.groundingChunks?.length ?? 0;
+            console.log(`[JEI/gemini] grounding=true queries=${queries.length} chunks=${chunks} q=${JSON.stringify(queries).slice(0, 200)}`);
+          } else {
+            console.log("[JEI/gemini] grounding=false (resposta sem busca Google)");
+          }
+        } catch (telemetryErr) {
+          console.warn("[JEI/gemini] telemetry leitura grounding falhou:", telemetryErr?.message);
+        }
         controller.close();
       } catch (err) {
         // Log interno detalhado; pro client emite SÓ a mensagem amigável.
@@ -531,10 +564,12 @@ export default async (req) => {
     console.error("[JEI] Nenhuma API key configurada — devolvendo erro amigável.");
     return jsonResponse({ error: FRIENDLY_ERROR }, 503);
   }
+  // R40: ordem invertida — Gemini é primary por custo. Logamos qual
+  // provider está disponível como primário pra rastreabilidade.
   console.log(
-    hasAnthropic ? "[JEI] Path primário: Claude Haiku 4.5"
-    : hasOpenAI ? "[JEI] Path primário: GPT-4o-mini"
-    : "[JEI] Path primário: Gemini 2.5 Flash"
+    hasGemini ? "[JEI] Path primário: Gemini 2.5 Flash"
+    : hasAnthropic ? "[JEI] Path primário: Claude Haiku 4.5"
+    : "[JEI] Path primário: GPT-4o-mini"
   );
 
   let body;
@@ -608,18 +643,19 @@ export default async (req) => {
   const system = SYSTEM_TEMPLATE(viagem);
 
   // ===== STREAM =====
-  // Chain: Claude Haiku 4.5 → OpenAI → Gemini. Cada path tem retry
-  // interno; se um path falha após retries, cai pro próximo. Só devolve
-  // erro amigável quando TODOS falharem. Logs internos preservam
-  // detalhes pra debug.
+  // R40: Chain reordenada — Gemini 2.5 Flash → Claude Haiku 4.5 → OpenAI.
+  // Gemini é o primary por custo (~3× mais barato que Haiku). Cada path
+  // tem retry interno; se um path falha após retries, cai pro próximo.
+  // Só devolve erro amigável quando TODOS falharem. Logs internos
+  // preservam detalhes pra debug.
   const userMessage = message.trim();
   const params = { system, history: sanitizedHistory, userMessage };
 
   // Lista ordenada de tentativas (só inclui os providers disponíveis)
   const providers = [];
+  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => streamWithGemini(params) });
   if (hasAnthropic) providers.push({ label: "Claude Haiku 4.5",   run: () => streamWithClaude(params) });
   if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => streamWithOpenAI(params) });
-  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => streamWithGemini(params) });
 
   const providerErrors = [];
   for (let i = 0; i < providers.length; i++) {
@@ -627,6 +663,10 @@ export default async (req) => {
     try {
       if (i > 0) console.log(`[JEI] Fallback: ${p.label}`);
       const stream = await p.run();
+      // R40: log de qual modelo respondeu com sucesso (rastreabilidade
+      // — saber se Gemini está sendo usado de fato ou se está caindo
+      // muito pro Haiku/GPT em prod).
+      console.log(`[JEI] modelo=${p.label}`);
       return new Response(stream, { status: 200, headers: SSE_HEADERS });
     } catch (err) {
       console.error(`[JEI] ${p.label} falhou:`, err?.message ?? err);

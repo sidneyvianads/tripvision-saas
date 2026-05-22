@@ -1,9 +1,9 @@
 // /api/chat — chat livre da viagem (perguntas pontuais do grupo).
 //
 // Chain (tenta na ordem, cai pro próximo se falhar):
-//   1. PRIMARY: Anthropic Claude Haiku 4.5 com web_search_20250305.
-//   2. FALLBACK 1: OpenAI GPT-4o-mini via Responses API.
-//   3. FALLBACK 2: Google Gemini 2.5 Flash com googleSearch.
+//   1. PRIMARY: Google Gemini 2.5 Flash com googleSearch (R40, custo).
+//   2. FALLBACK 1: Anthropic Claude Haiku 4.5 com web_search_20250305.
+//   3. FALLBACK 2: OpenAI GPT-4o-mini via Responses API.
 //
 // AUTH: exige Authorization: Bearer <access_token> de Supabase Auth.
 // RATE-LIMIT: 20 msgs/min/user, 60/min/IP (mesmo padrão do plan.mjs).
@@ -199,7 +199,9 @@ async function replyWithClaude({ system, history, userMessage }) {
   }, "claude-chat", 2, 1000);
 }
 
-// ────────────────────────── PATH B: OPENAI (fallback 1) ──────────────────────────
+// ────────────────────────── PATH B: OPENAI (fallback 2) ──────────────────────────
+//
+// R40: era fallback 1; virou fallback 2 (Gemini é primary agora).
 
 async function replyWithOpenAI({ system, history, userMessage }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -226,7 +228,10 @@ async function replyWithOpenAI({ system, history, userMessage }) {
   }, "openai-chat", 2, 1000);
 }
 
-// ────────────────────────── PATH C: GEMINI (fallback 2) ──────────────────────────
+// ────────────────────────── PATH C: GEMINI (primary) ──────────────────────────
+//
+// R40: promovido a primary. Loga groundingMetadata pra medir uso de
+// Google Search vs free tier (500 grounding/dia).
 
 async function replyWithGemini({ system, history, userMessage }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -248,6 +253,19 @@ async function replyWithGemini({ system, history, userMessage }) {
     });
     const result = await model.generateContent({ contents });
     const text = result?.response?.text?.() ?? "";
+    // R40: telemetria de grounding (best-effort, não falha o reply).
+    try {
+      const grounding = result?.response?.candidates?.[0]?.groundingMetadata;
+      if (grounding) {
+        const queries = grounding.webSearchQueries ?? [];
+        const chunks = grounding.groundingChunks?.length ?? 0;
+        console.log(`[JEI/chat/gemini] grounding=true queries=${queries.length} chunks=${chunks} q=${JSON.stringify(queries).slice(0, 200)}`);
+      } else {
+        console.log("[JEI/chat/gemini] grounding=false");
+      }
+    } catch (e) {
+      console.warn("[JEI/chat/gemini] telemetry leitura grounding falhou:", e?.message);
+    }
     return text || FRIENDLY_ERROR;
   }, "gemini-chat", 2, 1000);
 }
@@ -309,10 +327,11 @@ export default async (req) => {
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
+  // R40: ordem invertida — Gemini é primary por custo.
   console.log(
-    hasAnthropic ? "[JEI/chat] Path primário: Claude Haiku 4.5"
-    : hasOpenAI ? "[JEI/chat] Path primário: GPT-4o-mini"
-    : "[JEI/chat] Path primário: Gemini 2.5 Flash"
+    hasGemini ? "[JEI/chat] Path primário: Gemini 2.5 Flash"
+    : hasAnthropic ? "[JEI/chat] Path primário: Claude Haiku 4.5"
+    : "[JEI/chat] Path primário: GPT-4o-mini"
   );
 
   let body;
@@ -337,18 +356,21 @@ export default async (req) => {
   const system = SYSTEM_BASE + buildContext({ trip, roteiro });
   const params = { system, history: sanitizedHistory, userMessage: message };
 
-  // Chain: OpenAI → Gemini → Claude. Cada path com retry interno; se um
-  // falha após retries, cai pro próximo. Erro amigável só se TODOS falharem.
+  // R40: Chain reordenada — Gemini → Claude → OpenAI. Gemini primary
+  // por custo. Cada path com retry interno; se um falha após retries,
+  // cai pro próximo. Erro amigável só se TODOS falharem.
   const providers = [];
+  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => replyWithGemini(params) });
   if (hasAnthropic) providers.push({ label: "Claude Haiku 4.5",   run: () => replyWithClaude(params) });
   if (hasOpenAI)    providers.push({ label: "OpenAI GPT-4o-mini", run: () => replyWithOpenAI(params) });
-  if (hasGemini)    providers.push({ label: "Gemini 2.5 Flash",   run: () => replyWithGemini(params) });
 
   for (let i = 0; i < providers.length; i++) {
     const p = providers[i];
     try {
       if (i > 0) console.log(`[JEI/chat] Fallback: ${p.label}`);
       const reply = await p.run();
+      // R40: log de qual modelo respondeu com sucesso (rastreabilidade).
+      console.log(`[JEI/chat] modelo=${p.label}`);
       return new Response(JSON.stringify({ reply }), {
         headers: { "Content-Type": "application/json" },
       });
