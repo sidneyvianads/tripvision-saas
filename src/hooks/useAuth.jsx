@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { supabase, normalizePassword, normalizeEmail } from "../lib/supabase";
+import { supabase, normalizePassword, normalizeEmail, withTimeout } from "../lib/supabase";
 import { captureException, setUser as setSentryUser, clearUser as clearSentryUser } from "../lib/sentry";
 import { identify, resetAnalytics, trackSignupCompleted } from "../lib/analytics";
 import { clearSessionScopedStorage } from "../lib/storage";
@@ -23,6 +23,16 @@ const AuthContext = createContext(null);
 // (cursor not-allowed em signup). Esse safety net garante que mesmo se
 // getSession nunca resolver, `hydrating` vira false e a UI destrava.
 const HYDRATION_TIMEOUT_MS = 5000;
+
+// R41: timeouts pras chamadas auth do updatePassword. Sem isso, se a
+// hidratação do supabase-js travar (Safari ITP / storage bloqueado), tanto
+// getSession() quanto updateUser() ficam pendurados pra sempre — botão
+// "Atualizar senha" não faz NADA. Ver withTimeout() em lib/supabase.js.
+// SESSION_CHECK: getSession só lê estado local (rápido); 8s é folga
+// generosa que só estoura se a init travou. UPDATE_USER: é um PUT /user
+// na rede, então damos 15s antes de desistir.
+const SESSION_CHECK_MS = 8000;
+const UPDATE_USER_MS = 15000;
 
 export function AuthProvider({ children }) {
   // session inicia null; o getSession() abaixo hidrata se houver tokens válidos.
@@ -264,11 +274,40 @@ export function AuthProvider({ children }) {
     if (error) throw new Error(error.message);
   }, []);
 
-  // Atualiza a senha (usado tanto pelo flow de recovery quanto pelo Account)
+  // Atualiza a senha (usado tanto pelo flow de recovery quanto pelo Account).
+  //
+  // R41: blindado contra o travamento silencioso. Antes era só
+  // `updateUser({password})` cru — que faz `await initializePromise` antes
+  // de qualquer coisa. Se a init travou (Safari ITP / storage bloqueado,
+  // cenário R36/R38), a Promise nunca resolvia: o botão "Atualizar senha"
+  // não fazia nada (sem loading, sem erro). Repro empírico confirmou:
+  // updateUser fica unsettled pra sempre quando a init não resolve.
+  //
+  // Agora, em duas etapas, cada uma com timeout que vira erro VISÍVEL:
+  //   1. getSession() — garante que existe sessão ANTES do updateUser.
+  //      No recovery a sessão vem do #access_token do link (detectSessionInUrl).
+  //      Se o link expirou/foi reusado, não há sessão → avisa pra pedir
+  //      um novo (em vez do "Auth session missing!" cru do supabase).
+  //      Se a init travou, o timeout dispara e o user vê o erro.
+  //   2. updateUser() — o PUT de fato, também com timeout.
   const updatePassword = useCallback(async (novaSenha) => {
     const clean = normalizePassword(novaSenha);
     if (clean.length < 6) throw new Error("Senha precisa ter no mínimo 6 caracteres.");
-    const { error } = await supabase.auth.updateUser({ password: clean });
+
+    const { data } = await withTimeout(
+      supabase.auth.getSession(),
+      SESSION_CHECK_MS,
+      "Não consegui validar seu link de recuperação a tempo. Abra de novo o link do email e tente mais uma vez."
+    );
+    if (!data?.session) {
+      throw new Error("Seu link de recuperação expirou ou já foi usado. Volte para Esqueci a senha e peça um novo.");
+    }
+
+    const { error } = await withTimeout(
+      supabase.auth.updateUser({ password: clean }),
+      UPDATE_USER_MS,
+      "O servidor demorou demais pra atualizar a senha. Confira sua conexão e tente de novo."
+    );
     if (error) throw new Error(error.message);
   }, []);
 

@@ -170,6 +170,36 @@ export async function runPublicQuery(queryFn) {
   return await queryFn();
 }
 
+// R41: timeout pra chamadas auth do supabase-js que podem TRAVAR pra
+// sempre. updateUser() e getSession() fazem `await this.initializePromise`
+// internamente ANTES do timeout de lock interno (5s). Se a hidratação
+// travou — Safari ITP / storage bloqueado, MESMO cenário do R36/R38 —
+// a initializePromise NUNCA resolve e a chamada fica pendurada: sem erro,
+// sem sucesso, sem nada. Foi exatamente o sintoma do R41: o botão
+// "Atualizar senha" não fazia nada (sem loading, sem erro visível).
+//
+// Confirmado empiricamente (repro com storage que nunca resolve): o
+// updateUser fica unsettled indefinidamente. withTimeout força uma
+// REJEIÇÃO após `ms`, transformando o silêncio infinito num erro visível.
+//
+// A mensagem é repassada como Error.message já em PT-BR amigável. NÃO
+// usamos a palavra "timeout" nem name="TimeoutError" de propósito: o
+// friendlyError() casaria pelo name/marker técnico e trocaria pelo texto
+// genérico "Servidor demorou pra responder", perdendo a instrução
+// específica (ex: "abra o link do email de novo"). Marcamos com a flag
+// `isTimeout` pra checagem programática/testes sem afetar o name.
+export function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(message);
+      err.isTimeout = true;
+      reject(err);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 const INVISIBLE_CODEPOINTS = [0x00a0, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
 const INVISIBLE_CHARS_RE = new RegExp(
   "[" + INVISIBLE_CODEPOINTS.map((cp) => "\\u" + cp.toString(16).padStart(4, "0")).join("") + "]",
