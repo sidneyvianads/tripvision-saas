@@ -32,6 +32,12 @@ export default function Welcome() {
   const [mode, setMode] = useState(params.get("mode") === "signup" ? "signup" : "login");
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
+  // R41: loading dedicado do reset. O `loading` global do useAuth NÃO é
+  // tocado por updatePassword (e nem deve, é compartilhado com os outros
+  // forms), então o botão de submit do reset nunca mostrava spinner —
+  // parte do sintoma "não acontece nada". Estado local resolve sem mexer
+  // no global.
+  const [resetLoading, setResetLoading] = useState(false);
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -116,10 +122,14 @@ export default function Welcome() {
   const handleReset = async (e) => {
     e.preventDefault();
     setErr(null);
+    setInfo(null);
     if (!senha || senha !== senha2) {
       setErr("As senhas não conferem.");
       return;
     }
+    // R41: loading visível + finally garantido. Antes não havia loading
+    // nenhum e, se updatePassword travasse, a UI ficava muda pra sempre.
+    setResetLoading(true);
     try {
       await updatePassword(senha);
       setInfo("Senha atualizada! Redirecionando...");
@@ -132,6 +142,8 @@ export default function Welcome() {
     } catch (e) {
       console.error("[Welcome] reset password erro:", e);
       setErr(friendlyError(e));
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -248,7 +260,7 @@ export default function Welcome() {
           <ResetPasswordForm
             senha={senha} setSenha={setSenha}
             senha2={senha2} setSenha2={setSenha2}
-            loading={loading} err={err} info={info}
+            loading={resetLoading} err={err} info={info}
             onSubmit={handleReset}
           />
         ) : signupStep === "plano" ? (
