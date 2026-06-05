@@ -335,7 +335,16 @@ export function AuthProvider({ children }) {
       UPDATE_USER_MS,
       "O servidor demorou demais pra atualizar a senha. Confira sua conexão e tente de novo."
     );
-    if (error) throw new Error(error.message);
+    if (error) {
+      // R43: preserva code/status da AuthApiError (ex: same_password/422,
+      // weak_password, session_not_found) pra UI mapear mensagem clara.
+      // Antes era `new Error(error.message)` cru → o code se perdia e
+      // same_password caía no fallback genérico "Algo deu errado".
+      const e = new Error(error.message);
+      e.code = error.code;
+      e.status = error.status;
+      throw e;
+    }
   }, []);
 
   // Chamado pelo Welcome após resetar a senha. Libera o App.jsx pra

@@ -139,10 +139,20 @@ export default function Account() {
       setPwMsg({ type: "ok", text: "Senha atualizada!" });
       setPwOld(""); setPwNew(""); setPwNew2("");
     } catch (err) {
-      const friendly = reauthOk
-        ? `A senha NÃO foi alterada (erro de rede). Sua senha atual continua válida. Tente de novo: ${err.message}`
-        : err.message;
-      setPwMsg({ type: "err", text: friendly });
+      // R43: mensagens claras + consistência com o fluxo de recovery.
+      let text;
+      if (!reauthOk) {
+        text = err.message; // "Senha atual incorreta." (mensagem nossa)
+      } else if (err.code === "same_password") {
+        // Não é erro de rede — o user só repetiu a senha atual.
+        text = friendlyError(err); // "Essa já é a sua senha atual..."
+      } else {
+        // Reauth passou mas o update falhou (rede/Supabase). Tranquiliza
+        // que a senha atual segue válida + detalhe sanitizado (sem vazar
+        // mensagem técnica crua como era antes).
+        text = `A senha NÃO foi alterada. Sua senha atual continua válida. ${friendlyError(err)}`;
+      }
+      setPwMsg({ type: "err", text });
     } finally { setPwBusy(false); }
   };
 
