@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase, normalizePassword, normalizeEmail, withTimeout } from "../lib/supabase";
 import { captureException, setUser as setSentryUser, clearUser as clearSentryUser } from "../lib/sentry";
 import { identify, resetAnalytics, trackSignupCompleted } from "../lib/analytics";
@@ -50,6 +50,13 @@ export function AuthProvider({ children }) {
   // pra / — o Welcome continua renderizado pra o user definir nova senha.
   // Limpado por clearRecovering() depois do reset bem-sucedido.
   const [isRecovering, setIsRecovering] = useState(false);
+  // R44: espelho síncrono de isRecovering pro callback do onAuthStateChange.
+  // Enquanto recovery está ativo, NÃO carregamos o profile / setUser — senão
+  // o USER_UPDATED disparado pelo updateUser logaria o user no app, e o
+  // recovery deve terminar no LOGIN (não entrar no app). O state isRecovering
+  // sozinho não serve porque o closure deferido captura valor stale; o ref é
+  // lido no momento da execução.
+  const isRecoveringRef = useRef(false);
 
   // Faz fetch do profile estendido (public.users) usando o id do auth.users.
   // RLS garante que só puxa a row do user atual.
@@ -130,16 +137,21 @@ export function AuthProvider({ children }) {
       // do user trocar a senha. O Welcome.jsx vê o evento via listener
       // local e renderiza o form de nova senha.
       if (event === "PASSWORD_RECOVERY") {
+        isRecoveringRef.current = true;
         setIsRecovering(true);
         return;
       }
       if (event === "SIGNED_OUT" || !session) {
+        isRecoveringRef.current = false;
         setUser(null);
         setIsRecovering(false);
         clearSentryUser();
         resetAnalytics();
         return;
       }
+      // R44: em recovery não logamos o user no app — o fluxo termina no
+      // login. (Account/login normal: isRecoveringRef=false, segue normal.)
+      if (isRecoveringRef.current) return;
       // Defere pra FORA do lock — NÃO chamar supabase de forma síncrona aqui.
       setTimeout(async () => {
         if (!active) return; // effect desmontou enquanto deferido
@@ -349,7 +361,10 @@ export function AuthProvider({ children }) {
 
   // Chamado pelo Welcome após resetar a senha. Libera o App.jsx pra
   // navegar normalmente — o user agora tem session válida e senha nova.
-  const clearRecovering = useCallback(() => setIsRecovering(false), []);
+  const clearRecovering = useCallback(() => {
+    isRecoveringRef.current = false;
+    setIsRecovering(false);
+  }, []);
 
   const updateProfile = useCallback(async (patch) => {
     if (!user?.id) throw new Error("Não logado.");

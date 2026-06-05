@@ -132,13 +132,19 @@ export default function Welcome() {
     setResetLoading(true);
     try {
       await updatePassword(senha);
-      setInfo("Senha atualizada! Redirecionando...");
       setSenha("");
       setSenha2("");
-      // Libera o App.jsx pra navegar normalmente — agora que a senha foi
-      // trocada, manter a session é seguro e o redirect /welcome→/ pode
-      // acontecer. Sem isso, o user ficaria preso no Welcome.
+      // R44: NÃO entrar no app — o recovery termina no LOGIN, pra o user
+      // entrar com a senha nova. signOut encerra a sessão de recovery ANTES
+      // do redirect (best-effort: a senha já foi trocada, não mascarar o
+      // sucesso se o signOut falhar na rede). clearRecovering garante
+      // isRecovering=false pra o App não redirecionar pro app e o effect de
+      // recovery não jogar de volta pro form de reset.
+      try { await supabase.auth.signOut(); }
+      catch (soErr) { console.warn("[Welcome] signOut pós-reset falhou (ignorando):", soErr?.message); }
       clearRecovering();
+      setMode("login");
+      setInfo("Senha atualizada! Faça login com sua nova senha.");
     } catch (e) {
       console.error("[Welcome] reset password erro:", e);
       // R43: mapper específico do recovery — same_password vira "essa já é
