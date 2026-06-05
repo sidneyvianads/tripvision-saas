@@ -102,7 +102,29 @@ export function AuthProvider({ children }) {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // R42: o callback do onAuthStateChange é SÍNCRONO de propósito. Causa
+    // raiz do bug de reset (reproduzido em Chromium E node):
+    //
+    //   supabase-js segura o auth lock (lock:viajjei.auth via navigator.locks)
+    //   ENQUANTO executa os listeners. Se o listener chamar QUALQUER outro
+    //   método supabase que precise do lock — getSession() ou qualquer
+    //   .from().select() (que lê o token internamente) — re-entra no lock
+    //   que já está preso → DEADLOCK.
+    //
+    //   updateUser() é o gatilho: ele emite USER_UPDATED *dentro* do próprio
+    //   lock e só resolve DEPOIS de drenar os callbacks. O loadProfile()
+    //   antigo (supabase.from("users").select()) rodava aqui dentro e
+    //   travava o lock → updateUser nunca resolvia. Evidência: o
+    //   PUT /auth/v1/user retornava 200 em ~300ms, mas a Promise pendurava
+    //   pra sempre (R41 só mascarava com timeout de 15s). O LOGIN não
+    //   travava porque signInWithPassword não bloqueia a própria resolução
+    //   na drenagem do lock — por isso só o recovery quebrava.
+    //
+    // Fix: o callback só faz trabalho SÍNCRONO que NÃO chama supabase
+    // (setState/Sentry/analytics são seguros). Qualquer chamada supabase
+    // (loadProfile) é deferida via setTimeout(0), rodando DEPOIS do lock
+    // liberar. Padrão recomendado oficialmente pelo supabase-js.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // PASSWORD_RECOVERY: link do email criou uma session válida. Marcamos
       // isRecovering=true pra App.jsx NÃO redirecionar /welcome → / antes
       // do user trocar a senha. O Welcome.jsx vê o evento via listener
@@ -118,15 +140,20 @@ export function AuthProvider({ children }) {
         resetAnalytics();
         return;
       }
-      const profile = await loadProfile(session.user);
-      setUser(profile);
-      if (profile) {
-        // Sentry user é interno/error-tracking, OK ter email pra debug.
-        setSentryUser({ id: profile.id, email: profile.email });
-        // identify() decide internamente se envia PII conforme consent.
-        // plano é traits funcional (não PII) — sempre OK enviar.
-        identify(profile.id, { plano: profile.plano, email: profile.email, nome: profile.nome });
-      }
+      // Defere pra FORA do lock — NÃO chamar supabase de forma síncrona aqui.
+      setTimeout(async () => {
+        if (!active) return; // effect desmontou enquanto deferido
+        const profile = await loadProfile(session.user);
+        if (!active) return;
+        setUser(profile);
+        if (profile) {
+          // Sentry user é interno/error-tracking, OK ter email pra debug.
+          setSentryUser({ id: profile.id, email: profile.email });
+          // identify() decide internamente se envia PII conforme consent.
+          // plano é traits funcional (não PII) — sempre OK enviar.
+          identify(profile.id, { plano: profile.plano, email: profile.email, nome: profile.nome });
+        }
+      }, 0);
     });
 
     return () => {
