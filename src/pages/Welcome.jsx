@@ -8,7 +8,7 @@ import { getStoredCupom, setStoredCupom, clearStoredCupom } from "../lib/cupom";
 import { resolveOrigemPayload, clearStoredOrigem } from "../lib/origem";
 import { supabase } from "../lib/supabase";
 import { trackPaymentStarted } from "../lib/analytics";
-import { friendlyError } from "../lib/errorMessages";
+import { friendlyError, friendlyResetError } from "../lib/errorMessages";
 import { passwordStrength } from "./welcome/_shared";
 import { useInviteToken } from "../hooks/useInviteToken";
 import { startCheckoutSession } from "../lib/checkout";
@@ -141,7 +141,9 @@ export default function Welcome() {
       clearRecovering();
     } catch (e) {
       console.error("[Welcome] reset password erro:", e);
-      setErr(friendlyError(e));
+      // R43: mapper específico do recovery — same_password vira "essa já é
+      // sua senha atual", sessão expirada vira "peça um novo email", etc.
+      setErr(friendlyResetError(e));
     } finally {
       setResetLoading(false);
     }

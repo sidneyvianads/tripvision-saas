@@ -44,6 +44,11 @@ const PG_CODE_MAP = {
   "over_email_send_rate_limit": "Muitos emails enviados. Espera 1 minuto e tenta de novo.",
   "over_request_rate_limit": "Muitas tentativas. Espera 1 minuto.",
   "email_not_confirmed": "Confirma seu email antes de entrar (cheque sua caixa).",
+  // R43: updateUser no fluxo de reset. same_password (422) era o que mais
+  // confundia — caía no fallback genérico "Algo deu errado" e o user achava
+  // que estava quebrado (na real só tinha digitado a senha atual de novo).
+  "same_password": "Essa já é a sua senha atual. Escolha uma senha diferente.",
+  "session_not_found": "Sua sessão expirou. Faz login de novo.",
 };
 
 // Padrões de texto (substring case-insensitive). Casamos em ordem; o
@@ -62,6 +67,9 @@ const MESSAGE_PATTERNS = [
   [/user already (registered|exists)|already registered/i, "Esse email já está cadastrado."],
   [/email not confirmed/i, "Confirma seu email antes de entrar (cheque sua caixa)."],
   [/password should be at least|weak password/i, "Senha muito fraca. Use 6+ caracteres com letras e números."],
+  // R43: same_password — bate por texto também (caso o .code se perca no caminho)
+  [/new password should be different|should be different from the old|same.password/i, "Essa já é a sua senha atual. Escolha uma senha diferente."],
+  [/auth session missing|session.?not.?found/i, "Sua sessão expirou. Faz login de novo."],
   [/captcha verification (process )?failed/i, "Verificação anti-robô falhou. Tenta de novo."],
   [/jwt expired|jwt invalid|token (has )?expired/i, "Sua sessão expirou. Faz login de novo."],
   [/email address.*invalid|invalid email/i, "Email inválido."],
@@ -187,4 +195,31 @@ export function friendlyErrorWithContext(prefix, err) {
   // Evita duplicar ponto final
   const clean = String(prefix).trim().replace(/[.!?]+$/, "");
   return `${clean}. ${detail}`;
+}
+
+/**
+ * R43: sanitização ESPECÍFICA do fluxo de reset de senha (recovery).
+ *
+ * O friendlyError() é global e não pode saber o contexto: "sessão expirada"
+ * num fluxo logado significa "faça login de novo", mas no recovery significa
+ * "o LINK do email expirou — peça outro". Aqui sobrepomos só as mensagens
+ * cuja AÇÃO depende do contexto de recovery; o resto (same_password,
+ * weak_password, rate limit, timeout do R41, etc) delega pro friendlyError.
+ *
+ * Usar no catch do handleReset do Welcome, não em troca de senha logada.
+ */
+export function friendlyResetError(err) {
+  // Timeout do R41 (withTimeout) já vem com mensagem pronta em PT-BR —
+  // deixa o friendlyError fazer o passthrough, não sobrescreve.
+  if (err && err.isTimeout) return friendlyError(err);
+
+  const code = String(err?.code ?? "");
+  const msg = String(err?.message ?? "");
+  const sessionMissing =
+    code === "session_not_found" ||
+    /auth session missing|session.?not.?found|jwt expired|token (has )?expired/i.test(msg);
+  if (sessionMissing) {
+    return "Seu link de recuperação expirou. Volte e peça um novo email de redefinição.";
+  }
+  return friendlyError(err);
 }
