@@ -202,7 +202,8 @@ describe("R20 anti-regressão — rateLimit.js morto + sem getPlanUsage espalhad
 
   it("Bloqueio server-side em plan.mjs continua intacto", () => {
     const planMjs = readFileSync(PLAN_MJS, "utf8");
-    expect(planMjs).toMatch(/countMonthlyUserMessages\(user_id\)/);
+    // A1: variável renomeada user_id → userId (identidade vem do JWT verificado).
+    expect(planMjs).toMatch(/countMonthlyUserMessages\(userId\)/);
     expect(planMjs).toMatch(/used >= monthlyLimit/);
     expect(planMjs).toMatch(/scope:\s*["']monthly["']/);
   });

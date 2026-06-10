@@ -60,9 +60,18 @@ function stripPartialRoteiroTag(text) {
 }
 
 async function streamPlan(req, signal, onDelta) {
+  // A1: /api/plan agora exige Authorization: Bearer <access_token>. O token
+  // identifica o user no servidor e o plano é derivado do banco (o body não
+  // controla mais plano/identidade). Sem sessão → erro amigável antes do fetch.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sessão expirada — faça login de novo.");
+
   const res = await fetch("/api/plan", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
     body: JSON.stringify(req),
     signal,
   });
@@ -70,6 +79,9 @@ async function streamPlan(req, signal, onDelta) {
   if (!res.ok) {
     let err = null;
     try { err = await res.json(); } catch {}
+    if (res.status === 401) {
+      throw new Error("Sessão expirada — faça login de novo.");
+    }
     if (res.status === 403 && err?.upgrade) {
       const e = new Error(err?.error || "Limite Free atingido");
       e.code = "FREE_LIMIT";
@@ -309,8 +321,9 @@ export default function PlanChat({ trip, user, onGoToRoteiro, onTripChanged }) {
         {
           message: trimmed,
           history: historyForApi,
-          user_plano: user.plano ?? "pending",
-          user_id: user.id,
+          // A1: plano/identidade agora vêm do JWT no servidor — não enviamos
+          // mais user_plano/user_id no body (eram ignorados e davam falsa noção
+          // de controle). O Authorization: Bearer é setado dentro de streamPlan.
           viagem: {
             nome: trip.nome,
             data_inicio: trip.data_inicio,
