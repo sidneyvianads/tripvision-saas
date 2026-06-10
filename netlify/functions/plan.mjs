@@ -280,13 +280,39 @@ const MONTHLY_LIMITS = { pro: 200, grupo: 800 };
 const PAID_PLANS = new Set(["pro", "grupo", "owner"]);
 const NO_ACCESS_PLANS = new Set(["free", "pending", "expired", null, undefined]);
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+// SERVICE key: usado por fetchUserPlan/callRpc pra ler o plano de QUALQUER user
+// por id no servidor (bypassa RLS de propósito — é backend confiável).
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+// A1: ANON key dedicado só pra validar o JWT do usuário em verifyAuth (via
+// /auth/v1/user). NÃO substitui o SERVICE key acima — caminhos distintos.
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
 
 function jsonResponse(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+// A1: autenticação do chamador. Espelha chat.mjs:verifyAuth — valida o
+// Authorization: Bearer <access_token> contra /auth/v1/user e devolve o user
+// (ou null). Antes /api/plan era ANÔNIMO e confiava em user_plano/user_id do
+// body, então qualquer um drenava a conta de LLM+grounding com user_plano:"owner".
+async function verifyAuth(req) {
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    return user?.id ? user : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchUserPlan(uid) {
@@ -576,25 +602,34 @@ export default async (req) => {
   try { body = await req.json(); }
   catch { return jsonResponse({ error: FRIENDLY_ERROR }, 400); }
 
-  const { message, history = [], viagem = {}, user_plano = "pending", user_id = null } = body ?? {};
+  // A1: identidade e plano vêm SEMPRE do JWT verificado — nunca do body.
+  // user_plano/user_id do body são deliberadamente IGNORADOS (eram o vetor
+  // de abuso: chamador anônimo passava user_plano:"owner" e liberava IA grátis).
+  const { message, history = [], viagem = {} } = body ?? {};
   if (!message || typeof message !== "string" || !message.trim()) {
     return jsonResponse({ error: "Mensagem vazia." }, 400);
     // ↑ "Mensagem vazia" é validação de input do usuário, não erro técnico — pode mostrar.
   }
 
+  // ===== AUTH ===== (A1: antes de qualquer trabalho/custo)
+  const authed = await verifyAuth(req);
+  if (!authed) {
+    return jsonResponse({ error: "Não autenticado.", scope: "auth" }, 401);
+  }
+  const userId = authed.id;
+
   // ===== RATE LIMIT =====
-  // Checa user_id (mais estrito) e IP (mais permissivo). Qualquer um derruba.
+  // Checa userId (mais estrito) e IP (mais permissivo). Qualquer um derruba.
   // Stub mode quando UPSTASH_REDIS_REST_URL não está setado: passa direto.
   const ip = getClientIp(req);
-  const rlChecks = [
-    user_id ? rateLimit({ key: `plan:user:${user_id}`, limit: RL_USER_LIMIT, windowSec: RL_WINDOW_SEC }) : null,
+  const rlResults = await Promise.all([
+    rateLimit({ key: `plan:user:${userId}`, limit: RL_USER_LIMIT, windowSec: RL_WINDOW_SEC }),
     rateLimit({ key: `plan:ip:${ip}`, limit: RL_IP_LIMIT, windowSec: RL_WINDOW_SEC }),
-  ].filter(Boolean);
-  const rlResults = await Promise.all(rlChecks);
+  ]);
   const blocked = rlResults.find((r) => !r.ok);
   if (blocked) {
     const resetIn = blocked.resetAt ? Math.max(1, Math.ceil((blocked.resetAt - Date.now()) / 1000)) : 60;
-    console.log("[plan] RATE LIMIT blocked", { user_id, ip, resetIn });
+    console.log("[plan] RATE LIMIT blocked", { userId, ip, resetIn });
     return jsonResponse(
       { error: `Muitas requisições. Tenta de novo em ${resetIn}s.`, scope: "rate_limit" },
       429
@@ -602,30 +637,33 @@ export default async (req) => {
   }
 
   // ===== EFFECTIVE PLAN + GATES =====
-  let effectivePlan = user_plano;
-  if (user_id && PAID_PLANS.has(user_plano) && user_plano !== "owner") {
-    const dbUser = await fetchUserPlan(user_id);
-    if (dbUser?.plano_expires_at && new Date(dbUser.plano_expires_at).getTime() < Date.now()) {
-      console.log("[plan] plano expirado", { user_id });
-      effectivePlan = "expired";
-    }
+  // A1: plano derivado do banco pelo userId do token (fonte de verdade),
+  // não do body. Mesma fonte que o is_platform_owner() do RLS usa (plano='owner').
+  const dbUser = await fetchUserPlan(userId);
+  let effectivePlan = dbUser?.plano ?? "pending";
+  if (
+    effectivePlan !== "owner" &&
+    dbUser?.plano_expires_at &&
+    new Date(dbUser.plano_expires_at).getTime() < Date.now()
+  ) {
+    console.log("[plan] plano expirado", { userId });
+    effectivePlan = "expired";
   }
-  const isPaidPlan = PAID_PLANS.has(effectivePlan);
   const noAccess = NO_ACCESS_PLANS.has(effectivePlan) || effectivePlan === "expired";
 
   if (noAccess) {
-    console.log("[plan] NO-ACCESS GATE blocked", { user_id, plan: effectivePlan });
+    console.log("[plan] NO-ACCESS GATE blocked", { userId, plan: effectivePlan });
     return jsonResponse(
       { error: "Sua assinatura não está ativa. Comece o teste grátis de 7 dias!", upgrade: true, scope: "subscription" },
       403
     );
   }
-  if (effectivePlan !== "owner" && user_id) {
+  if (effectivePlan !== "owner") {
     const monthlyLimit = MONTHLY_LIMITS[effectivePlan];
     if (monthlyLimit != null) {
-      const used = await countMonthlyUserMessages(user_id);
+      const used = await countMonthlyUserMessages(userId);
       if (used != null && used >= monthlyLimit) {
-        console.log("[plan] MONTHLY GATE blocked", { user_id, plan: effectivePlan, used, limit: monthlyLimit });
+        console.log("[plan] MONTHLY GATE blocked", { userId, plan: effectivePlan, used, limit: monthlyLimit });
         return jsonResponse(
           { error: `Limite mensal atingido (${used}/${monthlyLimit})`, upgrade: true, used, limit: monthlyLimit, scope: "monthly" },
           403
@@ -676,7 +714,7 @@ export default async (req) => {
   }
 
   console.error("[JEI] Todos os providers falharam.");
-  captureMessage("plan: todos providers falharam", "error", { user_id, providerErrors });
+  captureMessage("plan: todos providers falharam", "error", { userId, providerErrors });
   return jsonResponse({ error: FRIENDLY_ERROR }, 502);
 };
 
